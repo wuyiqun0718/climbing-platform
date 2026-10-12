@@ -1,0 +1,29 @@
+{
+  "name": "@climb/dashboard",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "门店管理后台（Vue 3 + Vite）。用 GYM=<岩馆> 打出不同岩馆的后台",
+  "scripts": {
+    "dev": "node scripts/prepare-gym.mjs && vite",
+    "build": "node scripts/prepare-gym.mjs && vue-tsc --noEmit -p tsconfig.json && vite build",
+    "preview": "vite preview",
+    "typecheck": "node scripts/prepare-gym.mjs && vue-tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@climb/api": "workspace:*",
+    "@climb/core": "workspace:*",
+    "@climb/theme": "workspace:*",
+    "@climb/ui-web": "workspace:*",
+    "@climb/utils": "workspace:*",
+    "vue": "^3.5.43",
+    "vue-router": "^5.4.0"
+  },
+  "devDependencies": {
+    "@climb/gym-benchmark": "workspace:*",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "typescript": "~5.9.3",
+    "vite": "^8.3.4",
+    "vue-tsc": "^3.3.13"
+  }
+}

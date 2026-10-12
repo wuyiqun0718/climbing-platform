@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BENCHMARK 攀岩馆原型</title>
+<link rel="icon" href="assets/logo.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=ZCOOL+QingKe+HuangYou&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><img src="assets/logo.jpg" alt="BENCHMARK 攀岩馆标志"><span><b>BENCHMARK</b><small>攀岩馆 小程序与后台原型</small></span></div>
+  <nav class="mode-switch" role="tablist" aria-label="切换原型">
+    <button role="tab" data-mode="mini" aria-selected="true">微信小程序</button>
+    <button role="tab" data-mode="admin" aria-selected="false">管理后台</button>
+  </nav>
+  <button class="reset-btn" id="reset" title="清空所有演示操作，回到初始数据">重置演示</button>
+</header>
+
+<main id="mini" class="stage">
+  <aside class="guide">
+    <h1>两部手机，一套数据</h1>
+    <p class="lede">左边是年卡会员阿杰，右边是第一次来的小鹿。次卡分享和老带新都能在两部手机之间真的走一遍，每一步也会同步到管理后台。</p>
+    <div id="routes" class="routes"></div>
+  </aside>
+  <section class="phones" id="phones">
+    <div class="phone-switch" role="tablist" aria-label="切换手机">
+      <button role="tab" data-focus="jie" aria-selected="true">阿杰的手机<i class="dot"></i></button>
+      <button role="tab" data-focus="lu" aria-selected="false">小鹿的手机<i class="dot"></i></button>
+    </div>
+    <div class="phone-col" data-col="jie">
+      <div class="phone-label" data-label="jie"></div>
+      <div class="phone"><div class="screen" id="phone-jie" data-uid="jie"></div></div>
+    </div>
+    <div class="phone-col" data-col="lu">
+      <div class="phone-label" data-label="lu"></div>
+      <div class="phone"><div class="screen" id="phone-lu" data-uid="lu"></div></div>
+    </div>
+  </section>
+</main>
+
+<main id="admin" class="admin" hidden></main>
+<div id="tooltip" class="tooltip" hidden></div>
+
+<script src="js/data.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/mini.js"></script>
+<script src="js/admin.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

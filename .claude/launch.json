@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "prototype",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["scripts/serve-prototype.mjs"],
+      "port": 8765
+    },
+    {
+      "name": "dashboard",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev:dashboard"],
+      "port": 5174
+    },
+    {
+      "name": "miniapp-h5",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev:h5"],
+      "port": 5173
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "name": "@climb/ui-mp",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "小程序组件（uni-app，用 view/text 等小程序标签），颜色全部走主题 CSS 变量。按 .vue 路径引入：import MemberCard from '@climb/ui-mp/MemberCard.vue'，uni-app 才会把它注册成小程序组件",
+  "exports": {
+    "./*.vue": "./src/*.vue"
+  },
+  "scripts": {
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "vue": "^3.4.21"
+  },
+  "devDependencies": {
+    "vue": "3.4.21",
+    "vue-tsc": "^3.3.13"
+  }
+}

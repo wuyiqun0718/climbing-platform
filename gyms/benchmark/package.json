@@ -1,0 +1,17 @@
+{
+  "name": "@climb/gym-benchmark",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./gym.json": "./gym.json"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@climb/core": "workspace:*",
+    "@climb/theme": "workspace:*"
+  }
+}

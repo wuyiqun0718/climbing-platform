@@ -1,0 +1,33 @@
+{
+  "name": "climb-platform",
+  "private": true,
+  "description": "攀岩馆小程序与管理后台 monorepo：多个岩馆共用一套代码，按岩馆单独打包",
+  "packageManager": "pnpm@9.0.1",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev:dashboard": "pnpm --filter @climb/dashboard dev",
+    "dev:mp": "pnpm --filter @climb/miniapp dev:mp-weixin",
+    "dev:h5": "pnpm --filter @climb/miniapp dev:h5",
+    "build": "turbo run build",
+    "build:gym": "node scripts/build-gym.mjs",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "prototype": "node scripts/serve-prototype.mjs"
+  },
+  "devDependencies": {
+    "turbo": "^2.11.7",
+    "typescript": "~5.9.3",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.3"
+  },
+  "pnpm": {
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "vite>esbuild": "*",
+        "vite>yaml": "*"
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "@climb/ui-web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "管理后台组件（Vue 3 网页），颜色全部走主题 CSS 变量",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "vue": "^3.5.43",
+    "vue-tsc": "^3.3.13"
+  }
+}
