@@ -1,5 +1,5 @@
 {
-  "name": "climb-platform",
+  "name": "climbing-platform",
   "private": true,
   "description": "攀岩馆小程序与管理后台 monorepo：多个岩馆共用一套代码，按岩馆单独打包",
   "packageManager": "pnpm@9.0.1",

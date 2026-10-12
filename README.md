@@ -1,11 +1,11 @@
-# climb-platform
+# climbing-platform
 
 攀岩馆的会员小程序和门店管理后台。一个仓库服务多家岩馆：业务规则、组件、工具和接口层共用，每家岩馆有自己的配置（名称、小程序 AppID、配色、规则），可以单独打包。
 
 ## 目录
 
 ```
-climb-platform/
+climbing-platform/
 ├─ apps/
 │  ├─ miniapp/        会员端微信小程序（uni-app + Vue 3），一套代码按岩馆打包
 │  └─ dashboard/      门店管理后台（Vue 3 + Vite），一套代码按岩馆打包
