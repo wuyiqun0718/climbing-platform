@@ -22,6 +22,8 @@ climbing-platform/
 └─ scripts/           按岩馆打包、启动原型等脚本
 ```
 
+项目背景、已经定下的决定、等客户确认的问题和下一步，见 `docs/project-context.md`；跟客户谈的思路见 `docs/sales-pitch.md`。
+
 共享包不需要单独构建：`exports` 直接指向 `src` 里的 TypeScript 和 `.vue` 源码，由各个 app 的 Vite 编译。
 
 ## 常用命令
