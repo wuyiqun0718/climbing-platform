@@ -208,6 +208,8 @@ const Mini = (() => {
         <div class="hscroll">${upcoming.map(k => `<button class="mini-class" data-a="goto" data-v="courses:class:${daysLeft(k.date)}">
           <small>${dayLabel(k.date)} ${k.start}</small><b>${esc(k.name)}</b><span><span class="lv lv-${k.level}">${k.level}</span>${esc(coach(k.coach).name)}</span>${seats(k.booked, k.cap)}</button>`).join('')}</div>
         <div class="sec-h"><h3>馆内动态</h3></div>
+        ${S.routeNews ? `<div class="panel news"><span class="news-tag">新线预告</span><b>${esc(S.routeNews.branch)}${fmtMD(parseKey(S.routeNews.date))}换线</b>
+          <p>${esc(S.routeNews.area)}，${S.routeNews.routes} 条新线${S.routeNews.theme ? `，主题「${esc(S.routeNews.theme)}」` : ''}。换线当天这块区域会封闭半天。</p></div>` : ''}
         <button class="panel news" data-a="go" data-v='{"r":"event","id":"e2"}'>
           <span class="news-tag">换线</span><b>B 区新线路已经定好了</b>
           <p>14 条新线，难度 V0–V7。${fmtMD(parseKey(e2.date))}开放日，定线师现场讲线。</p></button>

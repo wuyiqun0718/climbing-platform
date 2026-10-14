@@ -126,6 +126,8 @@ function seedState() {
       jie: [{ from: 'jie', type: 'text', text: '周末来爬墙吗？我带你', time: '昨天 21:14' }, { from: 'lu', type: 'text', text: '好啊！但我一次都没爬过😂', time: '昨天 21:16' }],
     },
     unread: { jie: 0, lu: 0 },
+    routeSetsNew: [], // 后台「登记换线」新加的批次
+    routeNews: null, // 登记换线时发布到小程序首页的新线预告
   };
 }
 

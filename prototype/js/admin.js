@@ -2,10 +2,12 @@
 
 const Admin = (() => {
   let page = 'dash';
-  const st = { memFilter: 'all', memQuery: '', courseTab: 'class', entryTab: 'in', drawer: null, toast: null, priceDraft: {} };
+  const ST0 = { memFilter: 'all', memQuery: '', courseTab: 'class', entryTab: 'in', drawer: null, toast: null, priceDraft: {}, rsBranch: 'all', rsWin: 14, rsSel: null, rsSort: 'date' };
+  const st = { ...ST0 };
   const NAV = [
     ['dash', '数据看板', 'chart'],
     ['finance', '财务', 'yuan'],
+    ['routes', '定线分析', 'hold'],
     ['members', '会员', 'users'],
     ['courses', '课程排期', 'calendar'],
     ['events', '活动', 'flag'],
@@ -39,6 +41,29 @@ const Admin = (() => {
     return `<span class="delta ${up ? 'up' : 'down'}">${icon(up ? 'up' : 'down', 13)}${up ? '+' : ''}${d}${unit}</span>`;
   };
   const dateLine = () => `${TODAY.getFullYear()}年${TODAY.getMonth() + 1}月${TODAY.getDate()}日 ${WEEK[TODAY.getDay()]}`;
+  const signPct = v => { const n = Math.round(v * 100); return `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n)}%`; };
+
+  // ---------- 定线分析 ----------
+  /** 当前选中的批次：用户点过的优先，否则选最近一批统计窗口已经完整的 */
+  function selectedSet(list) {
+    const ok = s => !s.pending && RouteSets.analyze(s, st.rsWin).status !== 'early';
+    return list.find(s => s.id === st.rsSel && ok(s))
+      || list.find(s => ok(s) && RouteSets.analyze(s, st.rsWin).status === 'done')
+      || list.find(ok);
+  }
+  /** 给店长看的一句话结论 */
+  function insightFor(s, a, hol) {
+    const tail = a.status === 'partial' ? ` 目前只有 ${a.days} 天的数据，之后还会变。` : '';
+    if (a.market >= 0.06 && a.uplift - a.net >= 0.05) {
+      return `看着涨了 ${Math.round(a.uplift * 100)}%，但同期其他分馆也涨了 ${Math.round(a.market * 100)}%${hol ? `，主要是${RouteSets.holidayName}带来的` : ''}。扣掉这部分，这批线本身带来的大约是 ${signPct(a.net)}。${tail}`;
+    }
+    if (a.market <= -0.06 && hol) {
+      return `换线前两周正好赶上${RouteSets.holidayName}，各分馆人都多，直接对比会低估这批线。扣除同期其他分馆的变化后，净提升大约是 ${signPct(a.net)}。${tail}`;
+    }
+    if (a.net >= 0.15) return `这批线明显带动了客流${a.heatDays ? `，热度持续了 ${a.heatDays} 天` : '，热度到现在还没退'}。「${s.theme}」这类线可以多做。${tail}`;
+    if (a.net <= 0.03) return `这批线对客流几乎没有带动。可以结合会员反馈，看看是不是难度太集中，或者风格不太受欢迎。${tail}`;
+    return `这批线带来了一些客流，属于正常水平。${tail}`;
+  }
   const newChip = '<span class="chip new">刚刚</span>';
 
   // ---------- 外壳 ----------
@@ -50,7 +75,7 @@ const Admin = (() => {
       <nav>${NAV.map(([k, l, ic]) => `<button data-x="nav" data-v="${k}" class="${k === page ? 'on' : ''}" ${k === page ? 'aria-current="page"' : ''}>${icon(ic, 18)}<span>${l}</span></button>`).join('')}</nav>
       <div class="side-user">${holdAvatar('林', 'olive', 32, 0)}<span><b>小林</b><small>店长</small></span></div></aside>
       <section class="main">${PAGES[page]()}</section>
-      ${st.drawer ? `<div class="drawer-mask" data-x="closeDrawer"><aside class="drawer" role="dialog" aria-label="${st.drawer === 'class' ? '发布团课' : '发布活动'}">${DRAWERS[st.drawer]()}</aside></div>` : ''}
+      ${st.drawer ? `<div class="drawer-mask" data-x="closeDrawer"><aside class="drawer" role="dialog" aria-label="${{ class: '发布团课', event: '发布活动', routeset: '登记换线' }[st.drawer]}">${DRAWERS[st.drawer]()}</aside></div>` : ''}
       ${st.toast ? `<div class="a-toast" role="status">${icon('check', 18)}${st.toast}</div>` : ''}`;
     drawCharts();
     scrollTo(0, y);
@@ -76,6 +101,21 @@ const Admin = (() => {
       Charts.columns(hrs, {
         labels: BASE.hours.map(h => `${h.h}`), series: [{ name: '入场人数', color: 'var(--s1)', values: vals }],
         height: 200, fmt: v => Math.round(v), tipFmt: v => `${v} 人`, labelEvery: 2, future: lastH - 10, tipTitle: l => `${l}:00–${+l + 1}:00`,
+      });
+    }
+    const cur = document.getElementById('ch-curve');
+    if (cur && st.rsShown) {
+      const R = RouteSets, sel = R.all().find(s => s.id === st.rsShown), b = R.branch(sel.branch);
+      const xs = Array.from({ length: R.BEFORE + 29 }, (_, i) => i - R.BEFORE);
+      const others = R.all().filter(s => s.branch === sel.branch && s.id !== sel.id && !s.pending).map(s => R.curve(s));
+      const mine = R.curve(sel);
+      const avgOthers = i => { const v = others.map(o => o[i]).filter(x => x != null); return v.length ? Math.round(v.reduce((a, c) => a + c, 0) / v.length) : null; };
+      const dayName = t => t < 0 ? `换线前 ${-t} 天` : t === 0 ? '换线当天（部分区域封闭）' : `换线后第 ${t} 天`;
+      Charts.lines(cur, {
+        xs, height: 260, ref: 100, refLabel: '换线前水平', mark: 0, markLabel: '换线', shade: [1, st.rsWin],
+        xLabel: t => (t > 0 ? `+${t}` : `${t}`),
+        series: others.map(values => ({ name: '以往批次', values })).concat({ name: '这一批', values: mine, color: b.color, focus: true }),
+        tip: (t, i) => `<b>${dayName(t)}</b><div class="tip-row"><i style="background:${b.color}"></i><span>这一批</span><b>${mine[i] ?? '—'}</b></div><div class="tip-row"><i style="background:var(--ink-4)"></i><span>以往批次平均</span><b>${avgOthers(i) ?? '—'}</b></div>`,
       });
     }
     const mon = document.getElementById('ch-months');
@@ -183,6 +223,91 @@ const Admin = (() => {
         <div class="tbl-wrap"><table class="tbl"><thead><tr><th>订单号</th><th>时间</th><th>会员</th><th>产品</th><th class="num">金额</th><th>支付方式</th><th>状态</th></tr></thead>
         <tbody>${orders.map(o => `<tr class="${o.demo ? 'is-new' : ''}"><td class="mono">${o.id}</td><td>${o.when}</td><td>${esc(o.name)} ${o.demo ? newChip : ''}</td><td>${esc(o.product)}</td><td class="num">${yuan(o.amount)}</td><td>${o.pay}</td>
           <td>${o.status === '已退款' ? `<span class="chip gray">${o.status}</span>` : `<span class="chip olive">${o.status}</span>`}</td></tr>`).join('')}</tbody></table></div></div>`;
+    },
+
+    routes() {
+      const R = RouteSets, N = st.rsWin;
+      const list = R.all().filter(s => st.rsBranch === 'all' || s.branch === st.rsBranch);
+      const rows = list.map(s => ({ s, a: R.analyze(s, N) }));
+      if (st.rsSort === 'net') rows.sort((x, y) => (y.a.net ?? -9) - (x.a.net ?? -9));
+      const sel = selectedSet(list);
+      st.rsShown = sel?.id;
+      const brName = b => `<span class="br-name"><i style="background:${b.color}"></i>${b.name}</span>`;
+
+      const tiles = R.BRANCHES.map(b => {
+        const t = R.branchStatus(b.id);
+        const chip = t.days < 7 ? `<span class="chip">${icon('bolt', 12)}新线第 ${t.days} 天</span>`
+          : t.cooled ? `<span class="chip warn">${icon('clock', 12)}热度已回落</span>` : `<span class="chip olive">热度还在</span>`;
+        return `<div class="card br-tile ${st.rsBranch === b.id ? 'on' : ''}">
+          <div class="br-h">${brName(b)}${chip}</div>
+          <p class="sub">当前这批：${fmtMD(parseKey(t.cur.date))}换线，${esc(t.cur.area)}，已上线 ${t.days} 天</p>
+          <div class="br-heat"><div><b>${t.heat ?? '—'}</b><small>最近几天的热度（换线前 = 100）</small></div>${t.spark.length > 1 ? Charts.spark(t.spark, { w: 120, h: 36, color: b.color }) : ''}</div>
+          <dl class="br-dl"><div><dt>以往平均净提升</dt><dd>${signPct(t.avgNet)}</dd></div><div><dt>热度平均持续</dt><dd>${t.avgHeat} 天</dd></div></dl>
+          ${t.pending ? `<p class="br-tip">${icon('calendar', 14)}已登记下一批：${fmtMD(parseKey(t.pending.date))}，${esc(t.pending.area)}</p>`
+            : t.cooled ? `<p class="br-tip">${icon('info', 14)}这批线的热度已经回到换线前的水平，可以安排下一批了。</p>` : ''}
+        </div>`;
+      }).join('');
+
+      let focus = '';
+      if (sel) {
+        const a = R.analyze(sel, N), b = R.branch(sel.branch), hol = R.overlapsHoliday(sel, N);
+        const max = Math.max(...(sel.grades || [1]));
+        focus = `<div class="grid g-2-1" id="rs-focus">
+          <div class="card"><div class="card-h"><div><h2>热度曲线</h2><p class="sub">${b.name} ${fmtMD(parseKey(sel.date))}这一批，和${b.name}以往的批次对比</p></div></div>
+            <div class="legend"><span><i style="background:${b.color}"></i>这一批</span><span><i class="gray"></i>${b.name}以往批次</span><span><i class="shade"></i>统计窗口：换线后 ${N} 天</span></div>
+            <div id="ch-curve" class="chart-box"></div>
+            <p class="axis-cap">横轴是换线前后的天数，纵轴以换线前 14 天的客流为 100，已扣除同期其他分馆的变化。</p></div>
+          <div class="card rs-detail">
+            <h2>${b.name}，${fmtMD(parseKey(sel.date))}换线</h2>
+            <p class="sub">${esc(sel.area)}，主题「${esc(sel.theme)}」，${sel.routes} 条线，定线员 ${sel.setters.map(esc).join('、')}</p>
+            ${sel.grades ? `<div class="grades" role="img" aria-label="难度分布">${sel.grades.map((c, i) => `<div class="gcol"><span>${c || ''}</span><i style="height:${c / max * 100}%"></i><em>${R.GRADES[i]}</em></div>`).join('')}</div>` : ''}
+            ${a.status === 'early' ? `<p class="insight">新线刚上 ${a.days} 天，数据还不够，过几天再看。</p>` : `
+            <ul class="rs-metrics">
+              <li><span>换线前日均</span><b>${a.beforePerDay} 人</b></li>
+              <li><span>换线后 ${Math.min(a.days, N)} 天日均</span><b>${a.afterPerDay} 人</b></li>
+              <li><span>提升</span><b>${signPct(a.uplift)}</b></li>
+              <li><span>同期其他分馆</span><b>${signPct(a.market)}</b></li>
+              <li class="hl"><span>净提升</span><b>${signPct(a.net)}</b></li>
+              <li><span>热度持续</span><b>${a.heatDays ? `${a.heatDays} 天` : `还没退，已 ${a.heatSpan} 天`}</b></li>
+              <li><span>回访率</span><b>${Math.round(a.returnRate * 100)}%</b></li>
+              <li><span>从其他分馆过来</span><b>${a.cross} 人次</b></li>
+            </ul>
+            <p class="insight">${insightFor(sel, a, hol)}</p>
+            <p class="note">回访率是这段时间里来了 2 次及以上的会员占比，反映这批线值不值得反复来爬。</p>`}
+          </div></div>`;
+      }
+
+      const tableRows = rows.map(({ s, a }) => {
+        const b = R.branch(s.branch);
+        const head = `<td>${brName(b)}</td><td class="nowrap">${fmtMD(parseKey(s.date))}${R.overlapsHoliday(s, N) ? `<span class="tag-hol">含${R.holidayName}</span>` : ''}${a.status === 'partial' ? `<small>已上线 ${-daysLeft(s.date)} 天</small>` : ''}</td>
+          <td>${esc(s.area)}<small>${esc(s.theme)}</small></td><td>${s.setters.map(esc).join('、')}</td><td class="num">${s.routes}</td>`;
+        if (a.status === 'pending') return `<tr class="${s.fresh ? 'is-new' : ''}">${head}<td colspan="7" class="muted">已登记，换线后第二天开始统计</td></tr>`;
+        if (a.status === 'early') return `<tr>${head}<td colspan="7" class="muted">新线刚上 ${a.days} 天，数据还不够</td></tr>`;
+        const w = Math.min(50, Math.abs(a.net) / 0.3 * 50);
+        return `<tr class="rs-row ${sel?.id === s.id ? 'sel' : ''}" data-x="rsSel" data-v="${s.id}" tabindex="0" aria-selected="${sel?.id === s.id}">${head}
+          <td class="num">${a.beforePerDay}</td><td class="num">${a.afterPerDay}</td><td class="num">${signPct(a.uplift)}</td><td class="num">${signPct(a.market)}</td>
+          <td><span class="netbar"><span class="nb-track"><i class="${a.net >= 0 ? 'pos' : 'neg'}" style="width:${w}%"></i></span><b>${signPct(a.net)}</b></span></td>
+          <td class="num">${a.heatDays ? `${a.heatDays} 天` : '还没退'}</td><td class="num">${Math.round(a.returnRate * 100)}%</td></tr>`;
+      }).join('');
+
+      return `<header class="page-h"><div><h1>定线分析</h1><p class="sub">每批新线换上之后，各分馆的客流变化了多少</p></div>
+        <button class="btn primary" data-x="openDrawer" data-v="routeset">${icon('plus', 16)}登记换线</button></header>
+        <div class="toolbar"><div class="chips-row">${[['all', '全部分馆'], ...R.BRANCHES.map(b => [b.id, b.name])].map(([k, l]) => `<button class="fchip ${st.rsBranch === k ? 'on' : ''}" data-x="rsBranch" data-v="${k}">${l}</button>`).join('')}</div>
+          <div class="seg-sm" role="group" aria-label="统计窗口"><span>换线后</span>${[7, 14, 28].map(n => `<button class="${N === n ? 'on' : ''}" aria-pressed="${N === n}" data-x="rsWin" data-v="${n}">${n} 天</button>`).join('')}</div></div>
+        <details class="method"><summary>这些数字是怎么算的</summary><ul>
+          <li><b>换线前</b>：换线日前 14 天的日均入场。</li>
+          <li><b>换线后</b>：换线日后 ${N} 天的日均入场（上面可以换成 7、14 或 28 天），碰到这个分馆的下一次换线就截止。</li>
+          <li><b>同期其他分馆</b>：另外两个分馆在同样日期里的变化，代表节假日、天气、季节这些对所有分馆都有的影响。</li>
+          <li><b>净提升 = 提升 − 同期其他分馆</b>。比较不同批次、不同分馆时，看这个数。</li>
+          <li><b>热度持续</b>：扣除同期其他分馆的变化后，客流回落到换线前 5% 以内用了几天。</li>
+          <li>周末本来人就多，所有数字都已经按星期几校正过。</li></ul></details>
+        <div class="grid g-tiles">${tiles}</div>
+        ${focus}
+        <div class="card flush"><div class="card-h pad"><div><h2>各批次表现</h2><p class="sub">点一行，上面的热度曲线就换成这一批</p></div>
+          <div class="seg-sm" role="group" aria-label="排序">${[['date', '按时间'], ['net', '按净提升']].map(([k, l]) => `<button class="${st.rsSort === k ? 'on' : ''}" aria-pressed="${st.rsSort === k}" data-x="rsSort" data-v="${k}">${l}</button>`).join('')}</div></div>
+          <div class="tbl-wrap"><table class="tbl rs-tbl"><thead><tr><th>分馆</th><th>换线日期</th><th>区域和主题</th><th>定线员</th><th class="num">线路</th><th class="num">换线前日均</th><th class="num">换线后日均</th><th class="num">提升</th><th class="num">同期其他分馆</th><th>净提升</th><th class="num">热度持续</th><th class="num">回访率</th></tr></thead>
+          <tbody>${tableRows}</tbody></table></div>
+          <p class="note pad">原型里的客流是模拟数据。正式版直接用会员扫码入场记录（每条记录带分馆）和这里登记的换线批次自动计算。</p></div>`;
     },
 
     members() {
@@ -327,7 +452,37 @@ const Admin = (() => {
         <label>活动介绍<textarea name="desc" rows="3" placeholder="写清楚适合谁、要带什么、费用包含什么"></textarea></label>
         <p class="f-err" id="f-err" role="alert"></p>
         <div class="dr-f"><button type="button" class="btn" data-x="closeDrawer">取消</button><button type="submit" class="btn primary">发布到小程序</button></div></form>`,
+    routeset: () => {
+      const bs = RouteSets.BRANCHES, b0 = st.rsBranch === 'all' ? bs[0] : RouteSets.branch(st.rsBranch);
+      return `<div class="dr-h"><h2>登记换线</h2><button class="icon-btn" data-x="closeDrawer" aria-label="关闭">${icon('close', 20)}</button></div>
+      <form id="f-routeset" class="form" novalidate>
+        <div class="f-row"><label>分馆<select name="branch" id="rs-branch">${bs.map(b => `<option value="${b.id}" ${b === b0 ? 'selected' : ''}>${b.name}</option>`).join('')}</select></label>
+          <label>换线日期<input name="date" type="date" min="${todayKey()}" max="${dkey(addDays(TODAY, 60))}" value="${dkey(addDays(TODAY, 3))}"></label></div>
+        <div class="f-row"><label>区域<select name="area" id="rs-area">${b0.walls.map(w => `<option>${esc(w)}</option>`).join('')}</select></label>
+          <label>线路数<input name="routes" type="number" min="1" max="60" value="14"></label></div>
+        <label>主题<input name="theme" placeholder="比如：脚法与平衡" maxlength="12"></label>
+        <label>定线员<input name="setters" placeholder="多人用顿号隔开，比如：阿凯、小葵" maxlength="30"></label>
+        <label class="check"><input type="checkbox" name="notify" checked><span>在小程序首页「馆内动态」发布新线预告</span></label>
+        <p class="f-note">换线后，系统会自动统计这批线带来的客流，和以往批次放在一起比较。</p>
+        <p class="f-err" id="f-err" role="alert"></p>
+        <div class="dr-f"><button type="button" class="btn" data-x="closeDrawer">取消</button><button type="submit" class="btn primary">登记</button></div></form>`;
+    },
   };
+
+  function submitRouteSet(form) {
+    const f = Object.fromEntries(new FormData(form)), err = m => (form.querySelector('#f-err').textContent = m);
+    if (!f.date || f.date < todayKey()) return err('换线日期要选今天或以后');
+    const routes = Math.round(+f.routes);
+    if (!(routes >= 1)) return err('请填写线路数');
+    const setters = f.setters.split(/[、,，\s]+/).filter(Boolean);
+    const b = RouteSets.branch(f.branch);
+    RouteSets.register({ branch: f.branch, date: f.date, area: f.area, theme: f.theme.trim(), setters: setters.length ? setters : ['未填写'], routes });
+    if (f.notify) S.routeNews = { branch: b.name, date: f.date, area: f.area, routes, theme: f.theme.trim() };
+    pushFeed('admin', `登记了${b.name}${fmtMD(parseKey(f.date))}的换线：${f.area}，${routes} 条线`);
+    st.drawer = null;
+    Mini.renderAll(); Main.onData();
+    toast(f.notify ? '已登记。小程序首页的「馆内动态」已经发布了新线预告' : '已登记，换线后开始统计');
+  }
 
   function submitClass(form) {
     const f = Object.fromEntries(new FormData(form));
@@ -359,6 +514,14 @@ const Admin = (() => {
     memFilter: v => { st.memFilter = v; render(); },
     courseTab: v => { st.courseTab = v; render(); },
     entryTab: v => { st.entryTab = v; render(); },
+    rsBranch: v => { st.rsBranch = v; render(); },
+    rsWin: v => { st.rsWin = +v; render(); },
+    rsSort: v => { st.rsSort = v; render(); },
+    rsSel: v => {
+      st.rsSel = v; render();
+      document.querySelector(`tr[data-v="${v}"]`)?.focus({ preventScroll: true });
+      document.getElementById('rs-focus')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    },
     openDrawer: v => { st.drawer = v; render(); document.querySelector('.drawer input')?.focus(); },
     closeDrawer: () => { st.drawer = null; render(); },
     remind: v => toast(`已给 ${v} 发送续费提醒（小程序服务通知）`),
@@ -383,16 +546,21 @@ const Admin = (() => {
       e.preventDefault();
       if (e.target.id === 'f-class') submitClass(e.target);
       if (e.target.id === 'f-event') submitEvent(e.target);
+      if (e.target.id === 'f-routeset') submitRouteSet(e.target);
+    });
+    root.addEventListener('keydown', e => {
+      if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('tr[data-x]')) { e.preventDefault(); ACT[e.target.dataset.x](e.target.dataset.v); }
     });
     root.addEventListener('input', e => {
       if (e.target.id === 'mem-q') { st.memQuery = e.target.value; document.getElementById('mem-table').innerHTML = memberTable(); }
       if (e.target.dataset.pid) (st.priceDraft[e.target.dataset.pid] ||= {}).price = Math.round(+e.target.value);
     });
     root.addEventListener('change', e => {
+      if (e.target.id === 'rs-branch') document.getElementById('rs-area').innerHTML = RouteSets.branch(e.target.value).walls.map(w => `<option>${esc(w)}</option>`).join('');
       if (e.target.dataset.pidOn) { (st.priceDraft[e.target.dataset.pidOn] ||= {}).on = e.target.checked; e.target.parentElement.querySelector('em').textContent = e.target.checked ? '在售' : '已下架'; }
     });
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && st.drawer) { st.drawer = null; render(); } });
   }
 
-  return { render, bind, drawCharts, go: v => ACT.nav(v), reset: () => { page = 'dash'; Object.assign(st, { memFilter: 'all', memQuery: '', courseTab: 'class', entryTab: 'in', drawer: null, toast: null, priceDraft: {} }); } };
+  return { render, bind, drawCharts, go: v => ACT.nav(v), reset: () => { page = 'dash'; Object.assign(st, ST0, { priceDraft: {} }); } };
 })();

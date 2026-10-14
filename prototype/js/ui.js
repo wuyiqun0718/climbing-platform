@@ -119,6 +119,48 @@ const Charts = (() => {
     svg.addEventListener('mouseleave', () => { hb.innerHTML = ''; hideTip(); });
   }
 
+  /**
+   * 折线图：一条重点线 + 若干灰色参考线。
+   * xs: x 轴取值；series: [{name, color, values(可含 null 断开), focus}]；
+   * ref: 水平参考线的 y 值；mark: 竖线位置；shade: [x1, x2] 底色区间
+   */
+  function lines(el, { xs, series, height = 260, ref, refLabel = '', mark, markLabel = '', shade, xLabel = x => x, labelEvery = 7, tip }) {
+    const W = Math.max(280, el.clientWidth), H = height;
+    const m = { l: 40, r: 12, t: 16, b: 26 };
+    const pw = W - m.l - m.r, ph = H - m.t - m.b;
+    const vals = series.flatMap(s => s.values).filter(v => v != null).concat(ref ?? []);
+    const step = niceStep((Math.max(...vals) - Math.min(...vals)) / 4 || 10);
+    const lo = Math.floor(Math.min(...vals) / step) * step, hi = Math.ceil(Math.max(...vals) / step) * step;
+    const x = i => m.l + (i / (xs.length - 1)) * pw;
+    const y = v => m.t + ph - ((v - lo) / (hi - lo || 1)) * ph;
+    const xi = v => xs.indexOf(v);
+    let g = '';
+    if (shade && xi(shade[0]) >= 0) {
+      const a = x(xi(shade[0])), b = x(Math.max(xi(shade[0]), xi(shade[1]) >= 0 ? xi(shade[1]) : xs.length - 1));
+      g += `<rect x="${a}" y="${m.t}" width="${b - a}" height="${ph}" class="shade"/>`;
+    }
+    for (let v = lo; v <= hi + 1e-9; v += step) g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" class="grid"/><text x="${m.l - 8}" y="${y(v) + 4}" class="ax" text-anchor="end">${Math.round(v)}</text>`;
+    if (ref != null) g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(ref)}" y2="${y(ref)}" class="ref"/>${refLabel ? `<text x="${W - m.r}" y="${y(ref) - 6}" class="ax" text-anchor="end">${esc(refLabel)}</text>` : ''}`;
+    if (mark != null && xi(mark) >= 0) g += `<line x1="${x(xi(mark))}" x2="${x(xi(mark))}" y1="${m.t}" y2="${m.t + ph}" class="ref"/><text x="${x(xi(mark)) + 6}" y="${m.t + 10}" class="ax">${esc(markLabel)}</text>`;
+    xs.forEach((v, i) => { if (i % labelEvery === 0 || i === xs.length - 1) g += `<text x="${x(i)}" y="${H - 8}" class="ax" text-anchor="middle">${esc(xLabel(v))}</text>`; });
+    const path = vs => { let d = '', pen = false; vs.forEach((v, i) => { if (v == null) { pen = false; return; } d += `${pen ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`; pen = true; }); return d; };
+    const ordered = [...series].sort((a, b) => (a.focus ? 1 : 0) - (b.focus ? 1 : 0));
+    const paths = ordered.map(s => `<path d="${path(s.values)}" fill="none" stroke="${s.focus ? s.color : 'var(--ink-4)'}" stroke-width="${s.focus ? 2.5 : 1.5}" stroke-opacity="${s.focus ? 1 : 0.55}" stroke-linejoin="round" stroke-linecap="round"/>`).join('');
+    const focus = series.find(s => s.focus);
+    let end = '';
+    if (focus) { const li = focus.values.map((v, i) => v == null ? -1 : i).filter(i => i >= 0).pop(); if (li != null) end = `<circle cx="${x(li)}" cy="${y(focus.values[li])}" r="4.5" fill="${focus.color}" stroke="var(--white)" stroke-width="2"/>`; }
+    el.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" class="chart" role="img">${g}${paths}${end}<g class="cross"></g><rect x="${m.l}" y="${m.t}" width="${pw}" height="${ph}" class="hit"/></svg>`;
+    const svg = el.querySelector('svg'), cross = svg.querySelector('.cross');
+    svg.addEventListener('mousemove', ev => {
+      const box = svg.getBoundingClientRect();
+      const i = Math.max(0, Math.min(xs.length - 1, Math.round(((ev.clientX - box.left - m.l) / pw) * (xs.length - 1))));
+      const fv = focus?.values[i];
+      cross.innerHTML = `<line x1="${x(i)}" x2="${x(i)}" y1="${m.t}" y2="${m.t + ph}" class="crosshair"/>${fv != null ? `<circle cx="${x(i)}" cy="${y(fv)}" r="4.5" fill="${focus.color}" stroke="var(--white)" stroke-width="2"/>` : ''}`;
+      showTip(tip ? tip(xs[i], i) : `<b>${esc(xLabel(xs[i]))}</b>`, ev);
+    });
+    svg.addEventListener('mouseleave', () => { cross.innerHTML = ''; hideTip(); });
+  }
+
   // 迷你折线
   function spark(values, { w = 96, h = 28, color = 'var(--olive-700)' } = {}) {
     const max = Math.max(...values), min = Math.min(...values);
@@ -128,5 +170,5 @@ const Charts = (() => {
     return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" class="spark" aria-hidden="true"><path d="${d}" fill="none" stroke="var(--ink-4)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${lx}" cy="${ly}" r="3.5" fill="${color}" stroke="#fff" stroke-width="2"/></svg>`;
   }
 
-  return { columns, spark, showTip, hideTip };
+  return { columns, lines, spark, showTip, hideTip };
 })();
