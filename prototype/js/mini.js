@@ -332,6 +332,7 @@ const Mini = (() => {
             <button data-a="go" data-v='{"r":"bookings"}'>${icon('calendar', 20)}<span>我的预约</span><small>${u.bookings.length || ''}</small>${icon('right', 16)}</button>
             <button data-a="go" data-v='{"r":"shares"}'>${icon('gift', 20)}<span>分享与邀请</span><small></small>${icon('right', 16)}</button>
             <button data-a="go" data-v='{"r":"orders"}'>${icon('list', 20)}<span>订单记录</span><small></small>${icon('right', 16)}</button>
+            <button data-a="docs">${icon('shield', 20)}<span>保险与告知书</span><small>${u.policy ? '今天已投保' : ''}</small>${icon('right', 16)}</button>
             <button data-a="venue">${icon('pin', 20)}<span>场馆信息</span><small>10:00–23:00</small>${icon('right', 16)}</button>
           </div></div><div class="foot-space"></div>`,
       };
@@ -359,7 +360,9 @@ const Mini = (() => {
     },
 
     orders(uid) {
-      const list = S.orders.filter(o => o.name === S.users[uid].name);
+      const name = S.users[uid].name;
+      const list = S.policies.filter(p => p.name === name).map(p => ({ when: `今天 ${p.time}`, product: INSURANCE.name, amount: p.amount }))
+        .concat(S.orders.filter(o => o.name === name));
       return {
         title: '订单记录', body: `<div class="pad">${list.length ? `<ul class="log">${list.map(o => `<li><span>${o.when}</span><b>${esc(o.product)}</b><em>${yuan(o.amount)}</em></li>`).join('')}</ul>`
           : empty('还没有订单', '在这里购买的卡和课程都会留下记录。')}</div>`,
@@ -445,8 +448,9 @@ const Mini = (() => {
           <p class="en-sub">${r.again ? '同一天再次进出不会重复扣次，直接进去吧。' : rec.kind === 'referral' ? `欢迎第一次来 BENCHMARK，${esc(userName(rec.from))} 在里面等你。` : u.totalVisits <= 1 ? '欢迎第一次来 BENCHMARK，祝你爬得开心。' : '欢迎回来，祝你今天爬得顺。'}</p>
           <ul class="kv panel"><li><span>门店</span><b>${storeName(DEMO_STORE)}</b></li><li><span>使用</span><b>${esc(rec.label)}</b></li>
             ${rec.left != null ? `<li><span>剩余</span><b>${rec.left} 次</b></li>` : ''}
+            ${u.policy ? `<li><span>当日保险</span><b>已生效，今天 24:00 前</b></li>` : ''}
             <li><span>本月</span><b>第 ${u.visits.length} 次来馆</b></li></ul>
-          ${rec.kind === 'referral' || u.totalVisits <= 1 ? '<p class="fine">第一次来的话，前台会带你领鞋，再花 5 分钟讲一遍安全须知。</p>' : ''}
+          ${rec.kind === 'referral' || u.totalVisits <= 1 ? `<p class="fine">风险告知书已经在小程序里签好，不用再到前台签纸质单。第一次来的话，前台会带你领鞋，再花 5 分钟讲一遍安全须知。</p>` : ''}
           <button class="btn block dark" data-a="tab" data-v="home">完成</button></div>`,
       };
     },
@@ -526,6 +530,10 @@ const Mini = (() => {
   };
 
   // ---------- 弹层 ----------
+  const insureBox = (u, extra = '') => `<div class="insure">
+    <div class="ins-h">${icon('shield', 22)}<span><b>${INSURANCE.name}</b><small>${INSURANCE.insurer}</small></span><em>${u.policy ? '已生效' : yuan(INSURANCE.price)}</em></div>
+    <ul class="ins-cover">${INSURANCE.cover.map(([k, v]) => `<li><span>${k}</span><b>${v}</b></li>`).join('')}<li><span>被保险人</span><b>${esc(u.name)}，${u.idNo}</b></li>${extra}</ul></div>`;
+  const waiverText = label => `<details class="waiver"><summary>${label}</summary><ol>${WAIVER_POINTS.map(x => `<li>${x}</li>`).join('')}</ol></details>`;
   const sheetHead = t => `<div class="sheet-h"><span></span><b>${t}</b><button data-a="close" aria-label="关闭">${icon('close', 20)}</button></div>`;
   const SHEETS = {
     pay: (uid, s) => `<div class="pay"><div class="sheet-h"><button data-a="close" aria-label="关闭">${icon('close', 20)}</button><b></b><span></span></div>
@@ -534,9 +542,30 @@ const Mini = (() => {
       <div class="pay-row"><span>付款方式</span><span>零钱 ${icon('right', 14)}</span></div>
       <button class="btn-wx" data-a="payConfirm">确认支付</button><p class="pay-note">原型演示，不会真的扣款</p></div>`,
 
-    pickCard: (uid, s) => `${sheetHead('用哪张卡入场？')}<div class="opts">${s.opts.map(o => `<button class="opt ${s.sel === o.cardId ? 'on' : ''}" ${o.ok ? '' : 'disabled'} data-a="pickOpt" data-v="${o.cardId}">
-      <span class="radio"></span><span><b>${esc(o.title)}</b><small>${esc(o.sub)}</small></span></button>`).join('')}</div>
-      <button class="btn primary block" data-a="confirmEntry">确认入场</button>`,
+    entry: (uid, s) => {
+      const u = S.users[uid], buy = s.buy && product(s.buy), sign = !u.waiver;
+      const total = (buy ? buy.price : 0) + (u.policy ? 0 : INSURANCE.price);
+      const cards = buy
+        ? `<div class="opt on"><span class="radio"></span><span><b>${esc(buy.name)} ${yuan(buy.price)}</b><small>今天有效，含攀岩鞋租借</small></span></div>`
+        : s.opts.map(o => `<button class="opt ${s.sel === o.cardId ? 'on' : ''}" ${o.ok ? '' : 'disabled'} data-a="pickOpt" data-v="${o.cardId}">
+          <span class="radio"></span><span><b>${esc(o.title)}</b><small>${esc(o.sub)}</small></span></button>`).join('');
+      return `${sheetHead('确认入场')}
+        <p class="ent-l">用哪张卡</p><div class="opts">${cards}</div>
+        <p class="ent-l">当日保险</p>${insureBox(u)}
+        ${sign ? `<button class="agree ${s.agree ? 'on' : ''}" data-a="agree" role="checkbox" aria-checked="${!!s.agree}"><span class="box">${s.agree ? icon('check', 14) : ''}</span><span>我已阅读并同意《攀岩运动风险告知书》</span></button>
+          ${waiverText('看看告知书写了什么')}`
+          : `<p class="ent-ok">${icon('check', 14)}《攀岩运动风险告知书》${fmtDot(u.waiver)} 已签过</p>`}
+        <button class="btn primary block" data-a="confirmEntry" ${sign && !s.agree ? 'disabled' : ''}>${total ? `微信支付 ${yuan(total)} 并入场` : '确认入场'}</button>
+        <p class="fine center">${sign ? '告知书和身份证号只在第一次填，以后扫码确认就能进，前台不用再签纸质单。' : '保险在你付款后马上生效，当天多次进出不用重复买。'}</p>`;
+    },
+
+    docs: uid => {
+      const u = S.users[uid], p = u.policy;
+      return `${sheetHead('保险与告知书')}${insureBox(u, p ? `<li><span>保单号</span><b class="mono">${p.no}</b></li>` : '')}
+        <p class="fine">${p ? `今天 ${p.time} 扫码入场时买的。` : '每次扫码入场时一起买，当天有效。'}</p>
+        <ul class="kv panel"><li><span>风险告知书</span><b>${u.waiver ? `${fmtDot(u.waiver)} 已签` : '还没签，第一次入场时签'}</b></li></ul>
+        ${waiverText('告知书内容')}`;
+    },
 
     noCard: (uid, s) => {
       const blocked = s.opts.find(o => o.referral && !o.ok);
@@ -609,8 +638,7 @@ const Mini = (() => {
     if (u.checkins.length) return replace(uid, { r: 'entered', id: u.checkins[0].id, again: true });
     const opts = entryOptions(uid), ok = opts.filter(o => o.ok);
     if (!ok.length) return sheet(uid, { type: 'noCard', opts });
-    if (opts.length === 1) return finishCheckin(uid, ok[0].cardId);
-    sheet(uid, { type: 'pickCard', opts, sel: ok[0].cardId });
+    sheet(uid, { type: 'entry', opts, sel: ok[0].cardId });
   }
   function finishCheckin(uid, cardId) {
     const rec = doCheckin(uid, cardId);
@@ -627,7 +655,11 @@ const Mini = (() => {
     else if (then.type === 'class') { bookClass(uid, then.classId, 'wx'); toast(uid, '预约成功'); }
     else if (then.type === 'pt') { bookPt(uid, then.coachId, then.day, then.hour, 'wx'); cur(uid).hour = null; toast(uid, '预约成功'); }
     else if (then.type === 'event') { joinEvent(uid, then.eventId); toast(uid, '报名成功'); }
-    else if (then.type === 'singleEnter') { const c = buyProduct(uid, 's1'); return finishCheckin(uid, c.id); }
+    else if (then.type === 'enter') {
+      const cardId = then.buy ? buyProduct(uid, then.buy).id : then.cardId;
+      if (!S.users[uid].policy) buyInsurance(uid);
+      return finishCheckin(uid, cardId);
+    }
     sync();
   }
   function openWechat(uid) { S.unread[uid] = 0; P[uid].banner = null; if (cur(uid).r === 'wechat') render(uid); else go(uid, { r: 'wechat' }); }
@@ -648,12 +680,19 @@ const Mini = (() => {
     scan: uid => go(uid, { r: 'scan' }),
     scanNow: uid => scanned(uid),
     pickOpt: (uid, v) => { P[uid].sheet.sel = v; render(uid); },
-    confirmEntry: uid => { const id = P[uid].sheet.sel; P[uid].sheet = null; finishCheckin(uid, id); },
+    agree: uid => { P[uid].sheet.agree = !P[uid].sheet.agree; render(uid); },
+    confirmEntry: uid => {
+      const s = P[uid].sheet, u = S.users[uid], buy = s.buy && product(s.buy);
+      const amount = (buy ? buy.price : 0) + (u.policy ? 0 : INSURANCE.price);
+      const then = { type: 'enter', cardId: s.sel, buy: s.buy };
+      if (!amount) return afterPay(uid, then);
+      sheet(uid, { type: 'pay', amount, title: buy ? `${buy.name} + 当日保险` : INSURANCE.name, then });
+    },
     checkout: (uid, v) => go(uid, { r: 'checkout', pid: v }),
     buy: (uid, v) => go(uid, { r: 'checkout', pid: v }),
     pay: uid => { const p = product(cur(uid).pid); sheet(uid, { type: 'pay', amount: p.price, title: p.name, then: { type: 'product', pid: p.id } }); },
     payConfirm: uid => afterPay(uid, P[uid].sheet.then),
-    buySingleEnter: uid => sheet(uid, { type: 'pay', amount: product('s1').price, title: '单次票', then: { type: 'singleEnter' } }),
+    buySingleEnter: uid => sheet(uid, { type: 'entry', buy: 's1', opts: [] }),
     close: uid => closeSheet(uid),
     mask: uid => closeSheet(uid),
     shareCard: (uid, v) => sheet(uid, { type: 'shareQty', cardId: v, qty: 1 }),
@@ -698,6 +737,7 @@ const Mini = (() => {
       else { joinEvent(uid, e.id); P[uid].sheet = null; toast(uid, '报名成功'); sync(); }
     },
     venue: uid => sheet(uid, { type: 'venue' }),
+    docs: uid => sheet(uid, { type: 'docs' }),
   };
 
   function bind(container) {

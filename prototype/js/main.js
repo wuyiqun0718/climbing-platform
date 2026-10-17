@@ -12,8 +12,13 @@ const Main = (() => {
     },
     {
       title: '扫码入场', who: '阿杰',
-      steps: ['点首页的「扫码入场」', '两秒后自动识别前台码，也可以点按钮', '选年卡入场，不扣次数'],
+      steps: ['点首页的「扫码入场」', '两秒后自动识别前台码，也可以点按钮', '选年卡入场，不扣次数；当日保险 ¥5 一起付，告知书以前签过不用再签'],
       start: () => { Mini.start('jie', { r: 'home' }); show('jie'); },
+    },
+    {
+      title: '入场时一起买好当日保险', who: '小鹿',
+      steps: ['小鹿点首页的「扫码入场」，还没有卡，选「买单次票并入场」', '确认页里有当日保险，勾选同意《攀岩运动风险告知书》', '单次票加保险一次付完，前台不用再签纸质单', '入场页和「我的 → 保险与告知书」里能看到保单；后台「入场与分享」显示已投保'],
+      start: () => { Mini.start('lu', { r: 'home' }); show('lu'); },
     },
     {
       title: '把次卡送给朋友', who: '阿杰和小鹿',
@@ -48,7 +53,7 @@ const Main = (() => {
   ];
 
   function renderRoutes() {
-    document.getElementById('routes').innerHTML = ROUTES.map((r, i) => `<details class="route" ${i === 2 ? 'open' : ''}>
+    document.getElementById('routes').innerHTML = ROUTES.map((r, i) => `<details class="route" ${i === 3 ? 'open' : ''}>
       <summary><span class="r-t">${r.title}</span><span class="r-who">${r.who}</span></summary>
       <ol>${r.steps.map(s => `<li>${s}</li>`).join('')}</ol>
       <button class="btn sm dark" data-route="${i}">从这里开始</button></details>`).join('');

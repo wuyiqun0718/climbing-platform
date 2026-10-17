@@ -46,6 +46,17 @@ const PRODUCTS_SEED = [
   { id: 'g20', cat: 'class', name: '团课 20 次', price: 1980, sessions: 20, months: 8, desc: '约 ¥99/次，8 个月内有效', perks: ['满员时优先候补', '可带 1 位朋友试课'] },
 ];
 const CLASS_SINGLE_PRICE = 128;
+// 入场时一起买的当日保险。保险公司、价格、保额都是占位，等客户确认
+const INSURANCE = {
+  name: '攀岩当日意外险', price: 5, insurer: '合作保险公司（待定）',
+  cover: [['意外伤害', '10 万元'], ['意外医疗', '2 万元，不设免赔'], ['保障时间', '今天 24:00 前']],
+};
+const WAIVER_POINTS = [
+  '攀岩有坠落、扭伤、擦伤等风险，我会按自己的水平选择线路。',
+  '第一次来会先听前台讲安全须知，抱石落地时屈膝、不往人多的地方跳。',
+  '顶绳和先锋要用馆里认可的保护方式，没学过保护不给别人做保护。',
+  '身体不舒服、喝过酒不上墙；未成年人要有监护人陪同。',
+];
 
 const COACHES = [
   { id: 'max', name: 'Max', ab: 'Max', tags: ['抱石', '力量训练'], years: 9, price: 420, rating: 4.9, tone: 'olive', bio: '前省队抱石选手。擅长帮人突破平台期，课上会拍视频逐帧拆动作。' },
@@ -110,10 +121,12 @@ function seedState() {
       ],
       log: { cj2: [{ t: '9月27日', text: '入场', d: -1 }, { t: '9月14日', text: '送给 豆豆 1 次', d: -1 }, { t: '8月30日', text: '入场', d: -1 }, { t: '8月2日', text: '购买 10 次卡', d: +10 }] },
       referralMonth: null, visits, totalVisits: 86, bookings: [], checkins: [],
+      idNo: '3101**********2046', waiver: dkey(yearStart), policy: null,
     },
     lu: {
       id: 'lu', name: '小鹿', initial: '鹿', phone: '186****7731', tone: 'chalk', role: '第一次来',
       cards: [], log: {}, referralMonth: null, visits: [], totalVisits: 0, bookings: [], checkins: [],
+      idNo: '3101**********7731', waiver: null, policy: null,
     },
   };
 
@@ -121,6 +134,7 @@ function seedState() {
     products: PRODUCTS_SEED.map(p => ({ ...p, on: true })),
     classes, ptTaken, events, users,
     shares: [], orders: [], checkins: [], feed: [],
+    policies: [], // 小程序里买的当日保险；保费是代收，不算馆里的营收
     chats: {
       lu: [{ from: 'jie', type: 'text', text: '周末来爬墙吗？我带你', time: '昨天 21:14' }, { from: 'lu', type: 'text', text: '好啊！但我一次都没爬过😂', time: '昨天 21:16' }],
       jie: [{ from: 'jie', type: 'text', text: '周末来爬墙吗？我带你', time: '昨天 21:14' }, { from: 'lu', type: 'text', text: '好啊！但我一次都没爬过😂', time: '昨天 21:16' }],
@@ -214,7 +228,7 @@ const BASE = (() => {
   for (let i = 0; i < 14; i++) {
     const h = 10 + Math.floor(r() * (lastH - 10 + 1));
     const who = NAMES[Math.floor(r() * NAMES.length)];
-    checkins.push({ time: `${pad(h)}:${pad(Math.floor(r() * 60))}`, name: who, method: methods[Math.floor(r() * methods.length)], store: storeOf(who + i) });
+    checkins.push({ time: `${pad(h)}:${pad(Math.floor(r() * 60))}`, name: who, method: methods[Math.floor(r() * methods.length)], store: storeOf(who + i), insured: true });
   }
   checkins.sort((a, b) => b.time.localeCompare(a.time));
 
@@ -298,6 +312,15 @@ function entryOptions(uid) {
   return opts;
 }
 
+/** 买当日保险；第一次买的时候顺便签好风险告知书 */
+function buyInsurance(uid) {
+  const u = S.users[uid];
+  if (!u.waiver) u.waiver = todayKey();
+  u.policy = { no: 'PA' + todayKey().replaceAll('-', '') + (++_seq), time: nowHM(), amount: INSURANCE.price };
+  S.policies.unshift({ ...u.policy, name: u.name, store: DEMO_STORE, demo: true });
+  pushFeed('insure', `${u.name} 买了当日保险，${yuan(INSURANCE.price)}`);
+}
+
 function doCheckin(uid, cardId) {
   const u = S.users[uid], c = u.cards.find(x => x.id === cardId);
   let label = c.name, method = c.name;
@@ -316,7 +339,7 @@ function doCheckin(uid, cardId) {
   u.checkins.unshift(rec);
   if (!u.visits.includes(TODAY.getDate())) u.visits.push(TODAY.getDate());
   u.totalVisits += 1;
-  S.checkins.unshift({ time: rec.time, name: u.name, method, store: DEMO_STORE, demo: true });
+  S.checkins.unshift({ time: rec.time, name: u.name, method, store: DEMO_STORE, insured: !!u.policy, demo: true });
   pushFeed('in', `${u.name} 入场，${method}`);
   return rec;
 }

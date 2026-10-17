@@ -31,6 +31,7 @@ const Admin = (() => {
   const lastMtdTotal = (store = 'all') => CAT_ORDER.reduce((s, c) => s + storePart(BASE.lastMtd[c], store, `last|${c}`, c), 0);
   const baseEntriesSoFar = (store = 'all') => BASE.hours.filter(h => h.h <= openHour()).reduce((s, h) => s + storePart(h.n, store, `h|${h.h}`), 0);
   const todayEntries = (store = 'all') => baseEntriesSoFar(store) + S.checkins.filter(c => inStore(c, store)).length;
+  const insuredToday = (store = 'all') => baseEntriesSoFar(store) + (hasDemo(store) ? S.policies.length : 0);
   const lastWeekSoFar = (store = 'all') => Math.round(baseEntriesSoFar(store) * 0.91);
   const todayBookings = (store = 'all') => {
     const ks = S.classes.filter(k => k.date === todayKey() && inStore(k, store));
@@ -182,7 +183,7 @@ const Admin = (() => {
         ...BASE.checkins.slice(1, 8).map(c => ({ kind: 'in', text: `${c.name} 入场，${c.method}`, time: c.time, store: c.store })),
       ].filter(x => inStore(x, sto));
       const feed = (hasDemo(sto) ? S.feed.slice(0, 6).map(x => ({ ...x, demo: true, store: DEMO_STORE })) : []).concat(baseFeed).slice(0, 7);
-      const FEED_IC = { in: 'door', order: 'yuan', share: 'gift', claim: 'check', book: 'calendar', admin: 'edit' };
+      const FEED_IC = { in: 'door', order: 'yuan', share: 'gift', claim: 'check', book: 'calendar', admin: 'edit', insure: 'shield' };
       const where = all ? '三家店合计' : storeName(sto);
 
       const compare = all ? (() => {
@@ -433,8 +434,11 @@ const Admin = (() => {
             <div class="card kpi"><span class="label">期限卡</span><b class="value">${Math.round((total - demo.length) * .58) + by('卡') - by('次卡')}<small>人次</small></b></div>
             <div class="card kpi"><span class="label">次卡和单次票</span><b class="value">${Math.round((total - demo.length) * .33) + by('次卡') + by('单次票') - by('好友')}<small>人次</small></b></div>
             <div class="card kpi"><span class="label">好友赠送和老带新</span><b class="value">${Math.round((total - demo.length) * .09) + by('好友') + by('老带新')}<small>人次</small></b></div></div>
-          <div class="card flush"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>时间</th><th>会员</th><th>入场方式</th><th>门店</th></tr></thead>
-          <tbody>${rows.map(r => `<tr class="${r.demo ? 'is-new' : ''}"><td class="mono">${r.time}</td><td>${esc(r.name)} ${r.demo ? newChip : ''}</td><td>${esc(r.method)}</td><td>${storeName(r.store)}</td></tr>`).join('')}</tbody></table></div>
+          <div class="card ins-strip">${icon('shield', 22)}<div><b>今天入场的 ${total} 人次都在小程序里买好了当日保险</b>
+            <p class="sub">风险告知书第一次入场时在线签，签过的不用再签；前台不用再收纸质单。今天代收保费 ${yuan(insuredToday() * INSURANCE.price)}，不计入营收。</p></div></div>
+          <div class="card flush"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>时间</th><th>会员</th><th>入场方式</th><th>当日保险</th><th>门店</th></tr></thead>
+          <tbody>${rows.map(r => `<tr class="${r.demo ? 'is-new' : ''}"><td class="mono">${r.time}</td><td>${esc(r.name)} ${r.demo ? newChip : ''}</td><td>${esc(r.method)}</td>
+            <td>${r.insured ? `<span class="chip olive">${icon('shield', 12)}已投保</span>` : '<span class="chip warn">没买</span>'}</td><td>${storeName(r.store)}</td></tr>`).join('')}</tbody></table></div>
           <p class="note pad">只显示最近 ${rows.length} 条，原型数据。</p></div>`;
       }
       const stName = { pending: '等待领取', claimed: '已领取', used: '已入场' };
