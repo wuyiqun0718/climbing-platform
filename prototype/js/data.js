@@ -33,12 +33,12 @@ const CAT_COLOR = { period: 'var(--s1)', count: 'var(--s2)', pt: 'var(--s3)', cl
 
 // ---------- 静态目录 ----------
 const PRODUCTS_SEED = [
-  { id: 'm1', cat: 'period', name: '月卡', price: 599, days: 30, desc: '30 天内不限次入场', perks: ['每月 1 次老带新', '可冻结 7 天'] },
-  { id: 'm3', cat: 'period', name: '季卡', price: 1599, orig: 1797, days: 90, desc: '90 天内不限次入场', perks: ['每月 1 次老带新', '可冻结 15 天'], tag: '省 ¥198' },
-  { id: 'y1', cat: 'period', name: '年卡', price: 4999, orig: 7188, days: 365, desc: '365 天内不限次入场', perks: ['每月 1 次老带新', '可冻结 30 天', '送 2 节私教体验'], tag: '最划算' },
-  { id: 'c10', cat: 'count', name: '10 次卡', price: 899, times: 10, months: 6, desc: '6 个月内有效，约 ¥90/次', perks: ['可以分次送给朋友', '同一天进出多次只扣 1 次'] },
-  { id: 'c20', cat: 'count', name: '20 次卡', price: 1599, times: 20, months: 12, desc: '12 个月内有效，约 ¥80/次', perks: ['可以分次送给朋友', '同一天进出多次只扣 1 次'], tag: '常客之选' },
-  { id: 's1', cat: 'count', name: '单次票', price: 108, times: 1, months: 0, desc: '购买当天有效', perks: ['含攀岩鞋租借'] },
+  { id: 'm1', cat: 'period', name: '月卡', price: 599, days: 30, desc: '30 天内不限次入场', perks: ['每月 1 次老带新', '可冻结 7 天', '每次入场含当日保险'] },
+  { id: 'm3', cat: 'period', name: '季卡', price: 1599, orig: 1797, days: 90, desc: '90 天内不限次入场', perks: ['每月 1 次老带新', '可冻结 15 天', '每次入场含当日保险'], tag: '省 ¥198' },
+  { id: 'y1', cat: 'period', name: '年卡', price: 4999, orig: 7188, days: 365, desc: '365 天内不限次入场', perks: ['每月 1 次老带新', '可冻结 30 天', '送 2 节私教体验', '每次入场含当日保险'], tag: '最划算' },
+  { id: 'c10', cat: 'count', name: '10 次卡', price: 899, times: 10, months: 6, desc: '6 个月内有效，约 ¥90/次', perks: ['可以分次送给朋友', '同一天进出多次只扣 1 次', '每次入场含当日保险'] },
+  { id: 'c20', cat: 'count', name: '20 次卡', price: 1599, times: 20, months: 12, desc: '12 个月内有效，约 ¥80/次', perks: ['可以分次送给朋友', '同一天进出多次只扣 1 次', '每次入场含当日保险'], tag: '常客之选' },
+  { id: 's1', cat: 'count', name: '单次票', price: 108, times: 1, months: 0, desc: '购买当天有效', perks: ['含攀岩鞋租借', '含当日保险'] },
   { id: 'pt1', cat: 'pt', name: '私教体验课', price: 299, sessions: 1, months: 1, desc: '1 节 60 分钟，每人限购 1 次', perks: ['任选教练', '零基础友好'] },
   { id: 'pt5', cat: 'pt', name: '私教 5 节', price: 1980, sessions: 5, months: 3, desc: '约 ¥396/节，3 个月内有效', perks: ['可约任意教练'] },
   { id: 'pt10', cat: 'pt', name: '私教 10 节', price: 3680, sessions: 10, months: 6, desc: '约 ¥368/节，6 个月内有效', perks: ['可约任意教练', '送个人训练计划'], tag: '热卖' },
@@ -46,9 +46,10 @@ const PRODUCTS_SEED = [
   { id: 'g20', cat: 'class', name: '团课 20 次', price: 1980, sessions: 20, months: 8, desc: '约 ¥99/次，8 个月内有效', perks: ['满员时优先候补', '可带 1 位朋友试课'] },
 ];
 const CLASS_SINGLE_PRICE = 128;
-// 入场时一起买的当日保险。保险公司、价格、保额都是占位，等客户确认
+// 每次入场自动投的当日保险，包含在卡里，会员不另外付钱，保费由馆里出。
+// cost 是馆里每份的成本；保险公司、成本、保额都是占位，等客户确认
 const INSURANCE = {
-  name: '攀岩当日意外险', price: 5, insurer: '合作保险公司（待定）',
+  name: '攀岩当日意外险', cost: 5, insurer: '合作保险公司（待定）',
   cover: [['意外伤害', '10 万元'], ['意外医疗', '2 万元，不设免赔'], ['保障时间', '今天 24:00 前']],
 };
 const WAIVER_POINTS = [
@@ -134,7 +135,7 @@ function seedState() {
     products: PRODUCTS_SEED.map(p => ({ ...p, on: true })),
     classes, ptTaken, events, users,
     shares: [], orders: [], checkins: [], feed: [],
-    policies: [], // 小程序里买的当日保险；保费是代收，不算馆里的营收
+    policies: [], // 小程序里入场时自动投的当日保险；保费是馆里的成本
     chats: {
       lu: [{ from: 'jie', type: 'text', text: '周末来爬墙吗？我带你', time: '昨天 21:14' }, { from: 'lu', type: 'text', text: '好啊！但我一次都没爬过😂', time: '昨天 21:16' }],
       jie: [{ from: 'jie', type: 'text', text: '周末来爬墙吗？我带你', time: '昨天 21:14' }, { from: 'lu', type: 'text', text: '好啊！但我一次都没爬过😂', time: '昨天 21:16' }],
@@ -312,13 +313,13 @@ function entryOptions(uid) {
   return opts;
 }
 
-/** 买当日保险；第一次买的时候顺便签好风险告知书 */
+/** 入场时自动投当日保险（卡里含，会员不付钱）；第一次入场时顺便签好风险告知书 */
 function buyInsurance(uid) {
   const u = S.users[uid];
   if (!u.waiver) u.waiver = todayKey();
-  u.policy = { no: 'PA' + todayKey().replaceAll('-', '') + (++_seq), time: nowHM(), amount: INSURANCE.price };
+  u.policy = { no: 'PA' + todayKey().replaceAll('-', '') + (++_seq), time: nowHM(), cost: INSURANCE.cost };
   S.policies.unshift({ ...u.policy, name: u.name, store: DEMO_STORE, demo: true });
-  pushFeed('insure', `${u.name} 买了当日保险，${yuan(INSURANCE.price)}`);
+  pushFeed('insure', `${u.name} 的当日保险已生效`);
 }
 
 function doCheckin(uid, cardId) {

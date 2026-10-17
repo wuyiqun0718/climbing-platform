@@ -434,11 +434,11 @@ const Admin = (() => {
             <div class="card kpi"><span class="label">期限卡</span><b class="value">${Math.round((total - demo.length) * .58) + by('卡') - by('次卡')}<small>人次</small></b></div>
             <div class="card kpi"><span class="label">次卡和单次票</span><b class="value">${Math.round((total - demo.length) * .33) + by('次卡') + by('单次票') - by('好友')}<small>人次</small></b></div>
             <div class="card kpi"><span class="label">好友赠送和老带新</span><b class="value">${Math.round((total - demo.length) * .09) + by('好友') + by('老带新')}<small>人次</small></b></div></div>
-          <div class="card ins-strip">${icon('shield', 22)}<div><b>今天入场的 ${total} 人次都在小程序里买好了当日保险</b>
-            <p class="sub">风险告知书第一次入场时在线签，签过的不用再签；前台不用再收纸质单。今天代收保费 ${yuan(insuredToday() * INSURANCE.price)}，不计入营收。</p></div></div>
+          <div class="card ins-strip">${icon('shield', 22)}<div><b>今天入场的 ${total} 人次都自动投了当日保险</b>
+            <p class="sub">保险包含在卡里，会员不另外付钱；风险告知书第一次入场时在线签，前台不用再收纸质单。今天 ${insuredToday()} 份，保费约 ${yuan(insuredToday() * INSURANCE.cost)}（按每份 ${yuan(INSURANCE.cost)} 估），由馆里承担。</p></div></div>
           <div class="card flush"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>时间</th><th>会员</th><th>入场方式</th><th>当日保险</th><th>门店</th></tr></thead>
           <tbody>${rows.map(r => `<tr class="${r.demo ? 'is-new' : ''}"><td class="mono">${r.time}</td><td>${esc(r.name)} ${r.demo ? newChip : ''}</td><td>${esc(r.method)}</td>
-            <td>${r.insured ? `<span class="chip olive">${icon('shield', 12)}已投保</span>` : '<span class="chip warn">没买</span>'}</td><td>${storeName(r.store)}</td></tr>`).join('')}</tbody></table></div>
+            <td>${r.insured ? `<span class="chip olive">${icon('shield', 12)}已投保</span>` : '<span class="chip warn">没投保</span>'}</td><td>${storeName(r.store)}</td></tr>`).join('')}</tbody></table></div>
           <p class="note pad">只显示最近 ${rows.length} 条，原型数据。</p></div>`;
       }
       const stName = { pending: '等待领取', claimed: '已领取', used: '已入场' };

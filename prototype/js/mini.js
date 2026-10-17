@@ -360,9 +360,7 @@ const Mini = (() => {
     },
 
     orders(uid) {
-      const name = S.users[uid].name;
-      const list = S.policies.filter(p => p.name === name).map(p => ({ when: `今天 ${p.time}`, product: INSURANCE.name, amount: p.amount }))
-        .concat(S.orders.filter(o => o.name === name));
+      const list = S.orders.filter(o => o.name === S.users[uid].name);
       return {
         title: '订单记录', body: `<div class="pad">${list.length ? `<ul class="log">${list.map(o => `<li><span>${o.when}</span><b>${esc(o.product)}</b><em>${yuan(o.amount)}</em></li>`).join('')}</ul>`
           : empty('还没有订单', '在这里购买的卡和课程都会留下记录。')}</div>`,
@@ -531,7 +529,7 @@ const Mini = (() => {
 
   // ---------- 弹层 ----------
   const insureBox = (u, extra = '') => `<div class="insure">
-    <div class="ins-h">${icon('shield', 22)}<span><b>${INSURANCE.name}</b><small>${INSURANCE.insurer}</small></span><em>${u.policy ? '已生效' : yuan(INSURANCE.price)}</em></div>
+    <div class="ins-h">${icon('shield', 22)}<span><b>${INSURANCE.name}</b><small>${INSURANCE.insurer}</small></span><em>${u.policy ? '已生效' : '卡里含'}</em></div>
     <ul class="ins-cover">${INSURANCE.cover.map(([k, v]) => `<li><span>${k}</span><b>${v}</b></li>`).join('')}<li><span>被保险人</span><b>${esc(u.name)}，${u.idNo}</b></li>${extra}</ul></div>`;
   const waiverText = label => `<details class="waiver"><summary>${label}</summary><ol>${WAIVER_POINTS.map(x => `<li>${x}</li>`).join('')}</ol></details>`;
   const sheetHead = t => `<div class="sheet-h"><span></span><b>${t}</b><button data-a="close" aria-label="关闭">${icon('close', 20)}</button></div>`;
@@ -544,9 +542,9 @@ const Mini = (() => {
 
     entry: (uid, s) => {
       const u = S.users[uid], buy = s.buy && product(s.buy), sign = !u.waiver;
-      const total = (buy ? buy.price : 0) + (u.policy ? 0 : INSURANCE.price);
+      const total = buy ? buy.price : 0;
       const cards = buy
-        ? `<div class="opt on"><span class="radio"></span><span><b>${esc(buy.name)} ${yuan(buy.price)}</b><small>今天有效，含攀岩鞋租借</small></span></div>`
+        ? `<div class="opt on"><span class="radio"></span><span><b>${esc(buy.name)} ${yuan(buy.price)}</b><small>今天有效，含租鞋和当日保险</small></span></div>`
         : s.opts.map(o => `<button class="opt ${s.sel === o.cardId ? 'on' : ''}" ${o.ok ? '' : 'disabled'} data-a="pickOpt" data-v="${o.cardId}">
           <span class="radio"></span><span><b>${esc(o.title)}</b><small>${esc(o.sub)}</small></span></button>`).join('');
       return `${sheetHead('确认入场')}
@@ -556,13 +554,13 @@ const Mini = (() => {
           ${waiverText('看看告知书写了什么')}`
           : `<p class="ent-ok">${icon('check', 14)}《攀岩运动风险告知书》${fmtDot(u.waiver)} 已签过</p>`}
         <button class="btn primary block" data-a="confirmEntry" ${sign && !s.agree ? 'disabled' : ''}>${total ? `微信支付 ${yuan(total)} 并入场` : '确认入场'}</button>
-        <p class="fine center">${sign ? '告知书和身份证号只在第一次填，以后扫码确认就能进，前台不用再签纸质单。' : '保险在你付款后马上生效，当天多次进出不用重复买。'}</p>`;
+        <p class="fine center">${sign ? '告知书和身份证号只在第一次填，以后扫码确认就能进，前台不用再签纸质单。' : '保险包含在你的卡里，不用另外付钱，入场后马上生效。'}</p>`;
     },
 
     docs: uid => {
       const u = S.users[uid], p = u.policy;
       return `${sheetHead('保险与告知书')}${insureBox(u, p ? `<li><span>保单号</span><b class="mono">${p.no}</b></li>` : '')}
-        <p class="fine">${p ? `今天 ${p.time} 扫码入场时买的。` : '每次扫码入场时一起买，当天有效。'}</p>
+        <p class="fine">${p ? `今天 ${p.time} 扫码入场时自动投保。` : '每次扫码入场时自动投保，当天有效。'}保费包含在卡里，不用另外付钱。</p>
         <ul class="kv panel"><li><span>风险告知书</span><b>${u.waiver ? `${fmtDot(u.waiver)} 已签` : '还没签，第一次入场时签'}</b></li></ul>
         ${waiverText('告知书内容')}`;
     },
@@ -682,11 +680,10 @@ const Mini = (() => {
     pickOpt: (uid, v) => { P[uid].sheet.sel = v; render(uid); },
     agree: uid => { P[uid].sheet.agree = !P[uid].sheet.agree; render(uid); },
     confirmEntry: uid => {
-      const s = P[uid].sheet, u = S.users[uid], buy = s.buy && product(s.buy);
-      const amount = (buy ? buy.price : 0) + (u.policy ? 0 : INSURANCE.price);
+      const s = P[uid].sheet, buy = s.buy && product(s.buy);
       const then = { type: 'enter', cardId: s.sel, buy: s.buy };
-      if (!amount) return afterPay(uid, then);
-      sheet(uid, { type: 'pay', amount, title: buy ? `${buy.name} + 当日保险` : INSURANCE.name, then });
+      if (!buy) { P[uid].sheet = null; return afterPay(uid, then); }
+      sheet(uid, { type: 'pay', amount: buy.price, title: buy.name, then });
     },
     checkout: (uid, v) => go(uid, { r: 'checkout', pid: v }),
     buy: (uid, v) => go(uid, { r: 'checkout', pid: v }),
