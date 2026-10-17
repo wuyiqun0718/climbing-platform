@@ -14,9 +14,9 @@
 
 const RouteSets = (() => {
   const BRANCHES = [
-    { id: 'bingang', name: '滨港店', color: 'var(--s1)', base: 118, walls: ['A 区抱石墙', 'B 区抱石墙', '仰角区', '顶绳区'] },
-    { id: 'huiju', name: '汇聚店', color: 'var(--s2)', base: 86, walls: ['主墙', '平板区', '洞穴区'] },
-    { id: 'huanqiugang', name: '环球港店', color: 'var(--s3)', base: 64, walls: ['抱石墙', '训练墙'] },
+    { id: 'bingang', name: storeName('bingang'), color: 'var(--s1)', base: 118, walls: ['A 区抱石墙', 'B 区抱石墙', '仰角区', '顶绳区'] },
+    { id: 'huiju', name: storeName('huiju'), color: 'var(--s2)', base: 86, walls: ['主墙', '平板区', '洞穴区'] },
+    { id: 'huanqiugang', name: storeName('huanqiugang'), color: 'var(--s3)', base: 64, walls: ['抱石墙', '训练墙'] },
   ];
   const branch = id => BRANCHES.find(b => b.id === id);
   const GRADES = ['V0', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8'];
@@ -139,6 +139,8 @@ const RouteSets = (() => {
       // 回访率、跨馆来访：正式版从会员入场记录里算；原型按这批线的吸引力模拟
       returnRate: Math.min(0.75, 0.24 + 0.32 * s.q * k + 0.06),
       cross: Math.round(B.b0 * after.length * (0.03 + 0.11 * s.q) * k),
+      // 探馆频率：这段时间里来过的会员，人均来了几次
+      visitsPerMember: Math.round((1.25 + 0.95 * s.q * k + 0.08) * 10) / 10,
     };
   }
   /** 由字符串得到 0–1 之间的固定随机数 */

@@ -2,7 +2,7 @@
 
 const Admin = (() => {
   let page = 'dash';
-  const ST0 = { memFilter: 'all', memQuery: '', courseTab: 'class', entryTab: 'in', drawer: null, toast: null, priceDraft: {}, rsBranch: 'all', rsWin: 14, rsSel: null, rsSort: 'date' };
+  const ST0 = { memFilter: 'all', memQuery: '', courseTab: 'class', entryTab: 'in', drawer: null, toast: null, priceDraft: {}, rsBranch: 'all', rsWin: 14, rsSel: null, rsSort: 'date', dashStore: 'all' };
   const st = { ...ST0 };
   const NAV = [
     ['dash', '数据看板', 'chart'],
@@ -17,22 +17,58 @@ const Admin = (() => {
   const SERIES = CAT_ORDER.map(c => ({ key: c, name: CAT[c], color: CAT_COLOR[c] }));
 
   // ---------- 实时指标（历史数据 + 小程序里的演示操作） ----------
-  const demoOrders = () => S.orders;
-  const mtdByCat = () => { const m = { ...BASE.mtd }; demoOrders().forEach(o => m[o.cat] += o.amount); return m; };
-  const mtdTotal = () => Object.values(mtdByCat()).reduce((a, b) => a + b, 0);
-  const todayEntries = () => BASE.hours.filter(h => h.h <= openHour()).reduce((s, h) => s + h.n, 0) + S.checkins.length;
-  const lastWeekSoFar = () => Math.round(BASE.hours.filter(h => h.h <= openHour()).reduce((s, h) => s + h.n, 0) * 0.91);
-  const todayBookings = () => {
-    const ks = S.classes.filter(k => k.date === todayKey());
-    const pt = Object.keys(S.ptTaken).filter(k => k.split('|')[1] === todayKey()).length;
+  // store：'all' 是全部门店，否则是门店 id；小程序里的演示操作都算在 DEMO_STORE
+  const hasDemo = store => store === 'all' || store === DEMO_STORE;
+  const inStore = (rec, store) => store === 'all' || rec.store === store;
+  const demoOrders = (store = 'all') => (hasDemo(store) ? S.orders : []);
+  const mtdByCat = (store = 'all') => {
+    const m = {};
+    CAT_ORDER.forEach(c => (m[c] = storePart(BASE.mtd[c], store, `mtd|${c}`, c)));
+    demoOrders(store).forEach(o => (m[o.cat] += o.amount));
+    return m;
+  };
+  const mtdTotal = (store = 'all') => Object.values(mtdByCat(store)).reduce((a, b) => a + b, 0);
+  const lastMtdTotal = (store = 'all') => CAT_ORDER.reduce((s, c) => s + storePart(BASE.lastMtd[c], store, `last|${c}`, c), 0);
+  const baseEntriesSoFar = (store = 'all') => BASE.hours.filter(h => h.h <= openHour()).reduce((s, h) => s + storePart(h.n, store, `h|${h.h}`), 0);
+  const todayEntries = (store = 'all') => baseEntriesSoFar(store) + S.checkins.filter(c => inStore(c, store)).length;
+  const lastWeekSoFar = (store = 'all') => Math.round(baseEntriesSoFar(store) * 0.91);
+  const todayBookings = (store = 'all') => {
+    const ks = S.classes.filter(k => k.date === todayKey() && inStore(k, store));
+    const pt = storePart(Object.keys(S.ptTaken).filter(k => k.split('|')[1] === todayKey()).length, store, `pt|${todayKey()}`);
     return { classes: ks.length, people: ks.reduce((s, k) => s + k.booked, 0), pt };
   };
-  const demoNewMembers = () => Object.values(S.users).filter(u => u.id !== 'jie' && u.cards.some(c => ['period', 'count'].includes(c.kind) && c.pid !== 's1')).length;
-  const activeMembers = () => BASE.activeMembers.period + BASE.activeMembers.count + demoNewMembers();
-  const funnel = () => {
-    const f = { ...BASE.funnel }, refs = S.shares.filter(s => s.kind === 'referral');
-    f.sent += refs.length; f.claimed += refs.filter(s => s.status !== 'pending').length; f.visited += refs.filter(s => s.status === 'used').length;
+  const demoNewMembers = (store = 'all') => (hasDemo(store) ? Object.values(S.users).filter(u => u.id !== 'jie' && u.cards.some(c => ['period', 'count'].includes(c.kind) && c.pid !== 's1')).length : 0);
+  const activeMembers = (store = 'all') => storePart(BASE.activeMembers.period + BASE.activeMembers.count, store, 'active') + demoNewMembers(store);
+  /** 老带新漏斗；到馆和办卡两步取自「新客从哪来」的老带新那一行，两张卡片的数字一致 */
+  const funnel = (store = 'all') => {
+    const ref = newcomers(store).find(x => x.key === 'referral');
+    const f = { sent: storePart(BASE.funnel.sent, store, 'funnel'), claimed: storePart(BASE.funnel.claimed, store, 'funnel'), visited: ref.visitors, bought: ref.bought };
+    if (hasDemo(store)) {
+      const refs = S.shares.filter(s => s.kind === 'referral');
+      f.sent += refs.length; f.claimed += refs.filter(s => s.status !== 'pending').length;
+    }
     return f;
+  };
+  /** 近 30 天每天各品类营收，按门店拆；今天加上小程序里的演示订单 */
+  const revenueDays = (store = 'all') => {
+    const days = BASE.days.map(d => { const x = { key: d.key, date: d.date }; CAT_ORDER.forEach(c => (x[c] = storePart(d[c], store, `day|${d.key}|${c}`, c))); return x; });
+    demoOrders(store).forEach(o => (days[days.length - 1][o.cat] += o.amount));
+    return days;
+  };
+  /** 本月第一次来馆的新客，按来源；小鹿第一次入场、办卡也算进去 */
+  const newcomers = (store = 'all') => {
+    const rows = BASE.newcomers.map(n => {
+      const visitors = storePart(n.visitors, store, `nc|${n.key}`);
+      return { ...n, visitors, bought: Math.min(visitors, storePart(n.bought, store, `nc|${n.key}`)) };
+    });
+    const lu = S.users.lu;
+    if (hasDemo(store) && lu.checkins.length) {
+      const src = lu.checkins[lu.checkins.length - 1].kind === 'referral' ? 'referral' : lu.checkins[lu.checkins.length - 1].kind === 'gift' ? 'gift' : 'walkin';
+      const row = rows.find(x => x.key === src);
+      row.visitors += 1;
+      if (demoNewMembers(store)) row.bought += 1;
+    }
+    return rows;
   };
   const pct = (a, b) => b ? Math.round(a / b * 100) : 0;
   const delta = (now, before, unit = '%') => {
@@ -85,8 +121,7 @@ const Admin = (() => {
   function drawCharts() {
     const rev = document.getElementById('ch-rev');
     if (rev) {
-      const days = BASE.days.map(d => ({ ...d }));
-      demoOrders().forEach(o => days[days.length - 1][o.cat] += o.amount);
+      const days = revenueDays(st.dashStore);
       Charts.columns(rev, {
         labels: days.map(d => `${d.date.getMonth() + 1}/${d.date.getDate()}`),
         series: SERIES.map(s => ({ ...s, values: days.map(d => d[s.key]) })),
@@ -96,8 +131,8 @@ const Admin = (() => {
     const hrs = document.getElementById('ch-hours');
     if (hrs) {
       const lastH = openHour();
-      const vals = BASE.hours.map(h => h.h <= lastH ? h.n : 0);
-      vals[Math.max(0, lastH - 10)] += S.checkins.length;
+      const vals = BASE.hours.map(h => h.h <= lastH ? storePart(h.n, st.dashStore, `h|${h.h}`) : 0);
+      vals[Math.max(0, lastH - 10)] += S.checkins.filter(c => inStore(c, st.dashStore)).length;
       Charts.columns(hrs, {
         labels: BASE.hours.map(h => `${h.h}`), series: [{ name: '入场人数', color: 'var(--s1)', values: vals }],
         height: 200, fmt: v => Math.round(v), tipFmt: v => `${v} 人`, labelEvery: 2, future: lastH - 10, tipTitle: l => `${l}:00–${+l + 1}:00`,
@@ -132,34 +167,56 @@ const Admin = (() => {
   // ---------- 页面 ----------
   const PAGES = {
     dash() {
-      const m = mtdByCat(), total = mtdTotal(), lastTotal = Object.values(BASE.lastMtd).reduce((a, b) => a + b, 0);
-      const f = funnel(), tb = todayBookings();
-      const revSpark = BASE.days.slice(-14).map((d, i, arr) => CAT_ORDER.reduce((s, c) => s + d[c], 0) + (i === arr.length - 1 ? demoOrders().reduce((s, o) => s + o.amount, 0) : 0));
-      const expiring = BASE.members.filter(x => x.kind === 'period' && daysLeft(x.expire) >= 0 && daysLeft(x.expire) <= 7).sort((a, b) => a.expire.localeCompare(b.expire));
-      const todayClasses = S.classes.filter(k => k.date === todayKey());
-      const feed = S.feed.slice(0, 6).map(x => ({ ...x, demo: true })).concat([
-        { kind: 'in', text: `${BASE.checkins[0].name} 入场，${BASE.checkins[0].method}`, time: BASE.checkins[0].time },
-        { kind: 'order', text: `${BASE.orders[0].name} 购买了 ${BASE.orders[0].product}，${yuan(BASE.orders[0].amount)}`, time: BASE.orders[0].when.replace('今天 ', '') },
-        { kind: 'share', text: `${BASE.shares[1].from} 把 ${BASE.shares[1].what} 送给了 ${BASE.shares[1].to}`, time: '昨天' },
-        { kind: 'in', text: `${BASE.checkins[1].name} 入场，${BASE.checkins[1].method}`, time: BASE.checkins[1].time },
-      ]).slice(0, 7);
+      const sto = st.dashStore, all = sto === 'all';
+      const m = mtdByCat(sto), total = mtdTotal(sto), lastTotal = lastMtdTotal(sto);
+      const f = funnel(sto), tb = todayBookings(sto), nc = newcomers(sto);
+      const ncTotal = nc.reduce((a, x) => a + x.visitors, 0), ncBought = nc.reduce((a, x) => a + x.bought, 0);
+      const days = revenueDays(sto);
+      const revSpark = days.slice(-14).map(d => CAT_ORDER.reduce((a, c) => a + d[c], 0));
+      const expiring = BASE.members.filter(x => inStore(x, sto) && x.kind === 'period' && daysLeft(x.expire) >= 0 && daysLeft(x.expire) <= 7).sort((a, b) => a.expire.localeCompare(b.expire));
+      const todayClasses = S.classes.filter(k => k.date === todayKey() && inStore(k, sto));
+      const baseFeed = [
+        { kind: 'in', text: `${BASE.checkins[0].name} 入场，${BASE.checkins[0].method}`, time: BASE.checkins[0].time, store: BASE.checkins[0].store },
+        { kind: 'order', text: `${BASE.orders[0].name} 购买了 ${BASE.orders[0].product}，${yuan(BASE.orders[0].amount)}`, time: BASE.orders[0].when.replace('今天 ', ''), store: storeOf(BASE.orders[0].name) },
+        { kind: 'share', text: `${BASE.shares[1].from} 把 ${BASE.shares[1].what} 送给了 ${BASE.shares[1].to}`, time: '昨天', store: storeOf(BASE.shares[1].from) },
+        ...BASE.checkins.slice(1, 8).map(c => ({ kind: 'in', text: `${c.name} 入场，${c.method}`, time: c.time, store: c.store })),
+      ].filter(x => inStore(x, sto));
+      const feed = (hasDemo(sto) ? S.feed.slice(0, 6).map(x => ({ ...x, demo: true, store: DEMO_STORE })) : []).concat(baseFeed).slice(0, 7);
       const FEED_IC = { in: 'door', order: 'yuan', share: 'gift', claim: 'check', book: 'calendar', admin: 'edit' };
+      const where = all ? '三家店合计' : storeName(sto);
+
+      const compare = all ? (() => {
+        const rows = STORES.map(s => {
+          const rs = RouteSets.branchStatus(s.id), n = newcomers(s.id);
+          return { s, rev: mtdTotal(s.id), entries: todayEntries(s.id), members: activeMembers(s.id), nv: n.reduce((a, x) => a + x.visitors, 0), nb: n.reduce((a, x) => a + x.bought, 0), rs };
+        });
+        const maxRev = Math.max(...rows.map(r => r.rev));
+        return `<div class="card flush"><div class="card-h pad"><div><h2>门店对比</h2><p class="sub">点门店名只看这家店</p></div></div>
+          <div class="tbl-wrap"><table class="tbl cmp-tbl"><thead><tr><th>门店</th><th>本月营收</th><th class="num">今日入场</th><th class="num">有效会员</th><th class="num">本月新客</th><th class="num">其中办卡</th><th>当前这批线</th></tr></thead>
+          <tbody>${rows.map(r => `<tr><td><button class="link-btn" data-x="dashStore" data-v="${r.s.id}">${r.s.name}</button></td>
+            <td><span class="cmp-rev"><span class="cmp-bar"><i style="width:${r.rev / maxRev * 100}%"></i></span><b>${yuan(r.rev)}</b><small>${pct(r.rev, total)}%</small></span></td>
+            <td class="num">${r.entries}</td><td class="num">${r.members}</td><td class="num">${r.nv}</td><td class="num">${r.nb}<small class="muted">（${pct(r.nb, r.nv)}%）</small></td>
+            <td>${r.rs.days < 7 ? `<span class="chip">${icon('bolt', 12)}新线第 ${r.rs.days} 天</span>` : r.rs.cooled ? `<span class="chip warn">${icon('clock', 12)}热度已回落</span>` : `<span class="chip olive">热度 ${r.rs.heat}</span>`}</td></tr>`).join('')}</tbody></table></div></div>`;
+      })() : '';
+
       return `
-      <header class="page-h"><div><h1>数据看板</h1><p class="sub">${dateLine()}</p></div>
+      <header class="page-h"><div><h1>数据看板</h1><p class="sub">${dateLine()}，${where}</p></div>
         <span class="live-pill"><i></i>和小程序原型实时联动</span></header>
+      <div class="toolbar"><div class="chips-row">${[['all', '全部门店'], ...STORES.map(s => [s.id, s.name])].map(([k, l]) => `<button class="fchip ${sto === k ? 'on' : ''}" data-x="dashStore" data-v="${k}">${l}</button>`).join('')}</div></div>
       <div class="grid g-4">
         <div class="card kpi hero"><span class="label">本月营收</span><b class="value">${yuan(total)}</b>
           <div class="kpi-f">${delta(total, lastTotal)}<small>比上月同期</small>${Charts.spark(revSpark, { color: '#000' })}</div></div>
-        <div class="card kpi"><span class="label">今日入场</span><b class="value">${todayEntries()}<small>人次</small></b>
-          <div class="kpi-f">${delta(todayEntries(), lastWeekSoFar(), '')}<small>比上${WEEK[TODAY.getDay()]}同一时段</small></div></div>
+        <div class="card kpi"><span class="label">今日入场</span><b class="value">${todayEntries(sto)}<small>人次</small></b>
+          <div class="kpi-f">${delta(todayEntries(sto), lastWeekSoFar(sto), '')}<small>比上${WEEK[TODAY.getDay()]}同一时段</small></div></div>
         <div class="card kpi"><span class="label">今日约课</span><b class="value">${tb.people + tb.pt}<small>人次</small></b>
           <div class="kpi-f"><small>团课 ${tb.classes} 节共 ${tb.people} 人，私教 ${tb.pt} 节</small></div></div>
-        <div class="card kpi"><span class="label">有效会员</span><b class="value">${activeMembers()}<small>人</small></b>
-          <div class="kpi-f"><small>本月新增 ${BASE.newMembers + demoNewMembers()} 人，其中老带新 ${f.bought} 人</small></div></div>
+        <div class="card kpi"><span class="label">有效会员</span><b class="value">${activeMembers(sto)}<small>人</small></b>
+          <div class="kpi-f"><small>本月新增 ${ncBought} 人，其中老带新 ${nc.find(x => x.key === 'referral').bought} 人</small></div></div>
       </div>
+      ${compare}
       <div class="grid g-2-1">
         <div class="card"><div class="card-h"><div><h2>近 30 天营收</h2><p class="sub">按品类堆叠，鼠标移上去看每天明细</p></div></div>
-          <div class="legend">${SERIES.map(s => `<span><i style="background:${s.color}"></i>${s.name}</span>`).join('')}</div>
+          <div class="legend">${SERIES.map(x => `<span><i style="background:${x.color}"></i>${x.name}</span>`).join('')}</div>
           <div id="ch-rev" class="chart-box"></div></div>
         <div class="card"><div class="card-h"><div><h2>本月营收构成</h2><p class="sub">${TODAY.getMonth() + 1}月1日至今</p></div></div>
           <ul class="hbars">${CAT_ORDER.map(c => `<li><span class="hb-l"><i style="background:${CAT_COLOR[c]}"></i>${CAT[c]}</span>
@@ -168,20 +225,26 @@ const Admin = (() => {
           <p class="note">期限卡收入按售出金额统计。按天摊销后的确认收入见「财务」。</p></div>
       </div>
       <div class="grid g-3">
-        <div class="card"><div class="card-h"><div><h2>今日分时段入场</h2><p class="sub">10:00–23:00，每小时</p></div></div><div id="ch-hours" class="chart-box"></div></div>
+        <div class="card"><div class="card-h"><div><h2>新客从哪来</h2><p class="sub">${TODAY.getMonth() + 1}月第一次来馆的 ${ncTotal} 人，其中 ${ncBought} 人办了卡</p></div>
+            <button class="btn sm ghost" data-x="ask" data-v="q1">${icon('chat', 14)}问一问</button></div>
+          <ul class="nc-list">${nc.map(x => `<li><span class="nc-l">${x.name}</span>
+            <span class="nc-track"><span class="nc-v" style="width:${pct(x.visitors, Math.max(...nc.map(y => y.visitors)))}%"><i style="width:${pct(x.bought, x.visitors)}%"></i></span></span>
+            <span class="nc-n"><b>${x.visitors}</b><small>办卡 ${x.bought}，${pct(x.bought, x.visitors)}%</small></span></li>`).join('')}</ul>
+          <p class="note nc-key"><i class="k1"></i>第一次来馆<i class="k2"></i>其中已办卡</p></div>
         <div class="card"><div class="card-h"><div><h2>老带新转化</h2><p class="sub">${TODAY.getMonth() + 1}月，期限卡会员发出的邀请</p></div></div>
           <ul class="funnel">${[['发出邀请', f.sent], ['朋友领取', f.claimed], ['到馆体验', f.visited], ['办卡', f.bought]].map(([l, v], i, arr) =>
             `<li><span class="fn-l">${l}</span><span class="fn-track"><span style="width:${pct(v, f.sent)}%"></span></span><span class="fn-v"><b>${v}</b>${i ? `<small>${pct(v, arr[i - 1][1])}%</small>` : '<small></small>'}</span></li>`).join('')}</ul>
           <p class="note">右侧百分比是相对上一步的转化率。</p></div>
         <div class="card"><div class="card-h"><div><h2>7 天内到期</h2><p class="sub">期限卡会员，可以发续费提醒</p></div><span class="chip warn">${icon('clock', 13)}${expiring.length} 人</span></div>
-          <ul class="expiring">${expiring.map(x => `<li><span><b>${x.name}</b><small>${x.card}，${daysLeft(x.expire) === 0 ? '今天' : daysLeft(x.expire) + ' 天后'}到期</small></span><button class="btn sm" data-x="remind" data-v="${x.name}">提醒续费</button></li>`).join('')}</ul></div>
+          <ul class="expiring">${expiring.map(x => `<li><span><b>${x.name}</b><small>${x.card}，${all ? `${storeName(x.store)}，` : ''}${daysLeft(x.expire) === 0 ? '今天' : daysLeft(x.expire) + ' 天后'}到期</small></span><button class="btn sm" data-x="remind" data-v="${x.name}">提醒续费</button></li>`).join('') || '<li class="muted">这家店 7 天内没有到期的期限卡</li>'}</ul></div>
       </div>
-      <div class="grid g-2-1">
-        <div class="card"><div class="card-h"><div><h2>实时动态</h2><p class="sub">在左边的小程序里操作，这里会出现新记录</p></div></div>
-          <ul class="feed">${feed.map(x => `<li class="${x.demo ? 'is-new' : ''}"><span class="fd-ic">${icon(FEED_IC[x.kind] || 'bolt', 16)}</span><span class="fd-t">${esc(x.text)}</span>${x.demo ? newChip : ''}<time>${x.time}</time></li>`).join('')}</ul></div>
+      <div class="grid g-3">
+        <div class="card"><div class="card-h"><div><h2>今日分时段入场</h2><p class="sub">10:00–23:00，每小时</p></div></div><div id="ch-hours" class="chart-box"></div></div>
         <div class="card"><div class="card-h"><div><h2>今天的团课</h2><p class="sub">${todayClasses.length} 节</p></div><button class="btn sm" data-x="nav" data-v="courses">课表</button></div>
-          <ul class="today-classes">${todayClasses.map(k => `<li><time>${k.start}</time><span><b>${esc(k.name)}</b><small>${esc(coach(k.coach).name)}，${k.level}</small></span>
+          <ul class="today-classes">${todayClasses.map(k => `<li><time>${k.start}</time><span><b>${esc(k.name)}</b><small>${esc(coach(k.coach).name)}，${all ? storeName(k.store) : k.level}</small></span>
             <span class="tc-fill"><span class="seats"><i style="width:${k.booked / k.cap * 100}%"></i></span><small>${k.booked}/${k.cap}</small></span></li>`).join('') || '<li class="muted">今天没有团课</li>'}</ul></div>
+        <div class="card"><div class="card-h"><div><h2>实时动态</h2><p class="sub">${hasDemo(sto) ? '在小程序里操作，这里会出现新记录' : '这家店最近的记录'}</p></div></div>
+          <ul class="feed">${feed.map(x => `<li class="${x.demo ? 'is-new' : ''}"><span class="fd-ic">${icon(FEED_IC[x.kind] || 'bolt', 16)}</span><span class="fd-t">${esc(x.text)}${all ? `<small>${storeName(x.store)}</small>` : ''}</span>${x.demo ? newChip : ''}<time>${x.time}</time></li>`).join('')}</ul></div>
       </div>`;
     },
 
@@ -291,7 +354,8 @@ const Admin = (() => {
       }).join('');
 
       return `<header class="page-h"><div><h1>定线分析</h1><p class="sub">每批新线换上之后，各分馆的客流变化了多少</p></div>
-        <button class="btn primary" data-x="openDrawer" data-v="routeset">${icon('plus', 16)}登记换线</button></header>
+        <div class="row-btns"><button class="btn ghost" data-x="ask" data-v="q2">${icon('chat', 16)}问一问：哪批线会员来得最勤</button>
+        <button class="btn primary" data-x="openDrawer" data-v="routeset">${icon('plus', 16)}登记换线</button></div></header>
         <div class="toolbar"><div class="chips-row">${[['all', '全部分馆'], ...R.BRANCHES.map(b => [b.id, b.name])].map(([k, l]) => `<button class="fchip ${st.rsBranch === k ? 'on' : ''}" data-x="rsBranch" data-v="${k}">${l}</button>`).join('')}</div>
           <div class="seg-sm" role="group" aria-label="统计窗口"><span>换线后</span>${[7, 14, 28].map(n => `<button class="${N === n ? 'on' : ''}" aria-pressed="${N === n}" data-x="rsWin" data-v="${n}">${n} 天</button>`).join('')}</div></div>
         <details class="method"><summary>这些数字是怎么算的</summary><ul>
@@ -326,7 +390,7 @@ const Admin = (() => {
         body = `<div class="week">${[0, 1, 2, 3, 4, 5, 6].map(i => {
           const d = addDays(TODAY, i), key = dkey(d), list = S.classes.filter(k => k.date === key);
           return `<div class="wk-col"><div class="wk-h ${i === 0 ? 'today' : ''}"><b>${i === 0 ? '今天' : WEEK[d.getDay()]}</b><small>${d.getMonth() + 1}/${d.getDate()}</small></div>
-            ${list.map(k => `<div class="wk-item lv-bg-${k.level} ${k.fresh ? 'is-new' : ''}"><time>${k.start}–${k.end}</time><b>${esc(k.name)}</b><small>${esc(coach(k.coach).name)}，${k.level}</small>
+            ${list.map(k => `<div class="wk-item lv-bg-${k.level} ${k.fresh ? 'is-new' : ''}"><time>${k.start}–${k.end}</time><b>${esc(k.name)}</b><small>${storeName(k.store)}，${esc(coach(k.coach).name)}，${k.level}</small>
               <span class="seats"><i style="width:${k.booked / k.cap * 100}%"></i></span><small>${k.booked}/${k.cap} 人${k.members.length ? `，含 ${k.members.map(userName).join('、')}` : ''}</small></div>`).join('') || '<p class="wk-empty">没有课</p>'}</div>`;
         }).join('')}</div>`;
       } else {
@@ -369,8 +433,8 @@ const Admin = (() => {
             <div class="card kpi"><span class="label">期限卡</span><b class="value">${Math.round((total - demo.length) * .58) + by('卡') - by('次卡')}<small>人次</small></b></div>
             <div class="card kpi"><span class="label">次卡和单次票</span><b class="value">${Math.round((total - demo.length) * .33) + by('次卡') + by('单次票') - by('好友')}<small>人次</small></b></div>
             <div class="card kpi"><span class="label">好友赠送和老带新</span><b class="value">${Math.round((total - demo.length) * .09) + by('好友') + by('老带新')}<small>人次</small></b></div></div>
-          <div class="card flush"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>时间</th><th>会员</th><th>入场方式</th><th>入口</th></tr></thead>
-          <tbody>${rows.map(r => `<tr class="${r.demo ? 'is-new' : ''}"><td class="mono">${r.time}</td><td>${esc(r.name)} ${r.demo ? newChip : ''}</td><td>${esc(r.method)}</td><td>小程序扫码</td></tr>`).join('')}</tbody></table></div>
+          <div class="card flush"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>时间</th><th>会员</th><th>入场方式</th><th>门店</th></tr></thead>
+          <tbody>${rows.map(r => `<tr class="${r.demo ? 'is-new' : ''}"><td class="mono">${r.time}</td><td>${esc(r.name)} ${r.demo ? newChip : ''}</td><td>${esc(r.method)}</td><td>${storeName(r.store)}</td></tr>`).join('')}</tbody></table></div>
           <p class="note pad">只显示最近 ${rows.length} 条，原型数据。</p></div>`;
       }
       const stName = { pending: '等待领取', claimed: '已领取', used: '已入场' };
@@ -432,6 +496,7 @@ const Admin = (() => {
     class: () => `<div class="dr-h"><h2>发布团课</h2><button class="icon-btn" data-x="closeDrawer" aria-label="关闭">${icon('close', 20)}</button></div>
       <form id="f-class" class="form" novalidate>
         <label>课程名称<input name="name" required placeholder="比如：女生抱石专场" maxlength="16"></label>
+        <label>门店<select name="store">${STORES.map(x => `<option value="${x.id}">${x.name}</option>`).join('')}</select></label>
         <div class="f-row"><label>难度<select name="level"><option>入门</option><option>进阶</option><option>全部</option></select></label>
           <label>教练<select name="coach">${COACHES.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}</select></label></div>
         <div class="f-row"><label>日期<select name="day">${[0, 1, 2, 3, 4, 5, 6].map(i => { const d = addDays(TODAY, i); return `<option value="${i}" ${i === 1 ? 'selected' : ''}>${fmtMD(d)} ${WEEK[d.getDay()]}</option>`; }).join('')}</select></label>
@@ -488,12 +553,12 @@ const Admin = (() => {
     const f = Object.fromEntries(new FormData(form));
     if (!f.name.trim()) return form.querySelector('#f-err').textContent = '请填写课程名称';
     const [h, mi] = f.start.split(':').map(Number), endMin = h * 60 + mi + +f.dur;
-    const k = { id: newId('k'), date: dkey(addDays(TODAY, +f.day)), name: f.name.trim(), level: f.level, coach: f.coach, start: f.start, end: `${pad(Math.floor(endMin / 60))}:${pad(endMin % 60)}`, cap: Math.max(1, +f.cap || 8), booked: 0, members: [], fresh: true };
+    const k = { id: newId('k'), date: dkey(addDays(TODAY, +f.day)), name: f.name.trim(), store: f.store, level: f.level, coach: f.coach, start: f.start, end: `${pad(Math.floor(endMin / 60))}:${pad(endMin % 60)}`, cap: Math.max(1, +f.cap || 8), booked: 0, members: [], fresh: true };
     S.classes.push(k); S.classes.sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
     pushFeed('admin', `后台发布了团课「${k.name}」，${fmtMD(parseKey(k.date))} ${k.start}`);
     st.drawer = null; st.courseTab = 'class';
     Mini.renderAll(); Main.onData();
-    toast(`已发布。小程序「约课 → 团课」里选 ${fmtMD(parseKey(k.date))} 就能看到`);
+    toast(`已发布到${storeName(k.store)}。小程序「约课 → 团课」里选 ${fmtMD(parseKey(k.date))} 就能看到`);
   }
   function submitEvent(form) {
     const f = Object.fromEntries(new FormData(form));
@@ -514,6 +579,8 @@ const Admin = (() => {
     memFilter: v => { st.memFilter = v; render(); },
     courseTab: v => { st.courseTab = v; render(); },
     entryTab: v => { st.entryTab = v; render(); },
+    dashStore: v => { st.dashStore = v; render(); },
+    ask: v => Ask.preset(v),
     rsBranch: v => { st.rsBranch = v; render(); },
     rsWin: v => { st.rsWin = +v; render(); },
     rsSort: v => { st.rsSort = v; render(); },
@@ -562,5 +629,5 @@ const Admin = (() => {
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && st.drawer) { st.drawer = null; render(); } });
   }
 
-  return { render, bind, drawCharts, go: v => ACT.nav(v), reset: () => { page = 'dash'; Object.assign(st, ST0, { priceDraft: {} }); } };
+  return { render, bind, drawCharts, go: (v, patch) => { Object.assign(st, patch || {}); ACT.nav(v); }, metrics: { mtdTotal, funnel, newcomers, activeMembers }, reset: () => { page = 'dash'; Object.assign(st, ST0, { priceDraft: {} }); } };
 })();

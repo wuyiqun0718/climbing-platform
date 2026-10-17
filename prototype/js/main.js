@@ -40,6 +40,11 @@ const Main = (() => {
       steps: ['切到管理后台，打开「定线分析」', '对比三个分馆当前这批线的热度，看哪个馆该换线了', '在表格里点一批线，看它的热度曲线和净提升', '点「登记换线」，回到小程序首页看新线预告'],
       start: () => { setMode('admin'); Admin.go('routes'); },
     },
+    {
+      title: '用中文问数据', who: '管理后台',
+      steps: ['切到管理后台，点右下角「问数据」', '问「上个月哪个活动的新客占比最高？」，先选「新客」的口径', '展开「查询过程」，看它查了哪些数据', '再问「过去六个月哪一批定线的探馆频率最高？」'],
+      start: () => { setMode('admin'); Admin.go('dash'); Ask.open(); },
+    },
   ];
 
   function renderRoutes() {
@@ -72,6 +77,7 @@ const Main = (() => {
     document.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-selected', b.dataset.mode === m));
     document.getElementById('mini').hidden = m !== 'mini';
     document.getElementById('admin').hidden = m !== 'admin';
+    Ask.setMode(m);
     if (m === 'admin') Admin.render(); else Mini.renderAll();
     scrollTo(0, 0);
   }
@@ -83,6 +89,7 @@ const Main = (() => {
     Mini.reset();
     Mini.bind(document.getElementById('phones'));
     Admin.bind(document.getElementById('admin'));
+    Ask.init();
     Mini.renderAll();
     show('jie');
 
@@ -93,7 +100,7 @@ const Main = (() => {
       const f = e.target.closest('[data-focus]'); if (f) show(f.dataset.focus);
     });
     document.getElementById('reset').addEventListener('click', () => {
-      S = seedState(); Mini.reset(); Admin.reset(); updateLabels(); setMode(mode); show('jie');
+      S = seedState(); Mini.reset(); Admin.reset(); Ask.reset(); updateLabels(); setMode(mode); show('jie');
     });
     let t; addEventListener('resize', () => { clearTimeout(t); t = setTimeout(() => { if (mode === 'admin') Admin.drawCharts(); }, 150); });
     // 状态栏时间每分钟走一次

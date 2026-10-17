@@ -154,7 +154,7 @@ const Mini = (() => {
     return `<div class="class-row ${mine ? 'mine' : ''}">
       <div class="cr-time"><b>${k.start}</b><small>${k.end}</small></div>
       <div class="cr-main"><b>${esc(k.name)}</b>
-        <div class="cr-meta"><span class="lv lv-${k.level}">${k.level}</span><span>${esc(coach(k.coach).name)}</span></div>
+        <div class="cr-meta"><span class="lv lv-${k.level}">${k.level}</span><span>${esc(coach(k.coach).name)}，${storeName(k.store)}</span></div>
         <div class="cr-seats">${seats(k.booked, k.cap)}<small>${k.booked}/${k.cap}</small></div></div>
       <div class="cr-act">${btn}</div></div>`;
   }
@@ -206,7 +206,7 @@ const Mini = (() => {
           <div class="panel booking-mini"><span class="bk-kind k-${next.kind}">${{ pt: '私教', class: '团课', event: '活动' }[next.kind]}</span><div><b>${esc(next.title)}</b><small>${dayLabel(next.date)} ${next.time}</small></div></div>` : ''}
         <div class="sec-h"><h3>最近的团课</h3><button class="link" data-a="goto" data-v="courses:class">课表</button></div>
         <div class="hscroll">${upcoming.map(k => `<button class="mini-class" data-a="goto" data-v="courses:class:${daysLeft(k.date)}">
-          <small>${dayLabel(k.date)} ${k.start}</small><b>${esc(k.name)}</b><span><span class="lv lv-${k.level}">${k.level}</span>${esc(coach(k.coach).name)}</span>${seats(k.booked, k.cap)}</button>`).join('')}</div>
+          <small>${dayLabel(k.date)} ${k.start}</small><b>${esc(k.name)}</b><span><span class="lv lv-${k.level}">${k.level}</span>${storeName(k.store)}</span>${seats(k.booked, k.cap)}</button>`).join('')}</div>
         <div class="sec-h"><h3>馆内动态</h3></div>
         ${S.routeNews ? `<div class="panel news"><span class="news-tag">新线预告</span><b>${esc(S.routeNews.branch)}${fmtMD(parseKey(S.routeNews.date))}换线</b>
           <p>${esc(S.routeNews.area)}，${S.routeNews.routes} 条新线${S.routeNews.theme ? `，主题「${esc(S.routeNews.theme)}」` : ''}。换线当天这块区域会封闭半天。</p></div>` : ''}
@@ -423,6 +423,7 @@ const Mini = (() => {
       return {
         title: '扫码入场', top: 'dark', bodyCls: 'scan-body', body: `<div class="scanview">
           <p class="sv-tip">对准前台的入场二维码</p>
+          <p class="sv-store">演示：你现在在${storeName(DEMO_STORE)}</p>
           <div class="frame"><svg class="fake-qr" viewBox="0 0 21 21" aria-hidden="true">${cells}${finder(0, 0)}${finder(14, 0)}${finder(0, 14)}</svg><i class="c1"></i><i class="c2"></i><i class="c3"></i><i class="c4"></i><span class="laser"></span></div>
           <p class="sv-sub">识别中……</p>
           <button class="btn" data-a="scanNow">模拟扫到前台码</button></div>`,
@@ -442,7 +443,7 @@ const Mini = (() => {
           <h2>${r.again ? '今天已经入场过了' : '入场成功'}</h2>
           <div class="en-time">${rec.time}</div>
           <p class="en-sub">${r.again ? '同一天再次进出不会重复扣次，直接进去吧。' : rec.kind === 'referral' ? `欢迎第一次来 BENCHMARK，${esc(userName(rec.from))} 在里面等你。` : u.totalVisits <= 1 ? '欢迎第一次来 BENCHMARK，祝你爬得开心。' : '欢迎回来，祝你今天爬得顺。'}</p>
-          <ul class="kv panel"><li><span>使用</span><b>${esc(rec.label)}</b></li>
+          <ul class="kv panel"><li><span>门店</span><b>${storeName(DEMO_STORE)}</b></li><li><span>使用</span><b>${esc(rec.label)}</b></li>
             ${rec.left != null ? `<li><span>剩余</span><b>${rec.left} 次</b></li>` : ''}
             <li><span>本月</span><b>第 ${u.visits.length} 次来馆</b></li></ul>
           ${rec.kind === 'referral' || u.totalVisits <= 1 ? '<p class="fine">第一次来的话，前台会带你领鞋，再花 5 分钟讲一遍安全须知。</p>' : ''}

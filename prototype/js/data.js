@@ -56,12 +56,12 @@ const COACHES = [
 const PT_HOURS = [10, 11, 14, 15, 16, 17, 19, 20];
 
 const CLASS_TEMPLATES = [
-  { name: '亲子攀岩', level: '入门', coach: 'zhou', start: '10:00', end: '11:30', cap: 8, days: [6, 0] },
-  { name: '先锋攀登体验', level: '进阶', coach: 'may', start: '14:00', end: '16:00', cap: 6, days: [6, 0, 3] },
-  { name: '抱石动作工作坊', level: '进阶', coach: 'max', start: '16:30', end: '18:00', cap: 8, days: [6, 0] },
-  { name: '拉伸与灵活性', level: '全部', coach: 'kiki', start: '18:30', end: '19:30', cap: 12, days: [2, 4, 6] },
-  { name: '抱石入门', level: '入门', coach: 'kiki', start: '19:00', end: '20:30', cap: 8, days: [1, 3, 5, 0] },
-  { name: '核心与指力', level: '进阶', coach: 'max', start: '20:00', end: '21:00', cap: 10, days: [1, 2, 4, 5] },
+  { name: '亲子攀岩', store: 'huanqiugang', level: '入门', coach: 'zhou', start: '10:00', end: '11:30', cap: 8, days: [6, 0] },
+  { name: '先锋攀登体验', store: 'bingang', level: '进阶', coach: 'may', start: '14:00', end: '16:00', cap: 6, days: [6, 0, 3] },
+  { name: '抱石动作工作坊', store: 'huiju', level: '进阶', coach: 'max', start: '16:30', end: '18:00', cap: 8, days: [6, 0] },
+  { name: '拉伸与灵活性', store: 'huiju', level: '全部', coach: 'kiki', start: '18:30', end: '19:30', cap: 12, days: [2, 4, 6] },
+  { name: '抱石入门', store: 'huanqiugang', level: '入门', coach: 'kiki', start: '19:00', end: '20:30', cap: 8, days: [1, 3, 5, 0] },
+  { name: '核心与指力', store: 'bingang', level: '进阶', coach: 'max', start: '20:00', end: '21:00', cap: 10, days: [1, 2, 4, 5] },
 ];
 
 function nextWeekday(wd) { for (let i = 0; i < 7; i++) { const d = addDays(TODAY, i); if (d.getDay() === wd) return d; } return TODAY; }
@@ -77,7 +77,7 @@ function seedState() {
     const d = addDays(TODAY, i);
     CLASS_TEMPLATES.filter(t => t.days.includes(d.getDay())).forEach(t => {
       const fill = i === 0 ? 0.65 + r() * 0.35 : 0.25 + r() * 0.7;
-      classes.push({ id: newId('k'), date: dkey(d), name: t.name, level: t.level, coach: t.coach, start: t.start, end: t.end, cap: t.cap, booked: Math.min(t.cap, Math.round(t.cap * fill)), members: [] });
+      classes.push({ id: newId('k'), date: dkey(d), name: t.name, store: t.store, level: t.level, coach: t.coach, start: t.start, end: t.end, cap: t.cap, booked: Math.min(t.cap, Math.round(t.cap * fill)), members: [] });
     });
   }
   classes.sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start));
@@ -132,6 +132,23 @@ function seedState() {
 }
 
 // ---------- 后台用的历史模拟数据（只生成一次） ----------
+/** 上个月办过的活动。firstVisit：报名人里活动当天之前从没来过馆的；noCard：报名时还没有任何卡的 */
+function pastEvents() {
+  const first = new Date(TODAY.getFullYear(), TODAY.getMonth() - 1, 1), last = new Date(TODAY.getFullYear(), TODAY.getMonth(), 0);
+  const days = []; for (let d = new Date(first); d <= last; d.setDate(d.getDate() + 1)) days.push(new Date(d));
+  const nth = (wd, n) => days.filter(d => d.getDay() === wd)[n] || days[days.length - 1];
+  const fridays = days.filter(d => d.getDay() === 5);
+  const night = [[38, 4, 7], [42, 6, 9], [35, 3, 6], [44, 5, 8], [40, 4, 7]];
+  return [
+    ...fridays.map((d, i) => ({ title: '周五夜爬', store: 'bingang', date: dkey(d), signups: night[i][0], firstVisit: night[i][1], noCard: night[i][2] })),
+    { title: '新人体验日', store: 'huanqiugang', date: dkey(nth(6, 1)), signups: 24, firstVisit: 16, noCard: 20 },
+    { title: '女生抱石专场', store: 'huiju', date: dkey(nth(3, 1)), signups: 26, firstVisit: 7, noCard: 10 },
+    { title: '夏季抱石积分赛', store: 'bingang', date: dkey(nth(0, 2)), signups: 58, firstVisit: 3, noCard: 5 },
+    { title: '亲子攀岩周末', store: 'huanqiugang', date: dkey(nth(0, 2)), signups: 20, firstVisit: 8, noCard: 12 },
+    { title: '夏末夜爬派对', store: 'huiju', date: dkey(nth(6, 3)), signups: 61, firstVisit: 19, noCard: 25 },
+  ];
+}
+
 const BASE = (() => {
   const r = rng(77);
   // 近 30 天营收，按品类
@@ -171,11 +188,14 @@ const BASE = (() => {
   const NAMES = ['林小满', '陈一鸣', '王朵朵', '赵子轩', '周舟', '吴越', '郑好', '孙婷', '李想', '何夕', '许多', '高远', '宋雨', '唐果', '韩梅', '曹冬', '夏天', '彭湃', '苏晓', '叶子', '罗兰', '梁辰', '谢婉', '蒋鹏', '沈星', '杜若', '田甜', '姜山', '范宁', '方圆', '石磊', '秦川', '白露', '邓凯', '豆豆', '阿伟'];
   const CARD_TYPES = [['年卡', 'period'], ['季卡', 'period'], ['月卡', 'period'], ['10 次卡', 'count'], ['20 次卡', 'count']];
   const SOURCES = ['自己来的', '自己来的', '自己来的', '老带新', '好友送次卡', '点评/小红书'];
+  const SLEEPERS = [7, 12, 18, 23, 27, 31]; // 固定几位：年卡/季卡还没到期，但超过 30 天没来了
   const members = NAMES.map((name, i) => {
-    const [card, kind] = CARD_TYPES[Math.floor(r() * CARD_TYPES.length)];
+    let [card, kind] = CARD_TYPES[Math.floor(r() * CARD_TYPES.length)];
     let expire = Math.round(r() * 300) - 10;
     if (i < 5) expire = 1 + i; // 保证有几个即将到期
-    const last = i < 5 ? Math.round(r() * 5) : Math.round(r() * r() * 45);
+    const ra = r(), rb = r();
+    let last = i < 5 ? Math.round(ra * 5) : Math.round(ra * rb * 28);
+    if (SLEEPERS.includes(i)) { [card, kind] = CARD_TYPES[i % 2]; expire = 40 + i * 4; last = 33 + (i % 5) * 9; }
     return {
       name, phone: `1${3 + Math.floor(r() * 6)}${Math.floor(r() * 10)}****${pad(Math.floor(r() * 100))}${pad(Math.floor(r() * 100))}`,
       card, kind, expire: dkey(addDays(TODAY, expire)),
@@ -183,6 +203,7 @@ const BASE = (() => {
       month: last > 30 ? 0 : Math.round(r() * 12),
       last: dkey(addDays(TODAY, -last)),
       source: SOURCES[Math.floor(r() * SOURCES.length)],
+      store: storeOf(name),
     };
   });
 
@@ -192,7 +213,8 @@ const BASE = (() => {
   const checkins = [];
   for (let i = 0; i < 14; i++) {
     const h = 10 + Math.floor(r() * (lastH - 10 + 1));
-    checkins.push({ time: `${pad(h)}:${pad(Math.floor(r() * 60))}`, name: NAMES[Math.floor(r() * NAMES.length)], method: methods[Math.floor(r() * methods.length)] });
+    const who = NAMES[Math.floor(r() * NAMES.length)];
+    checkins.push({ time: `${pad(h)}:${pad(Math.floor(r() * 60))}`, name: who, method: methods[Math.floor(r() * methods.length)], store: storeOf(who + i) });
   }
   checkins.sort((a, b) => b.time.localeCompare(a.time));
 
@@ -215,6 +237,14 @@ const BASE = (() => {
   return {
     days, mtd, lastMtd, months, hours, members, checkins, orders, shares,
     funnel: { sent: 52, claimed: 44, visited: 31, bought: 12 },
+    // 本月第一次来馆的人，按来源；bought 是其中已经办卡的（加起来等于本月新增会员 38 人）
+    newcomers: [
+      { key: 'referral', name: '老带新', visitors: 31, bought: 12 },
+      { key: 'gift', name: '好友送的次卡', visitors: 24, bought: 7 },
+      { key: 'platform', name: '点评、小红书', visitors: 47, bought: 9 },
+      { key: 'walkin', name: '自己找来的', visitors: 44, bought: 10 },
+    ],
+    pastEvents: pastEvents(),
     activeMembers: { period: 186, count: 126 }, newMembers: 38, deferred: 486320, refunds: 1798,
   };
 })();
@@ -286,7 +316,7 @@ function doCheckin(uid, cardId) {
   u.checkins.unshift(rec);
   if (!u.visits.includes(TODAY.getDate())) u.visits.push(TODAY.getDate());
   u.totalVisits += 1;
-  S.checkins.unshift({ time: rec.time, name: u.name, method, demo: true });
+  S.checkins.unshift({ time: rec.time, name: u.name, method, store: DEMO_STORE, demo: true });
   pushFeed('in', `${u.name} 入场，${method}`);
   return rec;
 }
