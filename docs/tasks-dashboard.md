@@ -59,7 +59,7 @@
 - 内容：用 `admin.dashboard({ store })` 替换示例数字：本月营收、今日入场（对比上周同日同时段）、今日约课、有效会员；跟着门店切换刷新。
 - 完成标准：切门店数字变化；加载和出错有状态。
 
-**7. 看板：新客从哪来、老带新转化**
+**7. 看板：新客从哪来、老带新转化** ✅
 - 依赖：6
 - 涉及文件：`packages/api/src/admin.ts`（`DashboardSummary` 补字段）、`DashboardPage.vue`、mock
 - 内容：本月新客按来源（walkin / referral / gift / platform(美团) / legacy_import）分，含其中办卡人数；老带新发出、领取、到店、转化办卡。

@@ -1,3 +1,4 @@
+import type { NewcomerRow, ReferralFunnel } from '@climb/api';
 import { weekdayOf, type DateKey } from '@climb/utils';
 
 /** 今日入场和上周同日同一时段比：差几人次。跟原型一样用人次差，不用百分比（早上人少，百分比跳得厉害） */
@@ -23,4 +24,23 @@ export function createLatest() {
       return mine === seq ? { stale: false, ok: false, error } : { stale: true };
     }
   };
+}
+
+/** 百分比取整；分母为 0 时算 0，不出 NaN */
+export const pct = (a: number, b: number) => (b ? Math.round((a / b) * 100) : 0);
+
+/** 新客合计：第一次来的人数和其中办卡的人数 */
+export function newcomerTotals(rows: NewcomerRow[]): { visitors: number; bought: number } {
+  return rows.reduce((t, r) => ({ visitors: t.visitors + r.visitors, bought: t.bought + r.bought }), { visitors: 0, bought: 0 });
+}
+
+/** 老带新漏斗的四步：条长相对「发出」，rate 是相对上一步的转化率（第一步没有） */
+export function funnelSteps(f: ReferralFunnel): { label: string; value: number; width: number; rate: number | null }[] {
+  const steps: [string, number][] = [
+    ['发出邀请', f.sent],
+    ['朋友领取', f.claimed],
+    ['到店体验', f.visited],
+    ['办卡', f.bought],
+  ];
+  return steps.map(([label, value], i) => ({ label, value, width: pct(value, f.sent), rate: i ? pct(value, steps[i - 1][1]) : null }));
 }

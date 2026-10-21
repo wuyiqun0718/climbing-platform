@@ -1,4 +1,5 @@
-import type { ApiRequest, ApiResponse, DashboardSummary, LoginResult, RequestAdapter, Staff } from '@climb/api';
+import { MEMBER_SOURCES, type ApiRequest, type ApiResponse, type DashboardSummary, type LoginResult, type NewcomerRow, type ReferralFunnel, type RequestAdapter, type Staff } from '@climb/api';
+import { monthOf } from '@climb/utils';
 import { canSeeStore } from '../../permissions';
 import type { MockDb } from './db';
 
@@ -27,6 +28,32 @@ function toStaff({ password: _p, active: _a, ...s }: MockDb['staff'][number]): S
   return s;
 }
 
+/** 本月 1 日到今天第一次到店的新客，按来源；口径见 @climb/api 的 NewcomerRow */
+function newcomerRows(db: MockDb, storeIds: string[]): NewcomerRow[] {
+  const month = monthOf(db.today);
+  const hasCard = (on: string | null) => on !== null && on <= db.today;
+  const fresh = db.members.filter(m => monthOf(m.firstVisitOn) === month && m.firstVisitOn <= db.today && storeIds.includes(m.firstVisitStoreId));
+  return MEMBER_SOURCES.map(source => {
+    const ms = fresh.filter(m => m.source === source);
+    return { source, visitors: ms.length, bought: ms.filter(m => hasCard(m.firstCardOn)).length };
+  });
+}
+
+/** 本月发出的老带新邀请的漏斗，按邀请人的归属门店；口径见 @climb/api 的 ReferralFunnel */
+function referralFunnel(db: MockDb, storeIds: string[]): ReferralFunnel {
+  const month = monthOf(db.today);
+  const member = (id: string | null) => (id ? db.members.find(m => m.id === id) : undefined);
+  const sent = db.referrals.filter(
+    r => monthOf(r.createdOn) === month && r.createdOn <= db.today && storeIds.includes(member(r.fromMemberId)?.homeStoreId ?? ''),
+  );
+  const claimed = sent.filter(r => r.claimedByMemberId);
+  const visited = claimed.filter(r => r.usedOn && r.usedOn <= db.today);
+  const bought = visited.filter(r => {
+    const on = member(r.claimedByMemberId)?.firstCardOn;
+    return on != null && on <= db.today;
+  });
+  return { sent: sent.length, claimed: claimed.length, visited: visited.length, bought: bought.length };
+}
 
 const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handle: Handler }[] = [
   {
@@ -67,6 +94,8 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
         lastWeekSameTimeEntries: sum('lastWeekSameTimeEntries'),
         todayBookings: sum('todayBookings'),
         activeMembers: sum('activeMembers'),
+        newcomers: newcomerRows(db, ids),
+        referral: referralFunnel(db, ids),
       };
       return ok(res);
     },
