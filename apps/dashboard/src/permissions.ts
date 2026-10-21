@@ -16,7 +16,7 @@ export type ActionKey =
   | 'order.create'
   /** 手动登记入场（15） */
   | 'checkIn.create'
-  /** 撤销入场（16）。等馆方：前台能不能自己撤销，先允许（必须写原因，进操作日志） */
+  /** 撤销入场（16）。已定前台可以撤销（必须写原因，进操作日志） */
   | 'checkIn.void'
   /** 调整次数、有效期（17） */
   | 'card.adjust'

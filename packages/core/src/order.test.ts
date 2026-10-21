@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { addDays, addMonths } from '@climb/utils';
 import { ledgerMismatch } from './ledger';
-import { DESK_PRICE_REASON_MAX, deskOrderErrors, issueCard, parseYuanInput, periodStartsOn, purchaseLedgerEntry } from './order';
+import { DEFAULT_VALID_MONTHS, DESK_PRICE_REASON_MAX, deskOrderErrors, issueCard, parseYuanInput, periodStartsOn, purchaseLedgerEntry } from './order';
 import type { Card, Product } from './types';
 
 const product = (p: Partial<Product> & Pick<Product, 'category'>): Product => ({ id: 'p', name: '卡', priceCents: 59_900, perks: [], onSale: true, ...p });
@@ -47,13 +48,31 @@ describe('线下收款开卡', () => {
 
   it('次卡、课包按次数和有效月数开卡，purchase 流水跟卡对得上', () => {
     const card = issueCard({ id: 'c2', product: ten, memberId: 'm', cards: [], today: '2026-10-21' });
-    expect(card).toMatchObject({ kind: 'count', total: 10, remaining: 10, expiresOn: '2027-04-21', productId: 'p-10x' });
+    expect(card).toMatchObject({ kind: 'count', total: 10, remaining: 10, expiresOn: '2027-04-20', productId: 'p-10x' });
     const pt = issueCard({ id: 'c3', product: product({ category: 'pt', quantity: 5, validMonths: 3 }), memberId: 'm', cards: [], today: '2026-10-21' });
-    expect(pt).toMatchObject({ kind: 'pt', total: 5, remaining: 5, expiresOn: '2027-01-21' });
+    expect(pt).toMatchObject({ kind: 'pt', total: 5, remaining: 5, expiresOn: '2027-01-20' });
     for (const c of [card, pt, issueCard({ id: 'c4', product: month, memberId: 'm', cards: [], today: '2026-10-21' })]) {
       const e = purchaseLedgerEntry({ id: 'l', card: c, at: '2026-10-21T10:00:00+08:00', orderId: 'o', operator: { operatorType: 'staff', operatorId: 's' } });
       expect(e).toMatchObject({ reason: 'purchase', ref: { type: 'order', id: 'o' } });
       expect(ledgerMismatch(c, [e])).toBeNull();
     }
+  });
+
+  it('有效期含开卡当天；月底开卡按月底对齐', () => {
+    const one = product({ category: 'count', quantity: 10, validMonths: 1 });
+    expect(issueCard({ id: 'c', product: one, memberId: 'm', cards: [], today: '2026-10-21' }).expiresOn).toBe('2026-11-20');
+    expect(issueCard({ id: 'c', product: one, memberId: 'm', cards: [], today: '2027-01-31' }).expiresOn).toBe(addDays(addMonths('2027-01-31', 1), -1));
+  });
+
+  it('没填有效月数：单次票只当天有效，多次的按 DEFAULT_VALID_MONTHS', () => {
+    const today = '2026-10-21';
+    const single = issueCard({ id: 'c', product: product({ category: 'count', quantity: 1 }), memberId: 'm', cards: [], today });
+    expect(single).toMatchObject({ total: 1, remaining: 1, expiresOn: today });
+    expect(issueCard({ id: 'c', product: product({ category: 'count' }), memberId: 'm', cards: [], today }).expiresOn).toBe(today);
+    const multi = issueCard({ id: 'c', product: product({ category: 'class', quantity: 10 }), memberId: 'm', cards: [], today });
+    expect(multi.expiresOn).toBe(addDays(addMonths(today, DEFAULT_VALID_MONTHS), -1));
+    expect(multi.expiresOn).toBe('2027-10-20');
+    const singleWithMonths = issueCard({ id: 'c', product: product({ category: 'pt', quantity: 1, validMonths: 3 }), memberId: 'm', cards: [], today });
+    expect(singleWithMonths.expiresOn).toBe('2027-01-20');
   });
 });

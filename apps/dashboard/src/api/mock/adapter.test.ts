@@ -455,7 +455,7 @@ describe('后台 mock：线下收款开卡', () => {
     await login('13800000003');
     const { order, card } = await api.orders.create(body());
     expect(order).toMatchObject({ productName: '10 次卡', category: 'count', channel: 'desk_cash', amountCents: 128_000, paidOn: '2026-10-21', refundedCents: 0, storeId: 'bingang' });
-    expect(card).toMatchObject({ kind: 'count', memberId: 'm-old-5', total: 10, remaining: 10, expiresOn: '2027-04-21' });
+    expect(card).toMatchObject({ kind: 'count', memberId: 'm-old-5', total: 10, remaining: 10, expiresOn: '2027-04-20' });
     const detail = await api.members.get('m-old-5');
     expect(detail.recentOrders[0]!.id).toBe(order.id);
     expect(detail.cards.map(c => c.id)).toContain(card.id);

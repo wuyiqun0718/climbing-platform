@@ -11,7 +11,8 @@ import type { Card, PeriodCard, Product, ProductCategory } from './types';
  * 1. 线下收款方式只有现金、POS、转账（DESK_PAY_CHANNELS）。
  * 2. 实收可以比标价低（打折、抹零），不能比标价高，也不能是 0（送卡走「调整」，不走订单）；改了价必须写原因，最多 DESK_PRICE_REASON_MAX 个字。
  * 3. 期限卡从开卡当天开始算；手上还有没到期（含还没开始）的期限卡时，接在最晚那张后面（跟原型一样），不从首次入场激活。
- * 4. 次卡、私教、团课课包的有效期从开卡当天算 validMonths 个月（到期日 = addMonths(今天, validMonths)，跟示例数据一致）；没填 validMonths 的按 DEFAULT_VALID_MONTHS。
+ * 4. 次卡、私教、团课课包的有效期从开卡当天算 validMonths 个月，含当天（到期日 = addMonths(今天, validMonths) 前一天，跟小程序一致）；
+ *    没填 validMonths 的：多次的（quantity > 1）按 DEFAULT_VALID_MONTHS，单次票（quantity 1）只当天有效。
  * 5. 前台、店长、老板都能改价（只要写原因），见 dashboard 的 permissions.ts 的 order.create。
  */
 
@@ -20,6 +21,7 @@ export type DeskPayChannel = (typeof DESK_PAY_CHANNELS)[number];
 export const DEFAULT_DESK_PAY_CHANNEL: DeskPayChannel = 'desk_pos';
 
 export const DESK_PRICE_REASON_MAX = 100;
+/** 没填 validMonths 的次卡、课包（quantity > 1）的有效月数；单次票不用这个，只当天有效 */
 export const DEFAULT_VALID_MONTHS = 12;
 
 /** 卡种品类对应的财务品类 */
@@ -80,7 +82,8 @@ export function issueCard(args: { id: string; product: Product; memberId: string
     return { ...base, kind: 'period', startsOn, expiresOn: addDays(startsOn, (p.days ?? 1) - 1) };
   }
   const total = p.quantity ?? 1;
-  const expiresOn = addMonths(today, p.validMonths ?? DEFAULT_VALID_MONTHS);
+  const months = p.validMonths ?? (total > 1 ? DEFAULT_VALID_MONTHS : 0);
+  const expiresOn = months ? addDays(addMonths(today, months), -1) : today;
   return { ...base, kind: p.category, total, remaining: total, expiresOn };
 }
 
