@@ -1,6 +1,6 @@
 import type { StaffRole, Store } from '@climb/api';
 import { describe, expect, it } from 'vitest';
-import { ACTION_ROLES, canDo, canSeePage, PAGE_ROLES, resolveStore, storeOptions, type ActionKey, type PageKey } from './permissions';
+import { ACTION_ROLES, canDo, canSeeAllAuditLogs, canSeePage, PAGE_ROLES, resolveStore, storeOptions, type ActionKey, type PageKey } from './permissions';
 
 const ROLES: StaffRole[] = ['owner', 'manager', 'desk'];
 const STORES: Store[] = [
@@ -24,6 +24,7 @@ describe('页面权限', () => {
     products: ['owner', 'manager'],
     staff: ['owner'],
     settings: ['owner'],
+    audit: ['owner', 'manager'],
   };
 
   it.each(Object.keys(PAGE_ROLES) as PageKey[])('%s', page => {
@@ -58,6 +59,14 @@ describe('操作权限', () => {
 
   it.each(Object.keys(ACTION_ROLES) as ActionKey[])('%s', action => {
     expect(ROLES.filter(r => canDo(r, action))).toEqual(expected[action]);
+  });
+});
+
+describe('操作日志', () => {
+  it('老板都能看全部；别的角色能看全部门店的才能看全部', () => {
+    expect(canSeeAllAuditLogs({ role: 'owner', storeIds: ['bingang'] })).toBe(true);
+    expect(canSeeAllAuditLogs({ role: 'manager', storeIds: [] })).toBe(true);
+    expect(canSeeAllAuditLogs({ role: 'manager', storeIds: ['bingang'] })).toBe(false);
   });
 });
 

@@ -175,11 +175,12 @@
 - 完成标准：停用的账号登录失败（mock 单测）。
 - 补（2026-10-22）：规则在 core 的 `staff.ts`（`StaffRole`、`STAFF_ROLE_TEXT` 从 api 挪过来）：`newStaffErrors` / `staffPatchErrors`（手机号规整后全馆唯一，停用的也占着；名字必填；角色三种；可操作门店要么全部门店（存空数组，沿用 `Staff.storeIds` 的约定），要么至少一家存在的店；密码 6–32 位，占位）、`staffChangeBlockedBy`（不能停用、降级自己；改完至少留一个在用的馆长）。重置密码走 `PATCH` 的 `password`，停用、启用走 `active`。mock 只存密码哈希（加盐 FNV-1a，只为不放明文，后端用 bcrypt / argon2），token 带版本号，停用、重置密码后旧 token 立即 401（改自己的密码也要重新登录）；停用的登录 403。每次改动写 `db.auditLogs`（`staff.create` / `staff.update` 只记改了的字段 / `staff.password_reset` 不记密码），字段照 `audit_logs` 表，留给 23。教练资料见 28。
 
-**23. 操作日志**
+**23. 操作日志** ✅
 - 依赖：4
 - 涉及文件：`src/pages/AuditPage.vue`、契约 `GET /admin/audit-logs`、mock
 - 内容：改价、调整、退款、撤销入场、员工变更：谁、什么时候、改前改后。只读。
 - 完成标准：做过 14–18 的操作都能在这里查到。
+- 补（2026-10-22）：动作名、文字和写法在 core 的 `audit.ts`（`AuditLogEntry` 照 `audit_logs` 表，多了 `storeId`、`reason`；`auditDiff` 只留改了的字段，`auditSnapshot` 去掉 password / passwordHash / token / tokenVersion）。mock 的 `audit()` 扩成通用的，补上：线下收款开卡（标价、实收、改价原因）、前台登记入场、撤销入场（次数、保单改前改后，重复撤销不再记）、调整次数和有效期、冻结、解冻（卡改前改后，跟着挪的期限卡）、退款（订单和卡改前改后、退款单）、新建和修改卡种（改价、上下架）、员工变更，另外改冻结规则也记。系统自动解冻不进操作日志（卡流水里有）。门店：订单和入场按它的门店，卡按会员的归属门店，卡种、员工、设置为全馆（null）。查询 `GET /admin/audit-logs?store=&action=&page=`，最新的在前、每页 50；只读，改、删一律 405。权限占位：新页面 `audit` 店长以上；`canSeeAllAuditLogs`（老板都能看全部，别的角色要能看全部门店）才能不带门店查、看全馆的，否则只能按自己的店查。
 
 **24. 导出 Excel**
 - 依赖：10、20

@@ -1,4 +1,4 @@
-import { MEMBER_SOURCES, type Card, type CardAdjustInput, type FreezeOverridable, type PeriodCard, type RuleErrorCode, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type OrderStatus, type RefundBasis, type RefundMethod, type RefundStatus, type LedgerEntry, type MemberSource, type PayChannel, type Product, type ProductInput, type ProductPatch, type RevenueBucket, type RevenueCategory, type RevenueChannel, type Share, type ShareRecordState, type StaffInput, type StaffPatch, type StaffRole } from '@climb/core';
+import { MEMBER_SOURCES, type Card, type CardAdjustInput, type FreezeOverridable, type PeriodCard, type RuleErrorCode, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type OrderStatus, type RefundBasis, type RefundMethod, type RefundStatus, type LedgerEntry, type MemberSource, type PayChannel, type Product, type ProductInput, type ProductPatch, type RevenueBucket, type RevenueCategory, type RevenueChannel, type Share, type ShareRecordState, type StaffInput, type StaffPatch, type StaffRole, type AuditAction, type AuditLogEntry } from '@climb/core';
 import type { Cents, DateKey } from '@climb/utils';
 import { createHttp, type ClientOptions } from './client';
 
@@ -178,6 +178,21 @@ export interface FinanceRefundRow {
  */
 export type CreateProductBody = ProductInput;
 export type UpdateProductBody = ProductPatch;
+
+/**
+ * 操作日志 GET /admin/audit-logs?store=&action=&page=（任务 23），只读：没有改、删的接口（mock 对别的方法返回 405）。
+ * 字段和动作见 @climb/core 的 audit.ts：谁（staffId、staffName）、什么时候（at）、对什么（targetType、targetId）、原因、改前改后（只记改了的字段，不记密码）。
+ * 写日志的操作：线下收款开卡、前台登记入场、撤销入场、调整次数和有效期、冻结解冻、退款、新建和修改卡种（改价、上下架）、员工变更、改冻结规则。
+ * 要能看操作日志页（permissions.ts 的 audit，等馆方）。门店：带 store 只看这家店的（必须是能看的店，否则 403；没有这家店 404）；
+ * 不带是全部（含全馆的），只有 canSeeAllAuditLogs 的员工能这样查，不然 403。action 不对 400（data.field = action）。
+ * 最新的在前，每页 AUDIT_PAGE_SIZE 条，页码规则同会员列表。
+ */
+export const AUDIT_PAGE_SIZE = 50;
+
+export interface AuditLogRow extends AuditLogEntry {
+  /** 操作员工的名字（停用了的也照常显示） */
+  staffName: string;
+}
 
 /** 后台列表的一页。page 从 1 开始；超出范围时后端夹到最后一页，以返回的 page 为准 */
 export interface PageOf<T> {
@@ -696,6 +711,14 @@ export function createAdminApi(opts: ClientOptions) {
       if (q.kind) qs.set('kind', q.kind);
       const s = qs.toString();
       return http<ShareList>('GET', s ? `/admin/shares?${s}` : '/admin/shares');
+    },
+    auditLogs: (q: { store?: string; action?: AuditAction; page?: number } = {}) => {
+      const qs = new URLSearchParams();
+      if (q.store) qs.set('store', q.store);
+      if (q.action) qs.set('action', q.action);
+      if (q.page && q.page > 1) qs.set('page', String(q.page));
+      const s = qs.toString();
+      return http<PageOf<AuditLogRow>>('GET', s ? `/admin/audit-logs?${s}` : '/admin/audit-logs');
     },
     settings: {
       freezeRules: () => http<FreezeRules>('GET', '/admin/settings/freeze-rules'),

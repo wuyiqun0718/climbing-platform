@@ -7,7 +7,7 @@ import type { Staff, StaffRole, Store } from '@climb/api';
  * 标「等馆方」的是先定的占位，馆方确认后只改这张表。
  */
 
-export type PageKey = 'dashboard' | 'finance' | 'members' | 'courses' | 'events' | 'entries' | 'products' | 'staff' | 'settings';
+export type PageKey = 'dashboard' | 'finance' | 'members' | 'courses' | 'events' | 'entries' | 'products' | 'staff' | 'settings' | 'audit';
 
 export type ActionKey =
   /** 新建会员（13） */
@@ -51,6 +51,8 @@ export const PAGE_ROLES: Record<PageKey, readonly StaffRole[]> = {
   products: MANAGER_UP,
   staff: OWNER,
   settings: OWNER,
+  /** 操作日志（23）。等馆方：先放店长以上，店长只看自己店的（见 canSeeAllAuditLogs） */
+  audit: MANAGER_UP,
 };
 
 export const ACTION_ROLES: Record<ActionKey, readonly StaffRole[]> = {
@@ -83,6 +85,12 @@ export const MEMBERS_VISIBLE_ACROSS_STORES = true;
 
 /** storeIds 为空表示能看全部门店；只有这种员工能选「全部门店」（接口不带 store 就是全部门店） */
 export const canSeeAllStores = (staff: Pick<Staff, 'storeIds'>) => staff.storeIds.length === 0;
+
+/**
+ * 操作日志能不能看全部（含卡种、员工、设置这类全馆的，不带门店）：老板都能看全部，别的角色按能不能看全部门店。
+ * 等馆方（多店员工能不能看汇总还在讨论）：先这样，定了只改这里。看不了全部的只能按自己的店查，全馆的看不到。
+ */
+export const canSeeAllAuditLogs = (staff: Pick<Staff, 'role' | 'storeIds'>) => staff.role === 'owner' || canSeeAllStores(staff);
 
 export const canSeeStore = (staff: Pick<Staff, 'storeIds'>, storeId: string) => canSeeAllStores(staff) || staff.storeIds.includes(storeId);
 

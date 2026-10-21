@@ -1222,3 +1222,140 @@ describe('后台 mock：员工账号', () => {
     expect(await api.staff.update('s-owner', { name: '老板' })).toMatchObject({ name: '老板' });
   });
 });
+
+describe('后台 mock：操作日志', () => {
+  /** 前台给新会员开一张 10 次卡（实收改价）、登记入场，返回各自的结果 */
+  async function deskOps() {
+    const s = setup();
+    await s.login('13800000003');
+    const m = await s.api.members.create({ phone: '13912345678', name: '日志测试', source: 'walkin', storeId: 'bingang' });
+    const order = await s.api.orders.create({ requestId: 'o1', memberId: m.id, productId: 'p-10x', storeId: 'bingang', channel: 'desk_cash', amountCents: 120_000, priceReason: '老会员介绍' });
+    const ci = await s.api.checkIns.create({ requestId: 'c1', memberId: m.id, storeId: 'bingang', cardId: order.card.id });
+    return { ...s, m, order, ci };
+  }
+  const logsOf = (db: MockDb, action: string) => db.auditLogs.filter(l => l.action === action);
+
+  it('14 线下收款开卡：谁、哪家店、改价原因、标价和实收', async () => {
+    const { db, order, m } = await deskOps();
+    expect(logsOf(db, 'order.create')).toEqual([
+      expect.objectContaining({
+        staffId: 's-desk', targetType: 'order', targetId: order.order.id, storeId: 'bingang', reason: '老会员介绍', before: null,
+        after: expect.objectContaining({ memberId: m.id, productId: 'p-10x', listPriceCents: 128_000, amountCents: 120_000, channel: 'desk_cash', cardId: order.card.id }),
+      }),
+    ]);
+    expect(logsOf(db, 'order.create')[0]!.at).toMatch(/^2026-10-21T/);
+  });
+
+  it('15 前台登记入场：卡、扣次、保单', async () => {
+    const { db, ci, order } = await deskOps();
+    expect(logsOf(db, 'check_in.create')).toEqual([
+      expect.objectContaining({ staffId: 's-desk', targetType: 'check_in', targetId: ci.checkIn.id, storeId: 'bingang', after: expect.objectContaining({ cardId: order.card.id, deducted: 1, remaining: 9, policyId: ci.insurance.policyId }) }),
+    ]);
+  });
+
+  it('16 撤销入场：原因，改前改后的次数和保单；重复撤销不再记', async () => {
+    const { api, db, ci } = await deskOps();
+    await api.checkIns.void(ci.checkIn.id, { reason: '扫错了卡' });
+    await api.checkIns.void(ci.checkIn.id, { reason: '又点了一次' });
+    const logs = logsOf(db, 'check_in.void');
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({
+      staffId: 's-desk', targetId: ci.checkIn.id, storeId: 'bingang', reason: '扫错了卡',
+      before: { voided: false, deducted: 1, card: { remaining: 9 }, policy: { status: 'pending' } },
+      after: { voided: true, restored: 1, card: { remaining: 10 }, policy: { status: 'refund_pending' } },
+    });
+  });
+
+  it('17 调整次数、有效期：只记改了的字段，带原因；门店按会员的归属门店', async () => {
+    const { api, db, login, order } = await deskOps();
+    await login('13800000002');
+    await api.cards.adjust(order.card.id, { remaining: 12, reason: '补偿闭馆' });
+    expect(logsOf(db, 'card.adjust')).toEqual([
+      expect.objectContaining({ staffId: 's-manager', targetType: 'card', targetId: order.card.id, storeId: 'bingang', reason: '补偿闭馆', before: { remaining: 9, total: 10 }, after: { remaining: 12, total: 12 } }),
+    ]);
+  });
+
+  it('17 冻结、解冻：状态、冻结日期、到期日改前改后', async () => {
+    const { api, db, login } = setup();
+    await login('13800000001');
+    const card = db.cards.find(c => c.kind === 'period' && c.startsOn <= '2026-10-21' && c.expiresOn > '2026-11-30' && (c.status ?? 'normal') === 'normal')!;
+    const { rules } = await api.cards.freezeOptions(card.id);
+    await api.cards.freeze(card.id, { days: rules.minDays, note: '出差' });
+    await api.cards.unfreeze(card.id, { note: '提前回来' });
+    const store = db.members.find(m => m.id === card.memberId)!.homeStoreId;
+    expect(logsOf(db, 'card.freeze')[0]).toMatchObject({ staffId: 's-owner', targetId: card.id, storeId: store, reason: '出差', before: { status: 'normal' }, after: { status: 'frozen', frozenFrom: '2026-10-21' } });
+    expect(logsOf(db, 'card.unfreeze')[0]).toMatchObject({ targetId: card.id, reason: '提前回来', before: { status: 'frozen' }, after: { status: 'normal' } });
+  });
+
+  it('18 退款：金额、方式、原因，订单和卡改前改后', async () => {
+    const { api, db, login, order } = await deskOps();
+    await login('13800000002');
+    await api.orders.refund(order.order.id, { requestId: 'rf1', amountCents: 50_000, reason: '搬家了' });
+    expect(logsOf(db, 'order.refund')).toEqual([
+      expect.objectContaining({
+        staffId: 's-manager', targetType: 'order', targetId: order.order.id, storeId: 'bingang', reason: '搬家了',
+        before: expect.objectContaining({ refundedCents: 0, status: 'paid', card: expect.objectContaining({ status: 'normal', remaining: 9 }) }),
+        after: expect.objectContaining({ refundedCents: 50_000, status: 'partially_refunded', refund: expect.objectContaining({ amountCents: 50_000, method: 'offline', status: 'succeeded' }), card: expect.objectContaining({ status: 'refunded', remaining: 0 }) }),
+      }),
+    ]);
+  });
+
+  it('19 新建卡种、改价、上下架：全馆的（门店为空），只记改了的字段', async () => {
+    const { api, db, login } = setup();
+    await login('13800000002');
+    const made = await api.products.create({ category: 'period', name: '半年卡', priceCents: 299_900, days: 180, perks: [], onSale: true });
+    await api.products.update('p-30', { priceCents: 49_900, name: '月卡' });
+    await api.products.update('p-30', { onSale: false });
+    expect(logsOf(db, 'product.create')[0]).toMatchObject({ staffId: 's-manager', targetId: made.id, storeId: null, before: null, after: { name: '半年卡', priceCents: 299_900 } });
+    expect(logsOf(db, 'product.update').map(l => [l.targetId, l.storeId, l.before, l.after])).toEqual([
+      ['p-30', null, { priceCents: 59_900 }, { priceCents: 49_900 }],
+      ['p-30', null, { onSale: true }, { onSale: false }],
+    ]);
+  });
+
+  it('查询：最新的在前，带员工名；按门店、操作类型筛', async () => {
+    const { api, login } = await deskOps();
+    await login('13800000001');
+    await api.products.update('p-30', { priceCents: 49_900 });
+    const all = await api.auditLogs();
+    expect(all.items.map(l => l.action)).toEqual(['product.update', 'check_in.create', 'order.create']);
+    expect(all.items[1]).toMatchObject({ staffName: '前台小葵' });
+    expect((await api.auditLogs({ store: 'bingang' })).items.map(l => l.action)).toEqual(['check_in.create', 'order.create']);
+    expect((await api.auditLogs({ store: 'huiju' })).items).toEqual([]);
+    expect((await api.auditLogs({ action: 'order.create' })).total).toBe(1);
+    expect(await status(api.auditLogs({ action: 'nope' as never }))).toBe(400);
+    expect(await status(api.auditLogs({ store: 'nope' }))).toBe(404);
+  });
+
+  it('按员工能看的门店过滤：前台看不了；店长只能按自己的店查，看不到全馆的', async () => {
+    const { api, login } = await deskOps();
+    await login('13800000002');
+    await api.products.update('p-30', { priceCents: 49_900 });
+    expect(await status(api.auditLogs())).toBe(403);
+    expect(await status(api.auditLogs({ store: 'huiju' }))).toBe(403);
+    const mine = await api.auditLogs({ store: 'bingang' });
+    expect(mine.items.every(l => l.storeId === 'bingang')).toBe(true);
+    expect(mine.items.some(l => l.action === 'product.update')).toBe(false);
+    await login('13800000003');
+    expect(await status(api.auditLogs({ store: 'bingang' }))).toBe(403);
+  });
+
+  it('只读：改、删都 405，日志不变；员工变更的日志不记密码', async () => {
+    const { api, db, login } = setup();
+    await login('13800000001');
+    await api.staff.create({ phone: '13900000009', name: '新人', role: 'desk', allStores: false, storeIds: ['bingang'], password: 'secret99' });
+    await api.staff.update('s-desk', { password: 'another99' });
+    const before = structuredClone(db.auditLogs);
+    const adapter = createMockAdapter(db);
+    const token = (await api.auth.login({ phone: '13800000001', password: '123456' })).token;
+    const id = db.auditLogs[0]!.id;
+    for (const [method, url] of [['DELETE', `/admin/audit-logs/${id}`], ['PATCH', `/admin/audit-logs/${id}`], ['POST', '/admin/audit-logs'], ['PUT', `/admin/audit-logs/${id}`]] as const) {
+      const res = await adapter({ method, url, headers: { Authorization: `Bearer ${token}` }, body: { reason: 'x' } });
+      expect(res.status).toBe(405);
+    }
+    expect(db.auditLogs).toEqual(before);
+    // 动作名 staff.password_reset 里有 password，查的是字段和值
+    expect(JSON.stringify(db.auditLogs)).not.toMatch(/secret99|another99|"password(Hash)?":|"tokenVersion":/);
+    expect(db.auditLogs.map(l => l.action)).toEqual(['staff.create', 'staff.password_reset']);
+  });
+});

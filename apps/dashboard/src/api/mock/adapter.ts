@@ -1,6 +1,8 @@
 import {
   MEMBER_SOURCES,
   MEMBERS_PAGE_SIZE,
+  AUDIT_PAGE_SIZE,
+  type AuditLogRow,
   MEMBER_RECENT_LIMIT,
   type ApiRequest,
   type ApiResponse,
@@ -78,6 +80,9 @@ import {
   insuranceForEntry,
   entryPolicy,
   shareRecordState,
+  auditDiff,
+  AUDIT_ACTIONS,
+  auditSnapshot,
   STAFF_BLOCKED_TEXT,
   STAFF_ROLES,
   newStaffErrors,
@@ -116,7 +121,7 @@ import {
   type RevenueChannel,
 } from '@climb/core';
 import { addDays, formatYuan, isDateKey, maskPhone, monthOf } from '@climb/utils';
-import { MEMBERS_VISIBLE_ACROSS_STORES, canDo, canSeePage, canSeeStore } from '../../permissions';
+import { MEMBERS_VISIBLE_ACROSS_STORES, canDo, canSeeAllAuditLogs, canSeePage, canSeeStore } from '../../permissions';
 import { mockPasswordHash, type MockAuditLog, type MockCheckIn, type MockDb, type MockMember, type MockOrder, type MockStaff } from './db';
 
 /**
@@ -328,9 +333,43 @@ const staffRow = (s: MockStaff): StaffRow => ({ ...toStaff(s), active: s.active,
 /** 操作日志里员工的资料（不含密码） */
 const staffAuditFields = (s: MockStaff) => ({ phone: s.phone, name: s.name, role: s.role, storeIds: s.storeIds, active: s.active });
 
-function audit(db: MockDb, actor: Staff, e: Pick<MockAuditLog, 'action' | 'targetId' | 'before' | 'after'>) {
-  db.auditLogs.push({ id: nextId('al-', db.auditLogs), staffId: actor.id, targetType: 'staff', at: nowAt(db), ...e });
+/** 写一条操作日志（只追加）。before / after 先过 @climb/core 的 auditSnapshot，去掉敏感字段 */
+function audit(
+  db: MockDb,
+  actor: Staff,
+  e: Pick<MockAuditLog, 'action' | 'targetType' | 'targetId' | 'storeId'> & { reason?: string; before: object | null; after: object | null; at?: string },
+) {
+  db.auditLogs.push({
+    id: nextId('al-', db.auditLogs),
+    staffId: actor.id,
+    action: e.action,
+    targetType: e.targetType,
+    targetId: e.targetId,
+    storeId: e.storeId,
+    reason: e.reason ?? '',
+    before: e.before && auditSnapshot(e.before),
+    after: e.after && auditSnapshot(e.after),
+    at: e.at ?? nowAt(db),
+  });
 }
+
+/** 改了什么就记什么（@climb/core 的 auditDiff）；什么都没变不记 */
+function auditChange(db: MockDb, actor: Staff, e: Pick<MockAuditLog, 'action' | 'targetType' | 'targetId' | 'storeId'> & { reason?: string; at?: string }, before: object, after: object) {
+  const d = auditDiff(before, after);
+  if (d) audit(db, actor, { ...e, ...d });
+}
+
+/** 日志里卡的样子：状态、次数、有效期、冻结 */
+const cardAuditFields = (c: Card) => ({
+  status: c.status ?? 'normal',
+  ...('remaining' in c ? { remaining: c.remaining, total: c.total } : {}),
+  ...(c.kind === 'period' ? { startsOn: c.startsOn, frozenFrom: c.frozenFrom, frozenUntil: c.frozenUntil } : {}),
+  ...(c.kind === 'referral' ? { usedOn: c.usedOn } : {}),
+  expiresOn: c.expiresOn,
+});
+
+/** 会员的卡按会员的归属门店算日志的门店 */
+const memberStore = (db: MockDb, memberId: string) => db.members.find(m => m.id === memberId)?.homeStoreId ?? null;
 
 /** 员工列表：口径见 @climb/api 的 StaffRow */
 function staffList(db: MockDb, staff: Staff): ApiResponse {
@@ -366,7 +405,7 @@ function createStaff(db: MockDb, staff: Staff, body: Partial<CreateStaffBody> | 
     createdAt: nowAt(db),
   };
   db.staff.push(s);
-  audit(db, staff, { action: 'staff.create', targetId: s.id, before: null, after: staffAuditFields(s) });
+  audit(db, staff, { action: 'staff.create', targetType: 'staff', targetId: s.id, storeId: null, before: null, after: staffAuditFields(s) });
   return ok(staffRow(s));
 }
 
@@ -393,18 +432,33 @@ function updateStaff(db: MockDb, staff: Staff, id: string, body: UpdateStaffBody
     if (target.active && !patch.active) target.tokenVersion++;
     target.active = patch.active;
   }
-  const after = staffAuditFields(target);
-  const changed = (Object.keys(before) as (keyof typeof before)[]).filter(k => JSON.stringify(before[k]) !== JSON.stringify(after[k]));
-  if (changed.length) {
-    const pick = (o: typeof before) => Object.fromEntries(changed.map(k => [k, o[k]]));
-    audit(db, staff, { action: 'staff.update', targetId: id, before: pick(before), after: pick(after) });
-  }
+  auditChange(db, staff, { action: 'staff.update', targetType: 'staff', targetId: id, storeId: null }, before, staffAuditFields(target));
   if (patch.password !== undefined) {
     target.passwordHash = mockPasswordHash(id, patch.password);
     target.tokenVersion++;
-    audit(db, staff, { action: 'staff.password_reset', targetId: id, before: null, after: null });
+    audit(db, staff, { action: 'staff.password_reset', targetType: 'staff', targetId: id, storeId: null, before: null, after: null });
   }
   return ok(staffRow(target));
+}
+
+/** 操作日志：口径见 @climb/api 的 AuditLogRow，只读 */
+function auditLogList(db: MockDb, staff: Staff, storeId: string | null, action: string | null, page: number): ApiResponse {
+  if (!canSeePage(staff.role, 'audit')) return fail(403, 'forbidden', '没有看操作日志的权限');
+  if (action !== null && !(AUDIT_ACTIONS as readonly string[]).includes(action)) return badInput('action', '操作类型不对');
+  if (!Number.isInteger(page) || page < 1) return fail(400, 'bad-page', '页码不对');
+  if (storeId && !db.stores.some(st => st.id === storeId)) return fail(404, 'store-not-found', '没有这家店');
+  if (storeId ? !(canSeeAllAuditLogs(staff) || canSeeStore(staff, storeId)) : !canSeeAllAuditLogs(staff)) return fail(403, 'forbidden', '没有这家店的权限');
+  const names = new Map(db.staff.map(s => [s.id, s.name]));
+  const matched = db.auditLogs
+    .map((l, i) => ({ l, i }))
+    .filter(({ l }) => (!storeId || l.storeId === storeId) && (!action || l.action === action))
+    .sort((a, b) => b.l.at.localeCompare(a.l.at) || b.i - a.i);
+  const pageSize = AUDIT_PAGE_SIZE;
+  const last = Math.max(1, Math.ceil(matched.length / pageSize));
+  const cur = Math.min(page, last);
+  const items = matched.slice((cur - 1) * pageSize, cur * pageSize).map(({ l }): AuditLogRow => ({ ...l, staffName: names.get(l.staffId) ?? '' }));
+  const res: PageOf<AuditLogRow> = { items, total: matched.length, page: cur, pageSize };
+  return ok(res);
 }
 
 /** 分享记录：口径见 @climb/api 的 ShareList，状态按 @climb/core 的 shareRecordState */
@@ -551,6 +605,15 @@ function createDeskOrder(db: MockDb, staff: Staff, body: Partial<CreateDeskOrder
     m.firstCardOn = db.today;
     m.homeStoreId = storeId;
   }
+  audit(db, staff, {
+    action: 'order.create',
+    targetType: 'order',
+    targetId: order.id,
+    storeId,
+    reason: order.priceReason,
+    before: null,
+    after: { memberId: m.id, productId: product.id, productName: product.name, listPriceCents: product.priceCents, amountCents: order.amountCents, channel: order.channel, cardId: card.id },
+  });
   const res: DeskOrderResult = { order: orderRow(db, order), card };
   db.deskOrderRequests[requestId] = res;
   return ok(res);
@@ -649,6 +712,14 @@ function createDeskCheckIn(db: MockDb, staff: Staff, body: Partial<CreateDeskChe
     m.firstVisitOn = db.today;
     m.firstVisitStoreId = args.storeId;
   }
+  audit(db, staff, {
+    action: 'check_in.create',
+    targetType: 'check_in',
+    targetId: checkIn.id,
+    storeId: args.storeId,
+    before: null,
+    after: { memberId: m.id, cardId: card.id, cardName: card.name, deducted, reentry, policyId: policy.id, ...('remaining' in card ? { remaining: card.remaining } : {}) },
+  });
   const res: DeskCheckInResult = {
     checkIn: entryRow(db, checkIn),
     card,
@@ -689,6 +760,8 @@ function voidDeskCheckIn(db: MockDb, staff: Staff, id: string, body: Partial<Voi
   }
 
   const at = nowAt(db);
+  const cardBefore = db.cards[cardIdx] ? cardAuditFields(db.cards[cardIdx]!) : null;
+  const policyBefore = r.policy ? db.policies.find(p => p.id === r.policy!.id) : undefined;
   checkIn.voided = true;
   checkIn.void = { at, staffId: staff.id, reason };
   const operator = { operatorType: 'staff' as const, operatorId: staff.id };
@@ -723,6 +796,23 @@ function voidDeskCheckIn(db: MockDb, staff: Staff, id: string, body: Partial<Voi
   const m = db.members.find(x => x.id === checkIn.memberId);
   if (m) m.lastEntryOn = mine.filter(c => !c.voided).reduce<string | null>((last, c) => (!last || c.on > last ? c.on : last), null);
 
+  audit(db, staff, {
+    action: 'check_in.void',
+    targetType: 'check_in',
+    targetId: checkIn.id,
+    storeId: checkIn.storeId,
+    reason,
+    at,
+    before: { voided: false, deducted: checkIn.deducted, ...(cardBefore && { card: cardBefore }), ...(policyBefore && { policy: { status: policyBefore.status, checkInId: policyBefore.checkInId } }) },
+    after: {
+      voided: true,
+      restored: r.restored,
+      ...(r.card && { card: cardAuditFields(r.card) }),
+      ...(movedRow && { movedTo: { checkInId: movedRow.id, deducted: movedRow.deducted, cardId: movedRow.cardId } }),
+      ...(r.voucherRestored && { voucherRestored: true }),
+      ...(r.policy && { policy: { status: r.policy.status, checkInId: r.policy.checkInId } }),
+    },
+  });
   const res: VoidCheckInResult = {
     checkIn: entryRow(db, checkIn),
     card: r.card,
@@ -795,6 +885,13 @@ const ruleFail = (e: unknown): ApiResponse => {
   throw e;
 };
 
+/** 改卡的日志：卡改前改后（只记变了的），跟着挪的期限卡记在 after.followers */
+function auditCardChange(db: MockDb, staff: Staff, action: 'card.adjust' | 'card.freeze' | 'card.unfreeze', reason: string, before: Card, r: { card: Card; followers: PeriodCard[] }) {
+  const d = auditDiff(cardAuditFields(before), cardAuditFields(r.card)) ?? { before: {}, after: {} };
+  const followers = r.followers.map(f => ({ cardId: f.id, startsOn: f.startsOn, expiresOn: f.expiresOn }));
+  audit(db, staff, { action, targetType: 'card', targetId: before.id, storeId: memberStore(db, before.memberId), reason, before: d.before, after: followers.length ? { ...d.after, followers } : d.after });
+}
+
 /** 调次数、改到期日：口径见 @climb/api 的 CardAdjustBody，规则在 @climb/core 的 adjustCard */
 function adjustDeskCard(db: MockDb, staff: Staff, id: string, body: Partial<CardAdjustBody> | null): ApiResponse {
   const scope = cardScope(db, staff, id, 'card.adjust');
@@ -808,6 +905,7 @@ function adjustDeskCard(db: MockDb, staff: Staff, id: string, body: Partial<Card
     return ruleFail(e);
   }
   saveCardChange(db, r.card, r.followers, { reason: 'adjust', delta: r.delta, note: reason, followerNote: '前一张期限卡改了到期日，开始日跟着调整' }, { operatorType: 'staff', operatorId: staff.id });
+  auditCardChange(db, staff, 'card.adjust', reason, scope.card, r);
   const res: CardChangeResult = { card: r.card, followers: r.followers };
   return ok(res);
 }
@@ -841,6 +939,7 @@ function deskFreeze(db: MockDb, staff: Staff, id: string, body: Partial<DeskFree
   const extra = String(body?.note ?? '').trim();
   const note = [`前台代办冻结 ${days} 天，到 ${r.card.frozenUntil}`, extra, r.overridden.length ? `破例：${overrideReason}` : ''].filter(Boolean).join('；');
   saveCardChange(db, r.card, r.followers, { reason: 'freeze', note, followerNote: '前一张期限卡冻结，开始日往后挪' }, { operatorType: 'staff', operatorId: staff.id });
+  auditCardChange(db, staff, 'card.freeze', [extra, r.overridden.length ? `破例：${overrideReason}` : ''].filter(Boolean).join('；'), scope.card, r);
   const res: DeskFreezeResult = r;
   return ok(res);
 }
@@ -857,6 +956,7 @@ function deskUnfreeze(db: MockDb, staff: Staff, id: string, body: Partial<DeskUn
   }
   const note = [`前台办理提前解冻，到期日顺延 ${r.days} 天`, String(body?.note ?? '').trim()].filter(Boolean).join('；');
   saveCardChange(db, r.card, r.followers, { reason: 'unfreeze', note, followerNote: '前一张期限卡解冻，开始日跟着调整' }, { operatorType: 'staff', operatorId: staff.id });
+  auditCardChange(db, staff, 'card.unfreeze', String(body?.note ?? '').trim(), scope.card, r);
   const res: DeskUnfreezeResult = r;
   return ok(res);
 }
@@ -919,6 +1019,7 @@ function refundOrder(db: MockDb, staff: Staff, id: string, body: Partial<RefundB
   }
 
   const at = nowAt(db);
+  const orderBefore = orderRow(db, order);
   const refund: MockDb['refunds'][number] = {
     id: nextId('rf-', db.refunds),
     orderId: order.id,
@@ -945,7 +1046,24 @@ function refundOrder(db: MockDb, staff: Staff, id: string, body: Partial<RefundB
       db.ledger.push(cardChangeLedgerEntry({ id: nextId('l-', db.ledger), card: f, reason: 'adjust', at, operator, note: '前一张期限卡退款，开始日往前挪' }));
     }
   }
-  const res: RefundResult = { refund: refundRow(db, refund), order: orderRow(db, order), card: r.card, followers: r.followers };
+  const orderAfter = orderRow(db, order);
+  audit(db, staff, {
+    action: 'order.refund',
+    targetType: 'order',
+    targetId: order.id,
+    storeId: order.storeId,
+    reason,
+    at,
+    before: { refundedCents: orderBefore.refundedCents, status: orderBefore.status, ...(card && { card: cardAuditFields(card) }) },
+    after: {
+      refundedCents: orderAfter.refundedCents,
+      status: orderAfter.status,
+      refund: { id: refund.id, amountCents, method: refund.method, status: refund.status },
+      ...(r.card && { card: cardAuditFields(r.card) }),
+      ...(r.followers.length && { followers: r.followers.map(f => ({ cardId: f.id, startsOn: f.startsOn, expiresOn: f.expiresOn })) }),
+    },
+  });
+  const res: RefundResult = { refund: refundRow(db, refund), order: orderAfter, card: r.card, followers: r.followers };
   db.refundRequests[requestId] = res;
   return ok(res);
 }
@@ -958,7 +1076,9 @@ function saveFreezeRules(db: MockDb, staff: Staff, body: any): ApiResponse {
     const field = Object.keys(errs)[0] as keyof typeof errs;
     return badInput(field, errs[field]!);
   }
+  const before = db.rules.freezeRules;
   db.rules = { ...db.rules, freezeRules: pickFreezeRules(body) };
+  auditChange(db, staff, { action: 'settings.freeze_rules', targetType: 'settings', targetId: 'freeze-rules', storeId: null }, before, db.rules.freezeRules);
   return ok(db.rules.freezeRules);
 }
 
@@ -972,6 +1092,7 @@ function createProduct(db: MockDb, staff: Staff, body: Partial<CreateProductBody
   }
   const product = buildProduct(nextId('p-new-', db.products), body as CreateProductBody, db.products);
   db.products.push(product);
+  audit(db, staff, { action: 'product.create', targetType: 'product', targetId: product.id, storeId: null, before: null, after: product });
   return ok(product);
 }
 
@@ -989,6 +1110,7 @@ function updateProduct(db: MockDb, staff: Staff, id: string, body: UpdateProduct
     return badInput(field, errs[field]!);
   }
   db.products[i] = applyProductPatch(product, patch);
+  auditChange(db, staff, { action: 'product.update', targetType: 'product', targetId: id, storeId: null }, product, db.products[i]!);
   return ok(db.products[i]);
 }
 
@@ -1150,6 +1272,19 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
     auth: true,
     handle: ({ db, params, body, staff }) => refundOrder(db, staff!, decodeURIComponent(params[0]!), body),
   },
+  {
+    method: 'GET',
+    path: /^\/admin\/audit-logs$/,
+    auth: true,
+    handle: ({ db, query, staff }) => auditLogList(db, staff!, query.get('store'), query.get('action'), Number(query.get('page') ?? '1')),
+  },
+  // 操作日志只读：改、删一律 405
+  ...(['POST', 'PUT', 'PATCH', 'DELETE'] as const).map(method => ({
+    method,
+    path: /^\/admin\/audit-logs(\/[^/]+)?$/,
+    auth: true,
+    handle: () => fail(405, 'read-only', '操作日志不能改、不能删'),
+  })),
   {
     method: 'GET',
     path: /^\/admin\/shares$/,

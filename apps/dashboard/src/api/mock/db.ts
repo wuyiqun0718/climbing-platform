@@ -1,5 +1,5 @@
 import { MEMBER_SOURCES, type DeskCheckInResult, type DeskOrderResult, type RefundResult, type EntryMethod, type VoidCheckInResult, type MemberSource, type Staff, type Store } from '@climb/api';
-import { REFUND_METHOD_BY_CHANNEL, defaultRules, insuranceForEntry, newPolicy, type Card, type RefundMethod, type RefundStatus, type InsurancePolicy, type CountCard, type GiftCard, type Share, type GymRules, type LedgerEntry, type Product, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
+import { REFUND_METHOD_BY_CHANNEL, type AuditLogEntry, defaultRules, insuranceForEntry, newPolicy, type Card, type RefundMethod, type RefundStatus, type InsurancePolicy, type CountCard, type GiftCard, type Share, type GymRules, type LedgerEntry, type Product, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
 import { addDays, addMonths, daysBetween, endOfMonth, monthOf, type DateKey } from '@climb/utils';
 
 /** 会员（对应 members 表），目前放了看板「新客从哪来」和会员列表用到的字段 */
@@ -80,20 +80,8 @@ export interface MockStaff extends Staff {
   createdAt: string;
 }
 
-/**
- * 操作日志（对应 audit_logs 表，任务 23 查）。before / after 只放改了的字段，不放密码。
- * 目前只有员工变更写这里；改价、调整、退款、撤销入场等 23 一起补。
- */
-export interface MockAuditLog {
-  id: string;
-  staffId: string;
-  action: 'staff.create' | 'staff.update' | 'staff.password_reset';
-  targetType: 'staff';
-  targetId: string;
-  before: Record<string, unknown> | null;
-  after: Record<string, unknown> | null;
-  at: string;
-}
+/** 操作日志（对应 audit_logs 表），字段和写法见 @climb/core 的 audit.ts；只追加 */
+export type MockAuditLog = AuditLogEntry;
 
 /**
  * mock 里的密码哈希：加盐（员工 ID）的 FNV-1a，只是为了内存里不放明文，不安全，不能拿到正式环境；
