@@ -120,7 +120,10 @@ export type LedgerReason =
   | 'refund'
   | 'import'
   | 'freeze'
-  | 'unfreeze';
+  | 'unfreeze'
+  | 'class_book'
+  | 'class_cancel'
+  | 'class_void';
 
 /** 卡的流水：次数或有效期每变一次记一笔，只追加不修改 */
 export interface LedgerEntry {
@@ -132,7 +135,7 @@ export interface LedgerEntry {
   remainingAfter?: number;
   expiresOnAfter: DateKey;
   reason: LedgerReason;
-  refType?: 'check_in' | 'order' | 'share';
+  refType?: 'check_in' | 'order' | 'share' | 'class_booking';
   refId?: string;
   /** 业务日期 */
   on: DateKey;

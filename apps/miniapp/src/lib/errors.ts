@@ -32,6 +32,14 @@ const RULE_MESSAGES: Record<RuleErrorCode, string> = {
   'waiver-outdated': '告知书刚更新了，看一下新版再同意',
   'qr-expired': '这个码过期了，扫一下平板上新的码',
   'qr-used': '这个码已经用过了，扫一下平板上新的码',
+  'class-cancelled': '这节课已经取消了',
+  'class-started': '这节课已经开始了',
+  'class-already-booked': '这节课你已经约了',
+  'class-no-card': '没有能用的团课课包，先买一个',
+  'class-full': '这节课约满了',
+  'class-waitlist-full': '这节课约满了，候补也排满了',
+  'class-cancel-too-late': '离开课太近了，不能自己取消，找前台帮你处理',
+  'booking-not-active': '这个预约已经取消或者上过课了',
 };
 
 /** 接口层的错误（后端约定的 code，mock 里也一样） */

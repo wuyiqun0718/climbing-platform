@@ -32,7 +32,15 @@ export type RuleErrorCode =
   | 'waiver-required'
   | 'waiver-outdated'
   | 'qr-expired'
-  | 'qr-used';
+  | 'qr-used'
+  | 'class-cancelled'
+  | 'class-started'
+  | 'class-already-booked'
+  | 'class-no-card'
+  | 'class-full'
+  | 'class-waitlist-full'
+  | 'class-cancel-too-late'
+  | 'booking-not-active';
 
 export class RuleError extends Error {
   constructor(public code: RuleErrorCode, message: string) {
