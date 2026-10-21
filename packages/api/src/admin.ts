@@ -1,4 +1,4 @@
-import { MEMBER_SOURCES, type Card, type CardAdjustInput, type FreezeOverridable, type PeriodCard, type RuleErrorCode, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type OrderStatus, type RefundBasis, type RefundMethod, type RefundStatus, type LedgerEntry, type MemberSource, type PayChannel, type Product, type ProductInput, type ProductPatch, type RevenueBucket, type RevenueCategory, type RevenueChannel, type Share, type ShareRecordState, type StaffInput, type StaffPatch, type StaffRole, type AuditAction, type AuditLogEntry, type ClassRules, type ClassType, type ClassTypeInput, type ClassTypePatch, type ClassSession, type SessionPatch } from '@climb/core';
+import { MEMBER_SOURCES, type Card, type CardAdjustInput, type FreezeOverridable, type PeriodCard, type RuleErrorCode, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type OrderStatus, type RefundBasis, type RefundMethod, type RefundStatus, type LedgerEntry, type MemberSource, type PayChannel, type Product, type ProductInput, type ProductPatch, type RevenueBucket, type RevenueCategory, type RevenueChannel, type Share, type ShareRecordState, type StaffInput, type StaffPatch, type StaffRole, type AuditAction, type AuditLogEntry, type ClassRules, type ClassType, type ClassTypeInput, type ClassTypePatch, type ClassSession, type SessionPatch, type ClassBooking } from '@climb/core';
 import type { Cents, DateKey } from '@climb/utils';
 import { createHttp, type ClientOptions } from './client';
 
@@ -285,6 +285,47 @@ export interface CancelClassResult {
 export interface CopyWeekResult {
   created: AdminClassRow[];
   skipped: { sessionId: string; name: string; on: DateKey; startTime: string; code: RuleErrorCode }[];
+}
+
+/**
+ * 团课名单和签到（任务 27），规则在 @climb/core 的 classRoster.ts；取消、候补递补、退次扣次用 classes.ts 的 cancelBooking（by: 'staff'，跟小程序同一份）。
+ * 课的门店必须是员工能操作的店，不是 403；课、预约没有 404；规则不让的 422（data.code 是 core 的 RuleErrorCode）。
+ * - GET /admin/classes/:id/bookings：名单。约上的（含签到、缺席）按约课先后，候补按排队先后带位次，取消、作废的放最后。
+ * - POST /admin/bookings/:id/attend：present = true 签到（开课前 30 分钟起；超过 classRules.lateGraceMinutes 才到算迟到缺席，late = true），
+ *   present = false 标缺席。次数约课时已经扣了，不退不扣。要 class.attend（等馆方，先都能）。
+ * - POST /admin/bookings/:id/cancel：帮会员取消，reason 必填（400）；可以越过自助取消截止，开课后不能取消（422 class-started）。
+ *   约上的退次（流水 class_cancel），空出的名额候补第一位自动补上并扣次（流水 class_book）。要 class.cancelBooking（等馆方，先都能）。
+ * 签到、取消都写操作日志。看板「今日约课」= 今天没取消的课里占着名额的预约人次（core 的 classBookingsOn），私教等任务 29–30。
+ */
+export interface RosterRow extends ClassBooking {
+  memberName: string;
+  /** 跟会员列表一样打码 */
+  phoneMasked: string;
+  cardName: string;
+  /** 课包现在还剩几次；卡找不到为 null */
+  cardRemaining: number | null;
+  /** 签到（或标缺席）的时间和员工；没签为 null */
+  attendedAt: string | null;
+  attendedByName: string | null;
+}
+
+export interface ClassRosterView {
+  session: AdminClassRow;
+  booked: RosterRow[];
+  waitlist: (RosterRow & { position: number })[];
+  closed: RosterRow[];
+}
+
+export interface AttendResult {
+  booking: RosterRow;
+  /** 迟到超过宽限，按缺席算 */
+  late: boolean;
+}
+
+export interface CancelBookingResult {
+  booking: RosterRow;
+  /** 候补补上的 */
+  promoted: RosterRow[];
 }
 
 /** 后台列表的一页。page 从 1 开始；超出范围时后端夹到最后一页，以返回的 page 为准 */
@@ -820,6 +861,11 @@ export function createAdminApi(opts: ClientOptions) {
       update: (id: string, body: UpdateClassBody) => http<AdminClassRow>('PATCH', `/admin/classes/${encodeURIComponent(id)}`, body),
       cancel: (id: string, body: { reason: string }) => http<CancelClassResult>('POST', `/admin/classes/${encodeURIComponent(id)}/cancel`, body),
       copyWeek: (body: { week: DateKey; store?: string }) => http<CopyWeekResult>('POST', '/admin/classes/copy-week', body),
+      roster: (id: string) => http<ClassRosterView>('GET', `/admin/classes/${encodeURIComponent(id)}/bookings`),
+    },
+    bookings: {
+      attend: (id: string, body: { present: boolean }) => http<AttendResult>('POST', `/admin/bookings/${encodeURIComponent(id)}/attend`, body),
+      cancel: (id: string, body: { reason: string }) => http<CancelBookingResult>('POST', `/admin/bookings/${encodeURIComponent(id)}/cancel`, body),
     },
     classTypes: {
       list: () => http<ClassType[]>('GET', '/admin/class-types'),

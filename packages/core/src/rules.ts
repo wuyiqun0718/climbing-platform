@@ -50,7 +50,9 @@ export type RuleErrorCode =
   | 'class-time-invalid'
   | 'class-coach-busy'
   | 'class-store-busy'
-  | 'class-time-locked';
+  | 'class-time-locked'
+  // 后台团课签到（classRoster.ts）
+  | 'class-checkin-not-open';
 
 export class RuleError extends Error {
   constructor(public code: RuleErrorCode, message: string) {

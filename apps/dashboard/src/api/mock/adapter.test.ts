@@ -1500,6 +1500,8 @@ describe('后台 mock：团课排期', () => {
   function classSetup() {
     const s = setup();
     s.db.clock = '12:00:00';
+    // 这组只测排课，示例约课清掉，预约由各条用例自己加
+    s.db.classBookings = [];
     return s;
   }
   const code = (p: Promise<unknown>) => p.then(() => null, (e: ApiError) => [e.status, (e.data as { code?: string; field?: string }).code === 'bad-input' ? (e.data as { field?: string }).field : (e.data as { code?: string }).code]);
@@ -1629,5 +1631,104 @@ describe('后台 mock：团课排期', () => {
     await login('13800000002');
     expect(await status(api.classes.copyWeek({ week: '2026-10-26' }))).toBe(403);
     expect(await code(api.classes.copyWeek({ week: '2026-10-27', store: 'bingang' }))).toEqual([400, 'week']);
+  });
+});
+
+describe('后台 mock：团课名单和签到', () => {
+  // 2026-10-21 周三；示例课表这周：周二、周四滨港入门抱石，周六滨港顶绳，周三（今天）19:00 汇聚入门抱石，每节示例约了 3 人
+  const code = (p: Promise<unknown>) => p.then(() => null, (e: ApiError) => [e.status, (e.data as { code?: string; field?: string }).code === 'bad-input' ? (e.data as { field?: string }).field : (e.data as { code?: string }).code]);
+  const sessionOn = (db: MockDb, on: string) => db.classSessions.find(s => s.on === on && s.status === 'scheduled')!;
+
+  it('示例约课的课包和流水对得上；名单按门店权限看', async () => {
+    const { api, login, db } = setup();
+    for (const c of db.cards.filter(c => c.kind === 'class')) expect(ledgerMismatch(c, db.ledger)).toBeNull();
+    await login('13800000003');
+    const thu = sessionOn(db, '2026-10-22');
+    const r = await api.classes.roster(thu.id);
+    expect(r.session).toMatchObject({ id: thu.id, booked: 3 });
+    expect(r.booked).toHaveLength(3);
+    expect(r.booked[0]).toMatchObject({ status: 'booked', cardName: '团课 10 次', attendedAt: null });
+    expect(r.booked[0]!.phoneMasked).toMatch(/\*\*\*\*/);
+    expect(r.waitlist).toEqual([]);
+    expect(await status(api.classes.roster(sessionOn(db, '2026-10-21').id))).toBe(403);
+    expect(await status(api.classes.roster('nope'))).toBe(404);
+  });
+
+  it('签到：开课前 30 分钟起；宽限内到课，超过算迟到缺席；也能直接标缺席；写操作日志', async () => {
+    const { api, login, db } = setup();
+    await login('13800000001');
+    const wed = sessionOn(db, '2026-10-21');
+    const [a, b, c] = (await api.classes.roster(wed.id)).booked;
+    db.clock = '18:20:00';
+    expect(await code(api.bookings.attend(a!.id, { present: true }))).toEqual([422, 'class-checkin-not-open']);
+    db.clock = '18:45:00';
+    expect(await api.bookings.attend(a!.id, { present: true })).toMatchObject({ late: false, booking: { status: 'attended', attendedByName: '馆长' } });
+    db.clock = '19:16:00';
+    expect(await api.bookings.attend(b!.id, { present: true })).toMatchObject({ late: true, booking: { status: 'absent' } });
+    expect(await api.bookings.attend(c!.id, { present: false })).toMatchObject({ late: false, booking: { status: 'absent' } });
+    expect(await code(api.bookings.attend(c!.id, {} as never))).toEqual([400, 'present']);
+    expect(db.auditLogs.filter(l => l.action === 'class_booking.attend').map(l => [l.targetId, l.storeId, l.before, (l.after as { status: string }).status, l.reason])).toEqual([
+      [a!.id, 'huiju', { status: 'booked' }, 'attended', ''],
+      [b!.id, 'huiju', { status: 'booked' }, 'absent', '迟到超过 15 分钟，算缺席'],
+      [c!.id, 'huiju', { status: 'booked' }, 'absent', ''],
+    ]);
+    // 次数约课时已经扣了，签到不退不扣
+    expect(db.ledger.filter(e => e.reason === 'class_cancel')).toEqual([]);
+    expect(await status(api.bookings.attend('nope', { present: true }))).toBe(404);
+  });
+
+  it('帮会员取消：越过自助截止也能取消，退次记 class_cancel；候补第一位补上扣次记 class_book；原因必填；开课后不能取消', async () => {
+    const { api, login, db } = setup();
+    await login('13800000001');
+    const wed = sessionOn(db, '2026-10-21');
+    wed.capacity = 3;
+    db.cards.push({ id: 'cc-w', kind: 'class', memberId: 'm-old-1', productId: 'p-class10', name: '团课 10 次', total: 10, remaining: 10, expiresOn: '2026-12-31' });
+    db.ledger.push({ id: 'l-cc-w', cardId: 'cc-w', at: '2026-10-01T10:00:00+08:00', delta: 10, remainingAfter: 10, expiresOnAfter: '2026-12-31', reason: 'purchase', ref: null, operatorType: 'member', operatorId: 'm-old-1', note: '' });
+    db.classBookings.push({ id: 'cb-w', sessionId: wed.id, memberId: 'm-old-1', status: 'waitlisted', cardId: 'cc-w', createdAt: '2026-10-20T12:00:00+08:00', deducted: 0 });
+    const roster = await api.classes.roster(wed.id);
+    expect(roster.waitlist.map(w => [w.id, w.position])).toEqual([['cb-w', 1]]);
+    const target = roster.booked[0]!;
+    const before = target.cardRemaining!;
+
+    db.clock = '18:50:00'; // 开课前 2 小时的自助截止早过了
+    expect(await code(api.bookings.cancel(target.id, { reason: ' ' }))).toEqual([400, 'reason']);
+    const r = await api.bookings.cancel(target.id, { reason: '会员打电话说不来' });
+    expect(r.booking).toMatchObject({ id: target.id, status: 'cancelled', cardRemaining: before + 1 });
+    expect(r.promoted).toEqual([expect.objectContaining({ id: 'cb-w', status: 'booked', deducted: 1, cardRemaining: 9 })]);
+    expect(db.ledger.filter(e => e.ref?.type === 'class_booking').slice(-2)).toEqual([
+      expect.objectContaining({ cardId: target.cardId, reason: 'class_cancel', delta: 1, ref: { type: 'class_booking', id: target.id }, operatorType: 'staff', operatorId: 's-owner', note: '前台帮会员取消：会员打电话说不来' }),
+      expect.objectContaining({ cardId: 'cc-w', reason: 'class_book', delta: -1, remainingAfter: 9, ref: { type: 'class_booking', id: 'cb-w' } }),
+    ]);
+    expect(ledgerMismatch(db.cards.find(c => c.id === target.cardId)!, db.ledger)).toBeNull();
+    expect(ledgerMismatch(db.cards.find(c => c.id === 'cc-w')!, db.ledger)).toBeNull();
+    expect(db.auditLogs.at(-1)).toMatchObject({ action: 'class_booking.cancel', targetId: target.id, storeId: 'huiju', reason: '会员打电话说不来', after: { status: 'cancelled', refunded: 1, promoted: ['cb-w'] } });
+    const after = await api.classes.roster(wed.id);
+    expect(after.booked.map(b => b.id)).toContain('cb-w');
+    expect(after.closed.map(b => b.id)).toEqual([target.id]);
+
+    db.clock = '19:00:00';
+    expect(await code(api.bookings.cancel(after.booked[0]!.id, { reason: 'x' }))).toEqual([422, 'class-started']);
+    expect(await code(api.bookings.cancel(target.id, { reason: 'x' }))).toEqual([422, 'booking-not-active']);
+  });
+
+  it('只能签、取消自己能操作的店的课', async () => {
+    const { api, login, db } = setup();
+    db.clock = '18:45:00';
+    await login('13800000003');
+    const wed = db.classBookings.find(b => b.sessionId === sessionOn(db, '2026-10-21').id)!;
+    expect(await status(api.bookings.attend(wed.id, { present: true }))).toBe(403);
+    expect(await status(api.bookings.cancel(wed.id, { reason: 'x' }))).toBe(403);
+  });
+
+  it('看板「今日约课」按今天没取消的课里占名额的人次算，跟门店走', async () => {
+    const { api, login, db } = setup();
+    await login('13800000001');
+    expect((await api.dashboard()).todayBookings).toBe(3);
+    expect((await api.dashboard({ store: 'huiju' })).todayBookings).toBe(3);
+    expect((await api.dashboard({ store: 'bingang' })).todayBookings).toBe(0);
+    db.clock = '12:00:00';
+    const first = db.classBookings.find(b => b.sessionId === sessionOn(db, '2026-10-21').id)!;
+    await api.bookings.cancel(first.id, { reason: '临时有事' });
+    expect((await api.dashboard()).todayBookings).toBe(2);
   });
 });

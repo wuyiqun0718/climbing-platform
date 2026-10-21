@@ -38,6 +38,10 @@ export type ActionKey =
   | 'classType.edit'
   /** 团课排期：加课、改课、复制上周、取消一节课（26）。等馆方：先放店长以上，只能排自己能操作的店 */
   | 'class.schedule'
+  /** 团课签到、标缺席（27）。等馆方：前台、店长、老板都能，只能签自己能操作的店的课 */
+  | 'class.attend'
+  /** 帮会员取消团课预约，退次（27）。等馆方：前台、店长、老板都能（要写原因） */
+  | 'class.cancelBooking'
   /** 改团课规则：取消截止、候补、迟到（25）。等馆方：跟冻结规则一样先只给老板 */
   | 'settings.classRules'
   /** 导出 Excel（24）。等馆方：先放店长以上；每种导出另外要能看对应的页面（订单要财务） */
@@ -82,6 +86,8 @@ export const ACTION_ROLES: Record<ActionKey, readonly StaffRole[]> = {
   'data.export': MANAGER_UP,
   'classType.edit': MANAGER_UP,
   'class.schedule': MANAGER_UP,
+  'class.attend': ALL,
+  'class.cancelBooking': ALL,
   'settings.classRules': OWNER,
   'member.fullPhone': OWNER,
 };

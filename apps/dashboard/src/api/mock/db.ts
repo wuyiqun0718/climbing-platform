@@ -1,5 +1,5 @@
 import { MEMBER_SOURCES, type DeskCheckInResult, type DeskOrderResult, type RefundResult, type EntryMethod, type VoidCheckInResult, type MemberSource, type Staff, type Store } from '@climb/api';
-import { REFUND_METHOD_BY_CHANNEL, type AuditLogEntry, type ClassBooking, type ClassSession, type ClassType, defaultRules, insuranceForEntry, newPolicy, type Card, type RefundMethod, type RefundStatus, type InsurancePolicy, type CountCard, type GiftCard, type Share, type GymRules, type LedgerEntry, type Product, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
+import { REFUND_METHOD_BY_CHANNEL, type AuditLogEntry, type ClassBooking, type ClassSession, type ClassType, defaultRules, insuranceForEntry, newPolicy, type Card, type RefundMethod, type RefundStatus, type InsurancePolicy, type CountCard, type GiftCard, type LessonCard, type Share, type GymRules, type LedgerEntry, type Product, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
 import { addDays, addMonths, daysBetween, endOfMonth, fromDateKey, monthOf, type DateKey } from '@climb/utils';
 
 /** 会员（对应 members 表），目前放了看板「新客从哪来」和会员列表用到的字段 */
@@ -80,6 +80,9 @@ export interface MockStaff extends Staff {
   createdAt: string;
 }
 
+/** 团课预约，多记签到时间和签到的员工（对应 class_bookings.attended_at / attended_by_staff_id），ClassBooking 本身跟小程序一致不加字段 */
+export type MockClassBooking = ClassBooking & { attendedAt?: string; attendedBy?: string };
+
 /** 操作日志（对应 audit_logs 表），字段和写法见 @climb/core 的 audit.ts；只追加 */
 export type MockAuditLog = AuditLogEntry;
 
@@ -108,12 +111,12 @@ export interface MockDb {
   classTypes: ClassType[];
   /** 团课课表（对应 class_sessions 表），小程序 GET /classes 读同一份；示例：上周和这周两家店的课 */
   classSessions: ClassSession[];
-  /** 团课预约（对应 class_bookings 表），小程序约课写这里；示例数据没有 */
-  classBookings: ClassBooking[];
+  /** 团课预约（对应 class_bookings 表），小程序约课写这里；示例见 withClassBookings */
+  classBookings: MockClassBooking[];
   /** mock 的「现在」几点（HH:mm:ss），测试里固定；不填用本机时间。日期用 today */
   clock?: string;
   /** 每家店的看板数字（示例），全部门店 = 各店相加 */
-  storeStats: Record<string, { monthRevenueCents: number; todayEntries: number; lastWeekSameTimeEntries: number; todayBookings: number; activeMembers: number }>;
+  storeStats: Record<string, { monthRevenueCents: number; todayEntries: number; lastWeekSameTimeEntries: number; activeMembers: number }>;
   members: MockMember[];
   referrals: MockReferral[];
   /** 次卡转赠（对应 shares 表 kind = count）；领了的在 cards 里有一张好友送的次卡（shareId 指回来） */
@@ -169,9 +172,7 @@ export function createMockDb(today: DateKey, rules: GymRules = defaultRules): Mo
       { id: 'ct-rope', name: '顶绳进阶', minutes: 90, capacity: 8, credits: 2, coachId: 's-manager', active: true },
       { id: 'ct-kids', name: '亲子攀岩', minutes: 60, capacity: 10, credits: 1, active: false },
     ],
-    classSessions: sampleClassSessions(today),
-    classBookings: [],
-    ...withShares(withLedger(withCheckIns(sampleMembers(today), staff, today), staff, today), today),
+    ...withClassBookings(withShares(withLedger(withCheckIns(sampleMembers(today), staff, today), staff, today), today), sampleClassSessions(today), today),
     ...sampleOrders(today),
     products: sampleProducts(),
     deskOrderRequests: {},
@@ -180,9 +181,9 @@ export function createMockDb(today: DateKey, rules: GymRules = defaultRules): Mo
     refundRequests: {},
     waiverVersion: '2026-01',
     storeStats: {
-      bingang: { monthRevenueCents: 6_194_200, todayEntries: 45, lastWeekSameTimeEntries: 41, todayBookings: 9, activeMembers: 138 },
-      huiju: { monthRevenueCents: 4_504_900, todayEntries: 33, lastWeekSameTimeEntries: 35, todayBookings: 7, activeMembers: 101 },
-      huanqiu: { monthRevenueCents: 3_378_700, todayEntries: 25, lastWeekSameTimeEntries: 22, todayBookings: 5, activeMembers: 73 },
+      bingang: { monthRevenueCents: 6_194_200, todayEntries: 45, lastWeekSameTimeEntries: 41, activeMembers: 138 },
+      huiju: { monthRevenueCents: 4_504_900, todayEntries: 33, lastWeekSameTimeEntries: 35, activeMembers: 101 },
+      huanqiu: { monthRevenueCents: 3_378_700, todayEntries: 25, lastWeekSameTimeEntries: 22, activeMembers: 73 },
     },
   };
 }
@@ -500,6 +501,42 @@ function sampleClassSessions(today: DateKey): ClassSession[] {
   }
   sessions.push({ id: `cs-${sessions.length + 1}`, classTypeId: 'ct-kids', name: '亲子攀岩', storeId: 'bingang', on: addDays(monday, -2), startTime: '15:00', minutes: 60, capacity: 10, credits: 1, status: 'scheduled' });
   return sessions;
+}
+
+/**
+ * 示例团课预约，跟卡和流水对得上：这周每节课有几位老会员约了（每人一张团课 10 次课包，买卡和约课各记一笔流水）；
+ * 已经过了的课都签到了，其中一人缺席。课表上没有今天的课时，今日约课就是 0。
+ */
+function withClassBookings<T extends Pick<MockDb, 'members' | 'cards' | 'ledger'>>(data: T, sessions: ClassSession[], today: DateKey): T & Pick<MockDb, 'classSessions' | 'classBookings'> {
+  const { cards, ledger } = data;
+  const day = fromDateKey(today).getDay();
+  const monday = addDays(today, day === 0 ? -6 : 1 - day);
+  const bookings: MockClassBooking[] = [];
+  const add = (e: Omit<LedgerEntry, 'id' | 'note' | 'operatorType' | 'expiresOnAfter'> & { operatorId: string }) =>
+    ledger.push({ id: `l-${ledger.length + 1}`, note: '', operatorType: 'member', expiresOnAfter: '', ...e });
+  let n = 0;
+  for (const s of sessions.filter(x => x.on >= monday)) {
+    for (let k = 0; k < 3; k++) {
+      const memberId = `m-old-${(n++ % 12) + 12}`;
+      let card = cards.find((c): c is LessonCard => c.kind === 'class' && c.memberId === memberId);
+      if (!card) {
+        card = { id: `c-class-${memberId}`, kind: 'class', memberId, productId: 'p-class10', name: '团课 10 次', total: 10, remaining: 10, expiresOn: addMonths(monday, 4) };
+        cards.push(card);
+        add({ cardId: card.id, at: `${addDays(monday, -10)}T10:00:00+08:00`, delta: 10, remainingAfter: 10, reason: 'purchase', ref: null, operatorId: memberId });
+        ledger.at(-1)!.expiresOnAfter = card.expiresOn;
+      }
+      const id = `cb-${bookings.length + 1}`;
+      const createdAt = `${addDays(monday, -2)}T${String(9 + k).padStart(2, '0')}:00:00+08:00`;
+      card.remaining -= s.credits;
+      add({ cardId: card.id, at: createdAt, delta: -s.credits, remainingAfter: card.remaining, reason: 'class_book', ref: { type: 'class_booking', id }, operatorId: memberId });
+      ledger.at(-1)!.expiresOnAfter = card.expiresOn;
+      const past = s.on < today;
+      // 周二那节的第三位没来
+      const status = past ? (k === 2 && s.on === addDays(monday, 1) ? 'absent' : 'attended') : 'booked';
+      bookings.push({ id, sessionId: s.id, memberId, status, cardId: card.id, createdAt, deducted: s.credits, ...(past ? { attendedAt: `${s.on}T${s.startTime}:00+08:00` } : {}) });
+    }
+  }
+  return { ...data, classSessions: sessions, classBookings: bookings };
 }
 
 /** 示例订单：三家店最近 70 天，每天几笔，渠道和品类照原型的比例大致铺开；再放几笔退款 */

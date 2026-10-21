@@ -9,6 +9,7 @@ import { ConfirmButton, DataTable, Field, Modal, errorText, useToast, type Colum
 import { addDays, formatDot, toDateKey, weekdayOf } from '@climb/utils';
 import { computed, reactive, ref, useId, watch } from 'vue';
 import { api } from '../api';
+import ClassRoster from './ClassRoster.vue';
 import { createLatest } from '../pages/dashboard';
 import { canDo } from '../permissions';
 import { session } from '../session';
@@ -96,6 +97,14 @@ const cancelAction = (s: AdminClassRow) => async (reason: string) => {
   toast.success(`已取消${r.refunded ? `，${r.refunded} 人退回次数` : ''}${r.waitlistVoided ? `，${r.waitlistVoided} 人候补作废` : ''}`);
 };
 
+// 名单和签到（任务 27）
+const rosterOpen = ref(false);
+const rosterId = ref<string | null>(null);
+function openRoster(s: AdminClassRow) {
+  rosterId.value = s.id;
+  rosterOpen.value = true;
+}
+
 const copying = ref(false);
 async function copyLastWeek() {
   if (copying.value) return;
@@ -128,6 +137,7 @@ async function copyLastWeek() {
   <section class="panel">
     <DataTable :columns="columns" :rows="data?.sessions ?? []" row-key="id" :loading="loading" empty="这周还没排课" :clickable="canSchedule" @row-click="(s: AdminClassRow) => canSchedule && s.status !== 'cancelled' && openForm(s)">
       <template #cell-status="{ row }">
+        <button type="button" class="link" @click.stop="openRoster(row)" @keydown.enter.stop>名单</button>
         <span v-if="row.status === 'cancelled'" class="off">已取消：{{ row.cancelReason }}</span>
         <span v-else-if="canSchedule" @click.stop @keydown.enter.stop>
           <ConfirmButton
@@ -143,6 +153,8 @@ async function copyLastWeek() {
       </template>
     </DataTable>
   </section>
+
+  <ClassRoster v-model:open="rosterOpen" :session-id="rosterId" @changed="load" />
 
   <Modal :open="formOpen" :title="editing ? `改 ${editing.name}` : '加一节课'" :busy="busy" :close-on-backdrop="false" @update:open="v => (formOpen = v)">
     <form :id="formId" class="form" novalidate @submit.prevent="submit">
@@ -185,6 +197,7 @@ async function copyLastWeek() {
 .form { display: grid; gap: 14px; }
 .form input, .form select { font: inherit; }
 .off { font-size: 12px; color: var(--ink-muted); }
+.link { margin-right: 10px; padding: 0; font: inherit; font-size: 13px; color: var(--brand); background: none; border: 0; cursor: pointer; text-decoration: underline; }
 .btn { height: 32px; padding: 0 12px; font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); cursor: pointer; }
 .btn:disabled { cursor: default; opacity: 0.5; }
 .btn.primary { color: var(--on-brand); background: var(--brand); border-color: var(--brand); }

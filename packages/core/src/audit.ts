@@ -24,9 +24,11 @@ export type AuditAction =
   | 'class.create'
   | 'class.update'
   | 'class.cancel'
-  | 'class.copy_week';
+  | 'class.copy_week'
+  | 'class_booking.attend'
+  | 'class_booking.cancel';
 
-export type AuditTargetType = 'order' | 'check_in' | 'card' | 'product' | 'staff' | 'settings' | 'export' | 'class_type' | 'class_session';
+export type AuditTargetType = 'order' | 'check_in' | 'card' | 'product' | 'staff' | 'settings' | 'export' | 'class_type' | 'class_session' | 'class_booking';
 
 export const AUDIT_ACTIONS = [
   'order.create',
@@ -50,6 +52,8 @@ export const AUDIT_ACTIONS = [
   'class.update',
   'class.cancel',
   'class.copy_week',
+  'class_booking.attend',
+  'class_booking.cancel',
 ] as const satisfies readonly AuditAction[];
 
 export const AUDIT_ACTION_TEXT: Record<AuditAction, string> = {
@@ -74,6 +78,8 @@ export const AUDIT_ACTION_TEXT: Record<AuditAction, string> = {
   'class.update': '改团课',
   'class.cancel': '取消团课',
   'class.copy_week': '复制上周课表',
+  'class_booking.attend': '团课签到',
+  'class_booking.cancel': '帮会员取消团课',
 };
 
 export interface AuditLogEntry {

@@ -205,11 +205,12 @@
 - 完成标准：发布后小程序约课接口能看到（mock 共用数据）。
 - 补（2026-10-22）：`classes.ts` 和 `classes.test.ts` 整份从小程序分支原样拷过来（约课、取消、候补补位、`cancelSession`），为此 `LedgerReason` 加了 class_* / pt_*（文字同小程序）、流水 ref 加 `class_booking`、`RuleErrorCode` 加了团课的码、`types.ts` 转出 `LedgerReason`；拷来的测试里 `defineGym` 那行去掉了这边还没有的 `entryQrLink`。排课规则在新文件 core 的 `classSchedule.ts`：`planSession`（用 25 的 `sessionFromType` 拷贝；时间要在现在之后、当天 24:00 前结束；同教练、同门店时间重叠拦下）、`rescheduleSession`（已开始的不能改时间；人数上限不少于已约的，调大了用 `fillFromWaitlist` 补候补并扣次）、`staffCancelSession`（原因必填，直接调 `cancelSession`）、`copyWeek`（上周没取消的课挪一周，人数和教练照上周，教练停用了换默认教练；停用的种类、冲突、时间过了的跳过并给原因）、`classLedgerEntry`（class_book / class_void 流水）。接口 `GET /admin/classes?week=&store=`、`POST /admin/classes`、`PATCH /admin/classes/:id`、`POST /admin/classes/:id/cancel`、`POST /admin/classes/copy-week`；写的要 `class.schedule`（占位店长以上）且门店是自己能操作的，门店口径同财务页；每次操作写操作日志。课表就是 `db.classSessions`，排好即发布；mock 加了不用登录的 `GET /classes`（照小程序那边的筛选），小程序 mock 合并后读同一份 `classSessions` / `classBookings`。mock 的「现在」可以用 `db.clock` 固定。
 
-**27. 团课名单和签到**
+**27. 团课名单和签到** ✅
 - 依赖：26
 - 涉及文件：`src/components/ClassRoster.vue`、契约 `GET /admin/classes/:id/bookings`、`POST /admin/bookings/:id/attend`、`/cancel`、mock
 - 内容：已约名单、候补、签到、帮会员取消；看板「今日约课」用这里的数。
 - 完成标准：取消后次数退回，有流水。
+- 补（2026-10-22）：`classes.ts` 没动（跟小程序逐字一致），新规则放在 core 的 `classRoster.ts`：`classRoster`（约上的按先后、候补带位次、取消作废的放后）、`attendBooking`（booked → attended；超过 `classRules.lateGraceMinutes` 才到的用 `isLateForClass` 判成 absent，次数不退；可以直接标缺席，标错能在到课、缺席间改；开课前 `CLASS_CHECKIN_OPEN_MINUTES`（占位 30 分钟）起才能签）、`staffCancelBooking`（原因必填，其余直接调 `cancelBooking({ by: 'staff' })`：越过自助截止、退次 class_cancel、候补递补扣次 class_book；开课后不能取消）、`classBookingsOn`（看板「今日约课」：今天没取消的课里 booked / attended / absent 的人次，私教等 29–30）。接口 `GET /admin/classes/:id/bookings`、`POST /admin/bookings/:id/attend`（`present`）、`/cancel`（`reason`）；按课的门店查员工能不能操作；权限占位 `class.attend`、`class.cancelBooking` 先都能；签到、取消写操作日志。mock 的预约多记签到时间和员工（`MockClassBooking`，`ClassBooking` 本身不加字段）；示例数据给这周每节课约了 3 人（课包、流水对得上），看板的「今日约课」不再用写死的示例数。
 
 ### F. 私教
 

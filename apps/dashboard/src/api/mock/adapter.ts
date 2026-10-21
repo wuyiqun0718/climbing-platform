@@ -26,6 +26,10 @@ import {
   type CreateProductBody,
   type ClassTypeBody,
   type AdminClassRow,
+  type AttendResult,
+  type CancelBookingResult,
+  type ClassRosterView,
+  type RosterRow,
   type CancelClassResult,
   type ClassWeek,
   type CopyWeekResult,
@@ -95,6 +99,10 @@ import {
   insuranceForEntry,
   entryPolicy,
   shareRecordState,
+  classBookingsOn,
+  classRoster,
+  attendBooking,
+  staffCancelBooking,
   planSession,
   rescheduleSession,
   staffCancelSession,
@@ -162,7 +170,7 @@ import {
 } from '@climb/core';
 import { addDays, centsToYuanText, formatYuan, isDateKey, maskPhone, monthOf, toCsv, type CsvCell } from '@climb/utils';
 import { MEMBERS_VISIBLE_ACROSS_STORES, canDo, canSeeAllAuditLogs, canSeePage, canSeeStore } from '../../permissions';
-import { mockPasswordHash, type MockAuditLog, type MockCheckIn, type MockDb, type MockMember, type MockOrder, type MockStaff } from './db';
+import { mockPasswordHash, type MockClassBooking, type MockAuditLog, type MockCheckIn, type MockDb, type MockMember, type MockOrder, type MockStaff } from './db';
 
 /**
  * 后端没好之前用的假后端：实现 @climb/api 里后台接口的契约，数据放在内存里。
@@ -1421,6 +1429,105 @@ function copyClassWeek(db: MockDb, staff: Staff, body: { week?: unknown; store?:
   return ok(res);
 }
 
+/** 名单的一行 */
+function rosterRow(db: MockDb, b: MockClassBooking): RosterRow {
+  const { attendedAt, attendedBy, ...booking } = b;
+  const m = db.members.find(x => x.id === b.memberId);
+  const card = db.cards.find(c => c.id === b.cardId);
+  return {
+    ...booking,
+    memberName: m?.name ?? '',
+    phoneMasked: m ? maskPhone(m.phone) : '',
+    cardName: card?.name ?? '',
+    cardRemaining: card && 'remaining' in card ? card.remaining : null,
+    attendedAt: attendedAt ?? null,
+    attendedByName: attendedBy ? (db.staff.find(s => s.id === attendedBy)?.name ?? '') : null,
+  };
+}
+
+/** 课的权限和门店：门店要是员工能操作的 */
+function sessionStoreScope(staff: Staff, session: ClassSession, action?: 'class.attend' | 'class.cancelBooking'): ApiResponse | null {
+  if (action && !canDo(staff.role, action)) return fail(403, 'forbidden', action === 'class.attend' ? '没有签到的权限' : '没有帮会员取消的权限');
+  if (!canSeeStore(staff, session.storeId)) return fail(403, 'forbidden', '没有这家店的权限');
+  return null;
+}
+
+/** 团课名单：口径见 @climb/api 的 ClassRosterView，排法在 core 的 classRoster */
+function classRosterView(db: MockDb, staff: Staff, id: string): ApiResponse {
+  const session = db.classSessions.find(s => s.id === id);
+  if (!session) return fail(404, 'class-not-found', '没有这节课');
+  const scope = sessionStoreScope(staff, session);
+  if (scope) return scope;
+  const r = classRoster(id, db.classBookings);
+  const res: ClassRosterView = {
+    session: classRow(db, session),
+    booked: r.booked.map(b => rosterRow(db, b)),
+    waitlist: r.waitlist.map(b => ({ ...rosterRow(db, b), position: b.position })),
+    closed: r.closed.map(b => rosterRow(db, b)),
+  };
+  return ok(res);
+}
+
+function bookingScope(db: MockDb, staff: Staff, id: string, action: 'class.attend' | 'class.cancelBooking'): { booking: MockClassBooking; session: ClassSession } | ApiResponse {
+  const booking = db.classBookings.find(b => b.id === id);
+  if (!booking) return fail(404, 'booking-not-found', '没有这个预约');
+  const session = db.classSessions.find(s => s.id === booking.sessionId);
+  if (!session) return fail(404, 'class-not-found', '没有这节课');
+  return sessionStoreScope(staff, session, action) ?? { booking, session };
+}
+
+/** 签到、标缺席：core 的 attendBooking（迟到按 classRules.lateGraceMinutes） */
+function attendClassBooking(db: MockDb, staff: Staff, id: string, body: { present?: unknown } | null): ApiResponse {
+  const scope = bookingScope(db, staff, id, 'class.attend');
+  if (!('booking' in scope)) return scope;
+  const { booking, session } = scope;
+  if (typeof body?.present !== 'boolean') return badInput('present', '选一下签到还是缺席');
+  let r: ReturnType<typeof attendBooking>;
+  try {
+    r = attendBooking({ booking, session, present: body.present, now: mockNow(db), rules: db.rules.classRules });
+  } catch (e) {
+    return ruleFail(e);
+  }
+  const at = nowAt(db);
+  const next: MockClassBooking = { ...booking, ...r.booking, attendedAt: at, attendedBy: staff.id };
+  db.classBookings[db.classBookings.findIndex(b => b.id === id)] = next;
+  audit(db, staff, {
+    action: 'class_booking.attend', targetType: 'class_booking', targetId: id, storeId: session.storeId, at,
+    reason: r.late ? `迟到超过 ${db.rules.classRules.lateGraceMinutes} 分钟，算缺席` : '',
+    before: { status: booking.status }, after: { status: next.status, sessionId: session.id, memberId: booking.memberId },
+  });
+  const res: AttendResult = { booking: rosterRow(db, next), late: r.late };
+  return ok(res);
+}
+
+/** 帮会员取消：core 的 staffCancelBooking（就是 classes.ts 的 cancelBooking，by: 'staff'），退次、候补递补扣次都记流水 */
+function cancelClassBooking(db: MockDb, staff: Staff, id: string, body: { reason?: unknown } | null): ApiResponse {
+  const scope = bookingScope(db, staff, id, 'class.cancelBooking');
+  if (!('booking' in scope)) return scope;
+  const { booking, session } = scope;
+  const reason = String(body?.reason ?? '').trim();
+  let r: ReturnType<typeof staffCancelBooking>;
+  try {
+    r = staffCancelBooking({ booking, session, bookings: db.classBookings, cards: db.cards, now: mockNow(db), rules: db.rules.classRules, reason });
+  } catch (e) {
+    return ruleFail(e);
+  }
+  const at = nowAt(db);
+  saveBookings(db, [r.booking, ...r.promoted]);
+  applyClassChanges(db, r.changes.filter(c => c.reason === 'class_cancel'), staff, at, `前台帮会员取消：${reason}`);
+  applyClassChanges(db, r.changes.filter(c => c.reason === 'class_book'), staff, at, '有人取消，候补补上');
+  audit(db, staff, {
+    action: 'class_booking.cancel', targetType: 'class_booking', targetId: id, storeId: session.storeId, reason, at,
+    before: { status: booking.status, deducted: booking.deducted },
+    after: { status: r.booking.status, refunded: r.changes.filter(c => c.reason === 'class_cancel').reduce((n, c) => n + c.delta, 0), promoted: r.promoted.map(b => b.id) },
+  });
+  const res: CancelBookingResult = {
+    booking: rosterRow(db, db.classBookings.find(b => b.id === id)!),
+    promoted: r.promoted.map(p => rosterRow(db, db.classBookings.find(b => b.id === p.id)!)),
+  };
+  return ok(res);
+}
+
 /** 新建卡种：口径见 @climb/api 的 CreateProductBody，规则都在 @climb/core 的 product.ts */
 function createProduct(db: MockDb, staff: Staff, body: Partial<CreateProductBody> | null): ApiResponse {
   if (!canDo(staff.role, 'product.edit') || !canDo(staff.role, 'product.price')) return fail(403, 'forbidden', '没有新建卡种的权限');
@@ -1496,7 +1603,7 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
         monthRevenueCents: sum('monthRevenueCents'),
         todayEntries: sum('todayEntries'),
         lastWeekSameTimeEntries: sum('lastWeekSameTimeEntries'),
-        todayBookings: sum('todayBookings'),
+        todayBookings: classBookingsOn(db.classSessions, db.classBookings, db.today, ids),
         activeMembers: sum('activeMembers'),
         newcomers: newcomerRows(db, ids),
         referral: referralFunnel(db, ids),
@@ -1659,6 +1766,19 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
   },
   { method: 'GET', path: /^\/admin\/classes$/, auth: true, handle: ({ db, query, staff }) => classWeek(db, staff!, query.get('week'), query.get('store')) },
   { method: 'POST', path: /^\/admin\/classes$/, auth: true, handle: ({ db, body, staff }) => createClass(db, staff!, body) },
+  { method: 'GET', path: /^\/admin\/classes\/([^/]+)\/bookings$/, auth: true, handle: ({ db, params, staff }) => classRosterView(db, staff!, decodeURIComponent(params[0]!)) },
+  {
+    method: 'POST',
+    path: /^\/admin\/bookings\/([^/]+)\/attend$/,
+    auth: true,
+    handle: ({ db, params, body, staff }) => attendClassBooking(db, staff!, decodeURIComponent(params[0]!), body),
+  },
+  {
+    method: 'POST',
+    path: /^\/admin\/bookings\/([^/]+)\/cancel$/,
+    auth: true,
+    handle: ({ db, params, body, staff }) => cancelClassBooking(db, staff!, decodeURIComponent(params[0]!), body),
+  },
   { method: 'POST', path: /^\/admin\/classes\/copy-week$/, auth: true, handle: ({ db, body, staff }) => copyClassWeek(db, staff!, body) },
   {
     method: 'PATCH',

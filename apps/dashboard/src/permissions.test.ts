@@ -58,6 +58,8 @@ describe('操作权限', () => {
     'data.export': ['owner', 'manager'],
     'classType.edit': ['owner', 'manager'],
     'class.schedule': ['owner', 'manager'],
+    'class.attend': ['owner', 'manager', 'desk'],
+    'class.cancelBooking': ['owner', 'manager', 'desk'],
     'settings.classRules': ['owner'],
     'member.fullPhone': ['owner'],
   };

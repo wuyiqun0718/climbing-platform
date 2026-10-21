@@ -21,3 +21,4 @@ export * from './audit';
 export * from './classes';
 export * from './classTypes';
 export * from './classSchedule';
+export * from './classRoster';
