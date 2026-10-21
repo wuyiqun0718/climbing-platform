@@ -26,8 +26,10 @@ export type ActionKey =
   | 'card.freezeOverride'
   /** 退款（18）。等馆方：先放店长以上 */
   | 'order.refund'
-  /** 新建、改价、上下架卡种（19） */
+  /** 新建卡种、改名称、卖点、上下架、排序（19） */
   | 'product.edit'
+  /** 改卡种标价，新建卡种也要（19）。等馆方：谁能改价还在讨论，先放店长以上（mvp-plan 第 5 节「店长能改价」） */
+  | 'product.price'
   /** 员工账号（22） */
   | 'staff.manage'
   /** 青橙导入（39） */
@@ -61,6 +63,7 @@ export const ACTION_ROLES: Record<ActionKey, readonly StaffRole[]> = {
   'card.freezeOverride': MANAGER_UP,
   'order.refund': MANAGER_UP,
   'product.edit': MANAGER_UP,
+  'product.price': MANAGER_UP,
   'staff.manage': OWNER,
   'import.run': OWNER,
   'settings.freezeRules': OWNER,

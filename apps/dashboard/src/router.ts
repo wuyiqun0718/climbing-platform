@@ -25,6 +25,7 @@ const PAGES: Partial<Record<PageKey, () => Promise<unknown>>> = {
   dashboard: () => import('./pages/DashboardPage.vue'),
   finance: () => import('./pages/FinancePage.vue'),
   members: () => import('./pages/MembersPage.vue'),
+  products: () => import('./pages/ProductsPage.vue'),
   settings: () => import('./pages/SettingsPage.vue'),
 };
 

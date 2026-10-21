@@ -147,11 +147,12 @@
 
 ### D. 卡种、记录、员工
 
-**19. 卡种与价格**
+**19. 卡种与价格** ✅
 - 依赖：4、5
 - 涉及文件：`src/pages/ProductsPage.vue`、契约 `GET/POST/PATCH /admin/products`、mock
 - 内容：按品类（期限卡、次卡、单次票、私教课包、团课包）列出；新建、改价、改卖点、上下架、排序。改价不影响已卖出的订单（订单存快照）。
 - 完成标准：下架的卡种在小程序接口 `GET /products` 里消失（mock 共用一份数据）。
+- 补（2026-10-21）：规则在 core 的 `product.ts`，等馆方的占位（名称、卖点、标价、天数、次数、有效月数的上限）集中在文件开头：`newProductErrors` / `productPatchErrors` / `buildProduct` / `applyProductPatch`；品类和规格（天数、次数、有效月数）建好不能改，要换就新建、旧的下架；在售的不能重名；`productBlockedBy`（下架的不能买，前台开卡改用它）；`sortProducts`（按组 期限卡、次卡、单次票、私教、团课，组内按新加的 `Product.sort`，再按标价）、`productsForSale`（小程序 `GET /products`）。`shop.ts` 从小程序分支原样拷过来（单次票 = 1 次的次卡），小程序的 `groupProducts` 组内还是按价格排，合并后改用 `sortProducts`。权限新加 `product.price`（改价、新建都要，占位店长以上），别的改动是 `product.edit`。mock 加了不用登录的 `GET /products` 读同一份 `db.products`，小程序 mock 合并后要读同一份。已有订单和卡本来就存下单时的商品名、品类、标价，开好的卡不看卡种，所以改价、改名不影响；mock 单测覆盖。操作日志等 23。
 
 **20. 入场记录**
 - 依赖：4、3

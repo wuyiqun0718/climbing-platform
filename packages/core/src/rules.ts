@@ -31,7 +31,8 @@ export type RuleErrorCode =
   | 'refund-channel-unsupported'
   | 'order-fully-refunded'
   | 'refund-amount-invalid'
-  | 'refund-exceeds';
+  | 'refund-exceeds'
+  | 'product-off-sale';
 
 export class RuleError extends Error {
   constructor(public code: RuleErrorCode, message: string) {

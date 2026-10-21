@@ -50,6 +50,7 @@ describe('操作权限', () => {
     'card.freezeOverride': ['owner', 'manager'],
     'order.refund': ['owner', 'manager'],
     'product.edit': ['owner', 'manager'],
+    'product.price': ['owner', 'manager'],
     'staff.manage': ['owner'],
     'import.run': ['owner'],
     'settings.freezeRules': ['owner'],

@@ -12,6 +12,7 @@ import {
   type CreateDeskCheckInBody,
   type CreateDeskOrderBody,
   type CreateMemberBody,
+  type CreateProductBody,
   type DashboardSummary,
   type DeskCheckInResult,
   type DeskFreezeBody,
@@ -39,12 +40,21 @@ import {
   type RequestAdapter,
   type Staff,
   type StoreCompareRow,
+  type UpdateProductBody,
   type VoidCheckInBody,
   type VoidCheckInResult,
 } from '@climb/api';
 import {
   PRODUCT_REVENUE_CATEGORY,
   RuleError,
+  applyProductPatch,
+  buildProduct,
+  changesPrice,
+  newProductErrors,
+  productBlockedBy,
+  productPatchErrors,
+  productsForSale,
+  sortProducts,
   adjustCard,
   cardChangeLedgerEntry,
   deskFreezeCheck,
@@ -332,7 +342,7 @@ function createDeskOrder(db: MockDb, staff: Staff, body: Partial<CreateDeskOrder
   const storeId = String(body?.storeId ?? '');
   if (!db.stores.some(st => st.id === storeId)) return fail(404, 'store-not-found', '没有这家店');
   if (!canSeeStore(staff, storeId)) return fail(403, 'forbidden', '没有这家店的权限');
-  if (!product.onSale) return fail(422, 'product-off-sale', `${product.name}已经下架了`);
+  if (productBlockedBy(product)) return fail(422, 'product-off-sale', `${product.name}已经下架了`);
 
   const input = { channel: String(body?.channel ?? ''), amountCents: Number(body?.amountCents), priceReason: String(body?.priceReason ?? '') };
   const errs = deskOrderErrors(product, input);
@@ -778,6 +788,36 @@ function saveFreezeRules(db: MockDb, staff: Staff, body: any): ApiResponse {
   return ok(db.rules.freezeRules);
 }
 
+/** 新建卡种：口径见 @climb/api 的 CreateProductBody，规则都在 @climb/core 的 product.ts */
+function createProduct(db: MockDb, staff: Staff, body: Partial<CreateProductBody> | null): ApiResponse {
+  if (!canDo(staff.role, 'product.edit') || !canDo(staff.role, 'product.price')) return fail(403, 'forbidden', '没有新建卡种的权限');
+  const errs = newProductErrors(body ?? {}, db.products);
+  if (errs) {
+    const field = Object.keys(errs)[0] as keyof typeof errs;
+    return badInput(field, errs[field]!);
+  }
+  const product = buildProduct(nextId('p-new-', db.products), body as CreateProductBody, db.products);
+  db.products.push(product);
+  return ok(product);
+}
+
+/** 修改卡种：只改卡种本身，订单（快照）和已经开出去的卡不动 */
+function updateProduct(db: MockDb, staff: Staff, id: string, body: UpdateProductBody | null): ApiResponse {
+  if (!canDo(staff.role, 'product.edit')) return fail(403, 'forbidden', '没有修改卡种的权限');
+  const i = db.products.findIndex(p => p.id === id);
+  if (i < 0) return fail(404, 'product-not-found', '没有这个卡种');
+  const product = db.products[i]!;
+  const patch = body ?? {};
+  if (changesPrice(product, patch) && !canDo(staff.role, 'product.price')) return fail(403, 'forbidden', '没有改价的权限');
+  const errs = productPatchErrors(product, patch, db.products);
+  if (errs) {
+    const field = Object.keys(errs)[0] as keyof typeof errs;
+    return badInput(field, errs[field]!);
+  }
+  db.products[i] = applyProductPatch(product, patch);
+  return ok(db.products[i]);
+}
+
 const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handle: Handler }[] = [
   {
     method: 'POST',
@@ -889,7 +929,26 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
     method: 'GET',
     path: /^\/admin\/products$/,
     auth: true,
-    handle: ({ db }) => ok(db.products),
+    handle: ({ db }) => ok(sortProducts(db.products)),
+  },
+  {
+    method: 'POST',
+    path: /^\/admin\/products$/,
+    auth: true,
+    handle: ({ db, body, staff }) => createProduct(db, staff!, body),
+  },
+  {
+    method: 'PATCH',
+    path: /^\/admin\/products\/([^/]+)$/,
+    auth: true,
+    handle: ({ db, params, body, staff }) => updateProduct(db, staff!, decodeURIComponent(params[0]!), body),
+  },
+  // 小程序的在售卡种（@climb/api 的 createApi）。小程序 mock 合并过来后读同一份 db.products；会员登录这里先不查
+  {
+    method: 'GET',
+    path: /^\/products$/,
+    auth: false,
+    handle: ({ db }) => ok(productsForSale(db.products)),
   },
   {
     method: 'POST',

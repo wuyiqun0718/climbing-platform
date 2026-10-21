@@ -1,4 +1,4 @@
-import { MEMBER_SOURCES, type Card, type CardAdjustInput, type FreezeOverridable, type PeriodCard, type RuleErrorCode, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type OrderStatus, type RefundBasis, type RefundMethod, type RefundStatus, type LedgerEntry, type MemberSource, type PayChannel, type Product, type RevenueBucket, type RevenueCategory, type RevenueChannel } from '@climb/core';
+import { MEMBER_SOURCES, type Card, type CardAdjustInput, type FreezeOverridable, type PeriodCard, type RuleErrorCode, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type OrderStatus, type RefundBasis, type RefundMethod, type RefundStatus, type LedgerEntry, type MemberSource, type PayChannel, type Product, type ProductInput, type ProductPatch, type RevenueBucket, type RevenueCategory, type RevenueChannel } from '@climb/core';
 import type { Cents, DateKey } from '@climb/utils';
 import { createHttp, type ClientOptions } from './client';
 
@@ -145,6 +145,19 @@ export interface FinanceRefundRow {
   reason: string;
   method: RefundMethod;
 }
+
+/**
+ * 卡种与价格（任务 19），规则都在 @climb/core 的 product.ts（名称、标价、卖点上限等等馆方的占位也在那里）。
+ * - GET /admin/products：全部卡种（含下架的），按 core 的 sortProducts 排。登录的员工都能看（前台开卡要选）。
+ * - POST /admin/products：新建，要 product.edit 和 product.price 两个权限（谁能改价等馆方，见 permissions.ts），不是 403；
+ *   校验用 core 的 newProductErrors，不对的 400（data.field 是第一个错的字段）。返回建好的卡种。
+ * - PATCH /admin/products/:id：只传要改的（名称、标价、卖点、上下架、排序），要 product.edit，改了标价还要 product.price，不是 403；
+ *   没有这个卡种 404；品类和规格（天数、次数、有效月数）建好不能改，传了不一样的 400；校验用 core 的 productPatchErrors。返回改后的卡种。
+ * 改价、改名只影响以后的订单：已有订单存的是下单时的快照（商品名、品类、标价），卡在下单时开好，都不跟着变。
+ * 下架后小程序 GET /products 不再返回、不能下单，前台开卡 422（product-off-sale）；已经买了的卡照常用。操作日志等任务 23。
+ */
+export type CreateProductBody = ProductInput;
+export type UpdateProductBody = ProductPatch;
 
 /** 后台列表的一页。page 从 1 开始；超出范围时后端夹到最后一页，以返回的 page 为准 */
 export interface PageOf<T> {
@@ -571,9 +584,11 @@ export function createAdminApi(opts: ClientOptions) {
       get: (id: string) => http<MemberDetail>('GET', `/admin/members/${encodeURIComponent(id)}`),
       create: (body: CreateMemberBody) => http<MemberDetail>('POST', '/admin/members', body),
     },
-    /** 卡种列表（含下架的），按品类、排序。开卡弹窗只列在售的；新建、改价、上下架见任务 19 */
+    /** 卡种列表（含下架的），按 core 的 sortProducts 排。开卡弹窗只列在售的 */
     products: {
       list: () => http<Product[]>('GET', '/admin/products'),
+      create: (body: CreateProductBody) => http<Product>('POST', '/admin/products', body),
+      update: (id: string, body: UpdateProductBody) => http<Product>('PATCH', `/admin/products/${encodeURIComponent(id)}`, body),
     },
     orders: {
       create: (body: CreateDeskOrderBody) => http<DeskOrderResult>('POST', '/admin/orders', body),

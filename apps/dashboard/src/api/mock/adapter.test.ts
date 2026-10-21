@@ -1,4 +1,4 @@
-import { ApiError, createAdminApi } from '@climb/api';
+import { ApiError, createAdminApi, createApi } from '@climb/api';
 import { defaultFreezeRules, freezeBlockedBy, ledgerMismatch } from '@climb/core';
 import { addDays } from '@climb/utils';
 import { describe, expect, it } from 'vitest';
@@ -910,5 +910,80 @@ describe('后台 mock：退款', () => {
     const meituan = db.orders.find(o => o.channel === 'meituan')!;
     expect(await api.orders.refund(meituan.id, body({ amountCents: 1 })).catch((e: ApiError) => e)).toMatchObject({ status: 422, data: { code: 'refund-channel-unsupported' } });
     expect(await api.orders.refund('o-pending', body({ amountCents: 1 })).catch((e: ApiError) => e)).toMatchObject({ status: 422, data: { code: 'order-not-paid' } });
+  });
+});
+
+describe('后台 mock：卡种与价格', () => {
+  const half = { category: 'period' as const, name: '半年卡', priceCents: 299_900, days: 180, perks: ['每月 1 次老带新'], onSale: true };
+  const memberApi = (db: MockDb) => createApi({ baseURL: '', gymId: 'benchmark', adapter: createMockAdapter(db) });
+
+  it('列出全部卡种（含下架的），按组和排序排；前台也能看', async () => {
+    const { api, login } = setup();
+    await login('13800000003');
+    const list = await api.products.list();
+    expect(list.map(p => p.id)).toEqual(['p-30', 'p-90', 'p-365', 'p-10x', 'p-20x', 'p-summer', 'p-pt5', 'p-class10']);
+    expect(list.find(p => p.id === 'p-summer')!.onSale).toBe(false);
+  });
+
+  it('新建、改价、改卖点、排序；返回改后的卡种，列表跟着变', async () => {
+    const { api, login } = setup();
+    await login('13800000002');
+    const made = await api.products.create(half);
+    expect(made).toMatchObject({ ...half, sort: 9 });
+    const changed = await api.products.update(made.id, { priceCents: 279_900, perks: ['送一节体验课'], sort: 0 });
+    expect(changed).toMatchObject({ priceCents: 279_900, perks: ['送一节体验课'], days: 180 });
+    expect((await api.products.list()).filter(p => p.category === 'period').map(p => p.id)).toEqual([made.id, 'p-30', 'p-90', 'p-365']);
+  });
+
+  it('改价、改名只影响以后的订单：已有订单和卡用下单时的，新订单按新价', async () => {
+    const { api, login } = setup();
+    await login('13800000002');
+    const order = (requestId: string, amountCents: number) =>
+      api.orders.create({ requestId, memberId: 'm-old-5', productId: 'p-10x', storeId: 'bingang', channel: 'desk_cash', amountCents, priceReason: '' });
+    const first = await order('r1', 128_000);
+    await api.products.update('p-10x', { priceCents: 138_000, name: '十次卡' });
+    const detail = await api.members.get('m-old-5');
+    expect(detail.recentOrders.find(o => o.id === first.order.id)).toMatchObject({ productName: '10 次卡', amountCents: 128_000 });
+    expect(detail.cards.find(c => c.id === first.card.id)).toMatchObject({ name: '10 次卡', total: 10, expiresOn: first.card.expiresOn });
+    // 按旧价收要写原因（低于新标价），按新价不用
+    expect(await status(order('r2', 128_000))).toBe(400);
+    const second = await order('r3', 138_000);
+    expect(second.order).toMatchObject({ productName: '十次卡', amountCents: 138_000 });
+  });
+
+  it('下架的在小程序 GET /products 里消失、前台开不了卡；重新上架又能买', async () => {
+    const { api, login, db } = setup();
+    const mp = memberApi(db);
+    expect((await mp.products.list()).map(p => p.id)).not.toContain('p-summer');
+    expect((await mp.products.list()).map(p => p.id)).toContain('p-10x');
+    await login('13800000001');
+    await api.products.update('p-10x', { onSale: false });
+    expect((await mp.products.list()).map(p => p.id)).not.toContain('p-10x');
+    const body = { requestId: 'r1', memberId: 'm-old-5', productId: 'p-10x', storeId: 'bingang', channel: 'desk_cash' as const, amountCents: 128_000, priceReason: '' };
+    const err = await api.orders.create(body).catch((e: ApiError) => e);
+    expect(err).toMatchObject({ status: 422, data: { code: 'product-off-sale' } });
+    await api.products.update('p-10x', { onSale: true });
+    expect((await api.orders.create(body)).card.kind).toBe('count');
+  });
+
+  it('前台不能新建、不能改；改价按 product.price；没有的 404', async () => {
+    const { api, login } = setup();
+    await login('13800000003');
+    expect(await status(api.products.create(half))).toBe(403);
+    expect(await status(api.products.update('p-30', { priceCents: 1 }))).toBe(403);
+    expect(await status(api.products.update('p-30', { onSale: false }))).toBe(403);
+    await login('13800000002');
+    expect(await status(api.products.update('nope', { onSale: false }))).toBe(404);
+  });
+
+  it('填得不对 400：品类和规格不能改、在售的不能重名、标价不对', async () => {
+    const { api, login } = setup();
+    await login('13800000001');
+    const bad = (p: Promise<unknown>) => p.then(() => null, (e: ApiError) => (e.data as { field?: string }).field);
+    expect(await bad(api.products.update('p-30', { days: 31 } as never))).toBe('days');
+    expect(await bad(api.products.update('p-90', { name: '月卡' }))).toBe('name');
+    expect(await bad(api.products.update('p-30', { priceCents: 0 }))).toBe('priceCents');
+    expect(await bad(api.products.create({ ...half, name: '季卡' }))).toBe('name');
+    expect(await bad(api.products.create({ ...half, days: undefined }))).toBe('days');
   });
 });

@@ -402,17 +402,17 @@ function sampleOrders(today: DateKey): Pick<MockDb, 'orders' | 'refunds'> {
   return { orders, refunds };
 }
 
-/** 示例卡种：ID 跟示例卡上的 productId 对得上，价格跟示例订单一致；有一个下架的 */
+/** 示例卡种：ID 跟示例卡上的 productId 对得上，价格跟示例订单一致；有一个下架的；排序按这里的顺序 */
 function sampleProducts(): Product[] {
   return [
-    { id: 'p-30', category: 'period', name: '月卡', priceCents: 59_900, days: 30, perks: ['每月 1 次老带新'], onSale: true },
-    { id: 'p-90', category: 'period', name: '季卡', priceCents: 159_900, days: 90, perks: ['每月 1 次老带新'], onSale: true },
-    { id: 'p-365', category: 'period', name: '年卡', priceCents: 499_900, days: 365, perks: ['每月 1 次老带新'], onSale: true },
-    { id: 'p-10x', category: 'count', name: '10 次卡', priceCents: 128_000, quantity: 10, validMonths: 6, perks: ['可以分次送给朋友'], onSale: true },
-    { id: 'p-20x', category: 'count', name: '20 次卡', priceCents: 229_900, quantity: 20, validMonths: 12, perks: ['可以分次送给朋友'], onSale: true },
-    { id: 'p-pt5', category: 'pt', name: '私教 5 节', priceCents: 199_900, quantity: 5, validMonths: 3, perks: ['可约任意教练'], onSale: true },
-    { id: 'p-class10', category: 'class', name: '团课 10 次', priceCents: 98_000, quantity: 10, validMonths: 4, perks: ['满员时优先候补'], onSale: true },
-    { id: 'p-summer', category: 'count', name: '暑期 5 次卡', priceCents: 49_900, quantity: 5, validMonths: 2, perks: [], onSale: false },
+    { id: 'p-30', category: 'period', name: '月卡', priceCents: 59_900, days: 30, perks: ['每月 1 次老带新'], onSale: true, sort: 1 },
+    { id: 'p-90', category: 'period', name: '季卡', priceCents: 159_900, days: 90, perks: ['每月 1 次老带新'], onSale: true, sort: 2 },
+    { id: 'p-365', category: 'period', name: '年卡', priceCents: 499_900, days: 365, perks: ['每月 1 次老带新'], onSale: true, sort: 3 },
+    { id: 'p-10x', category: 'count', name: '10 次卡', priceCents: 128_000, quantity: 10, validMonths: 6, perks: ['可以分次送给朋友'], onSale: true, sort: 4 },
+    { id: 'p-20x', category: 'count', name: '20 次卡', priceCents: 229_900, quantity: 20, validMonths: 12, perks: ['可以分次送给朋友'], onSale: true, sort: 5 },
+    { id: 'p-pt5', category: 'pt', name: '私教 5 节', priceCents: 199_900, quantity: 5, validMonths: 3, perks: ['可约任意教练'], onSale: true, sort: 6 },
+    { id: 'p-class10', category: 'class', name: '团课 10 次', priceCents: 98_000, quantity: 10, validMonths: 4, perks: ['满员时优先候补'], onSale: true, sort: 7 },
+    { id: 'p-summer', category: 'count', name: '暑期 5 次卡', priceCents: 49_900, quantity: 5, validMonths: 2, perks: [], onSale: false, sort: 8 },
   ];
 }
 

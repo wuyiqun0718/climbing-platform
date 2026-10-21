@@ -16,6 +16,8 @@ export interface Product {
   validMonths?: number;
   perks: string[];
   onSale: boolean;
+  /** 列表里的顺序，同一组里小的在前；没填算 0（见 product.ts 的 sortProducts） */
+  sort?: number;
 }
 
 /** 卡的状态：正常、冻结、作废、已退款。冻结和解冻的规则见任务 17 */
