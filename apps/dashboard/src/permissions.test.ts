@@ -40,6 +40,7 @@ describe('页面权限', () => {
 
 describe('操作权限', () => {
   const expected: Record<ActionKey, StaffRole[]> = {
+    'member.create': ['owner', 'manager', 'desk'],
     'order.create': ['owner', 'manager', 'desk'],
     'checkIn.create': ['owner', 'manager', 'desk'],
     'checkIn.void': ['owner', 'manager', 'desk'],

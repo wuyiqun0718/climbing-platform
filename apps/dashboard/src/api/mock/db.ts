@@ -10,8 +10,9 @@ export interface MockMember {
   source: MemberSource;
   /** 归属门店（按办卡门店，等馆方） */
   homeStoreId: string;
-  firstVisitOn: DateKey;
-  firstVisitStoreId: string;
+  /** 第一次到店；后台建档后还没来过的为 null */
+  firstVisitOn: DateKey | null;
+  firstVisitStoreId: string | null;
   /** 第一次买期限卡或次卡的日期，没买过为 null */
   firstCardOn: DateKey | null;
   /** 最近一次入场，跟 checkIns 里最晚的一条一致（mock 里由入场记录生成时对齐）。等任务 15 再改成从入场记录算 */
@@ -54,6 +55,9 @@ export interface MockOrder extends RevenueOrder {
 export interface MockRefund extends RevenueRefund {
   reason: string;
 }
+
+/** 示例数据生成时的会员：都到过店 */
+type SeedMember = Omit<MockMember, 'phone' | 'lastEntryOn' | 'waiverSignedOn'> & { firstVisitOn: DateKey; firstVisitStoreId: string };
 
 /** mock 后端的内存数据。每次 createMockDb() 都是一份新的，测试之间互不影响。 */
 export interface MockDb {
@@ -119,7 +123,7 @@ function sampleMembers(today: DateKey): Pick<MockDb, 'members' | 'referrals' | '
   const storeIds = ['bingang', 'huiju', 'huanqiu'];
   const monthStart = `${monthOf(today)}-01`;
   const daysSoFar = Number(today.slice(8, 10));
-  const members: Omit<MockMember, 'phone' | 'lastEntryOn' | 'waiverSignedOn'>[] = [];
+  const members: SeedMember[] = [];
   const referrals: MockReferral[] = [];
   const cards: Card[] = [];
   let named = 0;
@@ -181,7 +185,7 @@ function sampleMembers(today: DateKey): Pick<MockDb, 'members' | 'referrals' | '
  * 会员列表要的手机号和最近入场，单独用一个伪随机数生成，不影响上面看板示例数字。
  * 手机号前 4 位后面接序号，保证不重复；青橙导入的有一半还没来过。
  */
-function withContact(members: Omit<MockMember, 'phone' | 'lastEntryOn' | 'waiverSignedOn'>[], today: DateKey): MockMember[] {
+function withContact(members: SeedMember[], today: DateKey): MockMember[] {
   let seed = 23;
   const rand = (n: number) => {
     seed = (seed * 1103515245 + 12345) % 2147483648;
@@ -196,7 +200,7 @@ function withContact(members: Omit<MockMember, 'phone' | 'lastEntryOn' | 'waiver
 }
 
 /** 本月办了卡的新客每人一张 10 次卡，用掉几次；有一张已经用完、一张冻结了（都不算有效卡） */
-function newcomerCountCards(members: Omit<MockMember, 'phone' | 'lastEntryOn' | 'waiverSignedOn'>[]): CountCard[] {
+function newcomerCountCards(members: SeedMember[]): CountCard[] {
   const bought = members.filter(m => !m.id.startsWith('m-old-') && m.firstCardOn);
   return bought.map((m, i): CountCard => ({
     id: `c-${m.id}`,
@@ -225,7 +229,7 @@ function withCheckIns<T extends Pick<MockDb, 'members' | 'cards'>>(data: T, toda
   const checkIns: MockCheckIn[] = [];
   let n = 0;
   for (const m of data.members) {
-    if (!m.lastEntryOn) continue;
+    if (!m.lastEntryOn || !m.firstVisitOn) continue;
     const span = daysBetween(m.firstVisitOn, m.lastEntryOn);
     const days = new Set([m.lastEntryOn, m.firstVisitOn]);
     for (let k = rand(4); k > 0; k--) days.add(addDays(m.firstVisitOn, rand(span + 1)));

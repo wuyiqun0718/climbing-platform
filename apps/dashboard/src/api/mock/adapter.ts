@@ -6,6 +6,7 @@ import {
   type ApiResponse,
   type CardLedger,
   type CardLedgerRow,
+  type CreateMemberBody,
   type DashboardSummary,
   type ExpiringCardRow,
   type FinanceRefundRow,
@@ -13,6 +14,7 @@ import {
   type LoginResult,
   type MemberDetail,
   type MemberEntryRow,
+  type MemberExistsError,
   type MemberListRow,
   type MemberOrderRow,
   type NewcomerRow,
@@ -22,10 +24,21 @@ import {
   type Staff,
   type StoreCompareRow,
 } from '@climb/api';
-import { expiringPeriodCards, financeRangeError, isCardValid, summarizeRevenue, type Card, type RevenueChannel } from '@climb/core';
+import {
+  expiringPeriodCards,
+  financeRangeError,
+  findMemberByPhone,
+  isCardValid,
+  newMemberErrors,
+  normalizePhone,
+  summarizeRevenue,
+  type Card,
+  type MemberSource,
+  type RevenueChannel,
+} from '@climb/core';
 import { maskPhone, monthOf } from '@climb/utils';
-import { MEMBERS_VISIBLE_ACROSS_STORES, canSeePage, canSeeStore } from '../../permissions';
-import type { MockDb } from './db';
+import { MEMBERS_VISIBLE_ACROSS_STORES, canDo, canSeePage, canSeeStore } from '../../permissions';
+import type { MockDb, MockMember } from './db';
 
 /**
  * 后端没好之前用的假后端：实现 @climb/api 里后台接口的契约，数据放在内存里。
@@ -56,7 +69,9 @@ function toStaff({ password: _p, active: _a, ...s }: MockDb['staff'][number]): S
 function newcomerRows(db: MockDb, storeIds: string[]): NewcomerRow[] {
   const month = monthOf(db.today);
   const hasCard = (on: string | null) => on !== null && on <= db.today;
-  const fresh = db.members.filter(m => monthOf(m.firstVisitOn) === month && m.firstVisitOn <= db.today && storeIds.includes(m.firstVisitStoreId));
+  const fresh = db.members.filter(
+    m => m.firstVisitOn && monthOf(m.firstVisitOn) === month && m.firstVisitOn <= db.today && storeIds.includes(m.firstVisitStoreId ?? ''),
+  );
   return MEMBER_SOURCES.map(source => {
     const ms = fresh.filter(m => m.source === source);
     return { source, visitors: ms.length, bought: ms.filter(m => hasCard(m.firstCardOn)).length };
@@ -119,7 +134,7 @@ function memberList(db: MockDb, staff: Staff, q: string, page: number): PageOf<M
   const matched = !q ? visible : /^\d+$/.test(q) ? visible.filter(m => m.phone.includes(q)) : visible.filter(m => m.name.includes(q));
   const sorted = [...matched].sort(
     (a, b) =>
-      (b.lastEntryOn ?? '').localeCompare(a.lastEntryOn ?? '') || b.firstVisitOn.localeCompare(a.firstVisitOn) || a.id.localeCompare(b.id),
+      (b.lastEntryOn ?? '').localeCompare(a.lastEntryOn ?? '') || (b.firstVisitOn ?? '').localeCompare(a.firstVisitOn ?? '') || a.id.localeCompare(b.id),
   );
   const pageSize = MEMBERS_PAGE_SIZE;
   const last = Math.max(1, Math.ceil(sorted.length / pageSize));
@@ -181,6 +196,42 @@ function memberDetail(db: MockDb, staff: Staff, id: string): ApiResponse {
     recentEntries,
   };
   return ok(res);
+}
+
+/** 新建会员：校验、判重的口径见 @climb/api 的 CreateMemberBody */
+function createMember(db: MockDb, staff: Staff, body: Partial<CreateMemberBody> | null): ApiResponse {
+  if (!canDo(staff.role, 'member.create')) return fail(403, 'forbidden', '没有建档权限');
+  const input = { phone: String(body?.phone ?? ''), name: String(body?.name ?? ''), source: String(body?.source ?? '') };
+  const errs = newMemberErrors(input);
+  if (errs) {
+    const field = Object.keys(errs)[0] as keyof typeof errs;
+    return { status: 400, data: { code: 'bad-input', field, message: errs[field] } };
+  }
+  const storeId = String(body?.storeId ?? '');
+  if (!db.stores.some(st => st.id === storeId)) return fail(404, 'store-not-found', '没有这家店');
+  if (!canSeeStore(staff, storeId)) return fail(403, 'forbidden', '没有这家店的权限');
+  const phone = normalizePhone(input.phone);
+  const dup = findMemberByPhone(db.members, phone);
+  if (dup) {
+    const data: MemberExistsError = { code: 'member-exists', message: `这个手机号已经有档案了：${dup.name || '没填名字'}`, memberId: dup.id, memberName: dup.name };
+    return { status: 409, data };
+  }
+  let n = db.members.length + 1;
+  while (db.members.some(m => m.id === `m-new-${n}`)) n++;
+  const m: MockMember = {
+    id: `m-new-${n}`,
+    name: input.name.trim(),
+    phone,
+    source: input.source as MemberSource,
+    homeStoreId: storeId,
+    firstVisitOn: null,
+    firstVisitStoreId: null,
+    firstCardOn: null,
+    lastEntryOn: null,
+    waiverSignedOn: null,
+  };
+  db.members.push(m);
+  return memberDetail(db, staff, m.id);
 }
 
 /** 卡流水：口径见 @climb/api 的 CardLedger */
@@ -295,6 +346,12 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
       if (!Number.isInteger(page) || page < 1) return fail(400, 'bad-page', '页码不对');
       return ok(memberList(db, staff!, (query.get('q') ?? '').trim(), page));
     },
+  },
+  {
+    method: 'POST',
+    path: /^\/admin\/members$/,
+    auth: true,
+    handle: ({ db, body, staff }) => createMember(db, staff!, body),
   },
   {
     method: 'GET',

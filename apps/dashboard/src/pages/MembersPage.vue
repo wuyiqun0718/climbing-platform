@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { MEMBER_SOURCE_TEXT, type MemberListRow, type PageOf } from '@climb/api';
-import { DataTable, Pager, errorText, type Column } from '@climb/ui-web';
+import { MEMBER_SOURCE_TEXT, type MemberDetail, type MemberListRow, type PageOf } from '@climb/api';
+import { DataTable, Pager, errorText, useToast, type Column } from '@climb/ui-web';
 import { formatDot } from '@climb/utils';
 import { onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from '../api';
+import MemberForm from '../components/MemberForm.vue';
+import { canDo } from '../permissions';
 import { session } from '../session';
 import { createLatest } from './dashboard';
 
@@ -52,7 +54,7 @@ function search(v = input.value) {
 }
 
 const columns: Column<MemberListRow>[] = [
-  { key: 'name', label: '名字' },
+  { key: 'name', label: '名字', format: r => r.name || '（没填）' },
   { key: 'phoneMasked', label: '手机号', num: true },
   { key: 'source', label: '来源', format: r => MEMBER_SOURCE_TEXT[r.source] },
   { key: 'firstVisitOn', label: '首次到店', format: r => (r.firstVisitOn ? formatDot(r.firstVisitOn) : '还没来过') },
@@ -60,14 +62,29 @@ const columns: Column<MemberListRow>[] = [
   { key: 'lastEntryOn', label: '最近入场', format: r => (r.lastEntryOn ? formatDot(r.lastEntryOn) : '—') },
 ];
 
+// 新建会员；搜的是手机号就预填进去
+const toast = useToast();
+const formOpen = ref(false);
+const canCreate = () => !!session.state.staff && canDo(session.state.staff.role, 'member.create');
+const prefillPhone = () => (/^\d+$/.test(qFromRoute()) ? qFromRoute() : '');
+const openMember = (id: string) => router.push({ name: 'member', params: { id } });
+function onCreated(m: MemberDetail) {
+  toast.success(`已建档：${m.name || m.phone}`);
+  openMember(m.id);
+}
+
 const emptyText = () => (qFromRoute() ? `没找到「${qFromRoute()}」，换个手机号或名字试试` : '还没有会员');
 </script>
 
 <template>
   <header class="page-h">
-    <h1>会员</h1>
-    <p>所有门店的会员；点一行看详情</p>
+    <div>
+      <h1>会员</h1>
+      <p>所有门店的会员；点一行看详情</p>
+    </div>
+    <button v-if="canCreate()" type="button" class="create" @click="formOpen = true">新建会员</button>
   </header>
+  <MemberForm v-model:open="formOpen" :phone="prefillPhone()" @created="onCreated" @open-existing="openMember" />
   <form class="search" role="search" @submit.prevent="search()">
     <input v-model="input" type="search" placeholder="手机号（后四位也行）或名字" aria-label="搜索会员" maxlength="30" />
     <button type="submit">搜索</button>
@@ -83,7 +100,7 @@ const emptyText = () => (qFromRoute() ? `没找到「${qFromRoute()}」，换个
       :loading="loading"
       :empty="emptyText()"
       clickable
-      @row-click="(r: MemberListRow) => router.push({ name: 'member', params: { id: r.id } })"
+      @row-click="(r: MemberListRow) => openMember(r.id)"
     />
     <Pager
       v-if="data && data.total > 0"
@@ -98,6 +115,8 @@ const emptyText = () => (qFromRoute() ? `没找到「${qFromRoute()}」，换个
 </template>
 
 <style scoped>
+.page-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.create { padding: 6px 14px; font: inherit; font-weight: 600; color: var(--on-brand); background: var(--brand); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
 .page-h h1 { margin: 0; font-family: var(--font-display); font-size: 34px; font-weight: 400; }
 .page-h p { margin: 4px 0 16px; font-size: 13px; color: var(--ink-muted); }
 .search { display: flex; gap: 8px; max-width: 420px; margin-bottom: 16px; }

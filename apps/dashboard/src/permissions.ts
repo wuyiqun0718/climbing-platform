@@ -10,6 +10,8 @@ import type { Staff, StaffRole, Store } from '@climb/api';
 export type PageKey = 'dashboard' | 'finance' | 'members' | 'courses' | 'events' | 'entries' | 'products' | 'staff';
 
 export type ActionKey =
+  /** 新建会员（13） */
+  | 'member.create'
   /** 线下收款开卡（14） */
   | 'order.create'
   /** 手动登记入场（15） */
@@ -45,6 +47,7 @@ export const PAGE_ROLES: Record<PageKey, readonly StaffRole[]> = {
 };
 
 export const ACTION_ROLES: Record<ActionKey, readonly StaffRole[]> = {
+  'member.create': ALL,
   'order.create': ALL,
   'checkIn.create': ALL,
   'checkIn.void': ALL,

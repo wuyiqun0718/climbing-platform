@@ -407,4 +407,39 @@ describe('后台 mock：会员详情', () => {
     expect(await status(api.cards.ledger('nope'))).toBe(404);
     expect(await status(api.cards.ledger('c-old-0'))).toBe(200);
   });
+
+  it('新建会员：存规范化后的手机号，还没来过店，列表和详情都能查到', async () => {
+    const { api, login } = setup();
+    await login('13800000003');
+    const m = await api.members.create({ phone: '+86 199-0000-1234', name: ' 小林 ', source: 'walkin', storeId: 'bingang' });
+    expect(m).toMatchObject({ phone: '19900001234', name: '小林', source: 'walkin', homeStoreId: 'bingang', firstVisitOn: null, waiver: null, cards: [] });
+    expect((await api.members.get(m.id)).phone).toBe('19900001234');
+    const found = await api.members.list({ q: '19900001234' });
+    expect(found.items.map(r => r.id)).toEqual([m.id]);
+    expect(found.items[0]).toMatchObject({ firstVisitOn: null, validCards: 0, lastEntryOn: null });
+  });
+
+  it('新建会员：手机号已经有档案返回 409，带上那个人的 ID', async () => {
+    const { api, login, db } = setup();
+    await login('13800000003');
+    const old = db.members[0]!;
+    const before = db.members.length;
+    const err = await api.members.create({ phone: old.phone.replace(/(\d{3})(\d{4})/, '$1 $2 '), name: '', source: 'walkin', storeId: 'bingang' }).catch(e => e as ApiError);
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).status).toBe(409);
+    expect((err as ApiError).data).toMatchObject({ code: 'member-exists', memberId: old.id, memberName: old.name });
+    expect(db.members).toHaveLength(before);
+  });
+
+  it('新建会员：填错 400，别的店 403，没登录 401', async () => {
+    const { api, login } = setup();
+    const body = { phone: '19900001234', name: '', source: 'walkin' as const, storeId: 'bingang' };
+    expect(await status(api.members.create(body))).toBe(401);
+    await login('13800000003');
+    const bad = await api.members.create({ ...body, phone: '123' }).catch(e => e as ApiError);
+    expect(bad).toMatchObject({ status: 400, data: { field: 'phone' } });
+    expect(await status(api.members.create({ ...body, source: 'legacy_import' }))).toBe(400);
+    expect(await status(api.members.create({ ...body, storeId: 'huiju' }))).toBe(403);
+    expect(await status(api.members.create({ ...body, storeId: 'nope' }))).toBe(404);
+  });
 });

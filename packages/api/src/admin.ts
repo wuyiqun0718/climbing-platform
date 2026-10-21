@@ -1,4 +1,4 @@
-import type { Card, LedgerEntry, PayChannel, RevenueBucket, RevenueCategory, RevenueChannel } from '@climb/core';
+import { MEMBER_SOURCES, type Card, type LedgerEntry, type MemberSource, type PayChannel, type RevenueBucket, type RevenueCategory, type RevenueChannel } from '@climb/core';
 import type { Cents, DateKey } from '@climb/utils';
 import { createHttp, type ClientOptions } from './client';
 
@@ -76,9 +76,8 @@ export interface StoreCompareRow {
   newcomersBought: number;
 }
 
-/** 会员来源（members.source） */
-export type MemberSource = 'walkin' | 'referral' | 'gift' | 'platform' | 'legacy_import';
-export const MEMBER_SOURCES: readonly MemberSource[] = ['walkin', 'referral', 'gift', 'platform', 'legacy_import'];
+/** 会员来源（members.source），定义在 @climb/core 的 member.ts */
+export { MEMBER_SOURCES, type MemberSource };
 export const MEMBER_SOURCE_TEXT: Record<MemberSource, string> = {
   walkin: '自己来的',
   referral: '老带新',
@@ -203,6 +202,27 @@ export interface MemberDetail {
   recentEntries: MemberEntryRow[];
 }
 
+/**
+ * 新建会员（建档）POST /admin/members。校验和判重用 @climb/core 的 newMemberErrors / findMemberByPhone：
+ * - phone 后端先 normalizePhone 再存；name 去掉首尾空格，选填；source 只能是 DESK_MEMBER_SOURCES 里的。
+ * - storeId 是建档的门店，还没办卡时先当归属门店（归属按办卡门店，等馆方）；必须是员工能操作的店，否则 403。
+ * - 填得不对 400（data.field 指出哪一项）；手机号已经有档案 409，data 是 MemberExistsError，页面据此跳到那个人。
+ * 建好返回会员详情（还没来过店，firstVisitOn 为 null）。
+ */
+export interface CreateMemberBody {
+  phone: string;
+  name: string;
+  source: MemberSource;
+  storeId: string;
+}
+
+export interface MemberExistsError {
+  code: 'member-exists';
+  message: string;
+  memberId: string;
+  memberName: string;
+}
+
 export interface MemberOrderRow {
   id: string;
   storeId: string;
@@ -294,6 +314,7 @@ export function createAdminApi(opts: ClientOptions) {
         return http<PageOf<MemberListRow>>('GET', s ? `/admin/members?${s}` : '/admin/members');
       },
       get: (id: string) => http<MemberDetail>('GET', `/admin/members/${encodeURIComponent(id)}`),
+      create: (body: CreateMemberBody) => http<MemberDetail>('POST', '/admin/members', body),
     },
     cards: {
       ledger: (id: string) => http<CardLedger>('GET', `/admin/cards/${encodeURIComponent(id)}/ledger`),
