@@ -1,4 +1,4 @@
-import { MEMBER_SOURCES, type Card, type CardAdjustInput, type FreezeOverridable, type PeriodCard, type RuleErrorCode, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type OrderStatus, type RefundBasis, type RefundMethod, type RefundStatus, type LedgerEntry, type MemberSource, type PayChannel, type Product, type ProductInput, type ProductPatch, type RevenueBucket, type RevenueCategory, type RevenueChannel, type Share, type ShareRecordState } from '@climb/core';
+import { MEMBER_SOURCES, type Card, type CardAdjustInput, type FreezeOverridable, type PeriodCard, type RuleErrorCode, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type OrderStatus, type RefundBasis, type RefundMethod, type RefundStatus, type LedgerEntry, type MemberSource, type PayChannel, type Product, type ProductInput, type ProductPatch, type RevenueBucket, type RevenueCategory, type RevenueChannel, type Share, type ShareRecordState, type StaffInput, type StaffPatch, type StaffRole } from '@climb/core';
 import type { Cents, DateKey } from '@climb/utils';
 import { createHttp, type ClientOptions } from './client';
 
@@ -7,7 +7,8 @@ import { createHttp, type ClientOptions } from './client';
  * 后台按 docs/tasks-dashboard.md 逐个加接口，后端照这里的类型实现。
  */
 
-export type StaffRole = 'owner' | 'manager' | 'desk';
+/** 角色、文字和员工账号的规则见 @climb/core 的 staff.ts */
+export type { StaffRole };
 
 export interface Store {
   id: string;
@@ -22,6 +23,25 @@ export interface Staff {
   /** 能操作哪些店，空数组表示全部 */
   storeIds: string[];
 }
+
+/**
+ * 员工账号（任务 22），规则都在 @climb/core 的 staff.ts。都要 staff.manage（只有老板），不是 403。
+ * - GET /admin/staff：全部员工，停用的也列出来；在用的在前，再按角色（馆长、店长、前台）、建号先后。不返回密码。
+ * - POST /admin/staff：新建（手机号、名字、角色、可操作门店、初始密码），校验用 core 的 newStaffErrors，不对的 400（data.field 是第一个错的字段）。
+ * - PATCH /admin/staff/:id：只传要改的；password 是重置密码，active 是停用、启用。没有这个人 404；校验用 core 的 staffPatchErrors；
+ *   停用自己、改自己的角色、改完没有在用的馆长 422（data.code 是 core 的 staffChangeBlockedBy）。
+ * 可操作门店：allStores = true 存成 storeIds = []（全部门店）；否则至少一家存在的店。
+ * 停用后登录 403（staff-inactive）；停用、重置密码后这个员工已经登录的 token 立即失效（401）。改自己的密码也一样，要重新登录。
+ * 后端只存密码哈希（bcrypt / argon2）。每次改动写一条操作日志（audit_logs，任务 23 查）：新建、改资料（改前改后只记改了的字段）、重置密码（不记密码）。
+ */
+export interface StaffRow extends Staff {
+  active: boolean;
+  /** 建号时间（ISO 8601 带时区） */
+  createdAt: string;
+}
+
+export type CreateStaffBody = StaffInput;
+export type UpdateStaffBody = StaffPatch;
 
 export interface LoginResult {
   token: string;
@@ -621,6 +641,11 @@ export function createAdminApi(opts: ClientOptions) {
     auth: {
       login: (body: { phone: string; password: string }) => http<LoginResult>('POST', '/admin/auth/login', body),
       me: () => http<Staff>('GET', '/admin/auth/me'),
+    },
+    staff: {
+      list: () => http<StaffRow[]>('GET', '/admin/staff'),
+      create: (body: CreateStaffBody) => http<StaffRow>('POST', '/admin/staff', body),
+      update: (id: string, body: UpdateStaffBody) => http<StaffRow>('PATCH', `/admin/staff/${encodeURIComponent(id)}`, body),
     },
     stores: {
       list: () => http<Store[]>('GET', '/admin/stores'),

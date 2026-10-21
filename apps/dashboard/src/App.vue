@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { StaffRole } from '@climb/api';
+import { STAFF_ROLE_TEXT } from '@climb/core';
 import { ToastHost } from '@climb/ui-web';
 import gym from '@gym';
 import { computed } from 'vue';
@@ -11,7 +11,7 @@ import { session } from './session';
 const logo = `/gym/${gym.logo}`;
 const route = useRoute();
 const router = useRouter();
-const ROLE_LABEL: Record<StaffRole, string> = { owner: '馆长', manager: '店长', desk: '前台' };
+const ROLE_LABEL = STAFF_ROLE_TEXT;
 
 const nav = computed(() => (session.state.staff ? navFor(session.state.staff.role) : []));
 const stores = computed(() => (session.state.staff ? storeOptions(session.state.staff, session.state.stores) : []));

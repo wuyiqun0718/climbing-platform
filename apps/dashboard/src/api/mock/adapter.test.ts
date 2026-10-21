@@ -1,4 +1,4 @@
-import { ApiError, createAdminApi, createApi } from '@climb/api';
+import { ApiError, createAdminApi, createApi, type CreateStaffBody } from '@climb/api';
 import { defaultFreezeRules, freezeBlockedBy, ledgerMismatch } from '@climb/core';
 import { addDays, endOfMonth } from '@climb/utils';
 import { describe, expect, it } from 'vitest';
@@ -1114,5 +1114,111 @@ describe('后台 mock：分享记录', () => {
     expect(mine.items.length).toBeGreaterThan(0);
     const home = (id: string) => db.members.find(m => m.id === id)!.homeStoreId;
     expect(mine.items.every(r => r.storeId === 'bingang' && home(r.fromMemberId) === 'bingang')).toBe(true);
+  });
+});
+
+describe('后台 mock：员工账号', () => {
+  const body = (over: Partial<CreateStaffBody> = {}): CreateStaffBody => ({ phone: '13900000009', name: '前台小新', role: 'desk', allStores: false, storeIds: ['huiju'], password: 'abc123', ...over });
+
+  it('只有馆长能管员工', async () => {
+    const { api, login } = setup();
+    for (const phone of ['13800000002', '13800000003']) {
+      await login(phone);
+      expect(await status(api.staff.list())).toBe(403);
+      expect(await status(api.staff.create(body()))).toBe(403);
+      expect(await status(api.staff.update('s-desk', { name: 'x' }))).toBe(403);
+    }
+  });
+
+  it('新建的能用初始密码登录；列表不带密码，内存里只有哈希；写一条操作日志', async () => {
+    const { api, login, db } = setup();
+    await login('13800000001');
+    const made = await api.staff.create(body({ phone: '139 0000 0009' }));
+    expect(made).toMatchObject({ phone: '13900000009', name: '前台小新', role: 'desk', storeIds: ['huiju'], active: true });
+    const list = await api.staff.list();
+    expect(list.map(s => s.id)).toContain(made.id);
+    expect(JSON.stringify(list)).not.toMatch(/password|abc123|123456|tokenVersion/);
+    expect(JSON.stringify(db.staff)).not.toContain('abc123');
+    expect(db.auditLogs).toEqual([
+      expect.objectContaining({ staffId: 's-owner', action: 'staff.create', targetType: 'staff', targetId: made.id, before: null, after: { phone: '13900000009', name: '前台小新', role: 'desk', storeIds: ['huiju'], active: true } }),
+    ]);
+    const other = createAdminApi({ baseURL: '', gymId: 'benchmark', adapter: createMockAdapter(db) });
+    expect((await other.auth.login({ phone: '13900000009', password: 'abc123' })).staff.id).toBe(made.id);
+    expect(await status(other.auth.login({ phone: '13900000009', password: '123456' }))).toBe(401);
+  });
+
+  it('手机号唯一（停用的也算）；门店至少一家且要存在，全部门店存成空数组', async () => {
+    const { api, login } = setup();
+    await login('13800000001');
+    const field = (p: Promise<unknown>) => p.then(() => null, (e: ApiError) => [e.status, (e.data as { field?: string }).field]);
+    expect(await field(api.staff.create(body({ phone: '13800000003' })))).toEqual([400, 'phone']);
+    expect(await field(api.staff.create(body({ storeIds: [] })))).toEqual([400, 'storeIds']);
+    expect(await field(api.staff.create(body({ storeIds: ['nope'] })))).toEqual([400, 'storeIds']);
+    expect(await field(api.staff.create(body({ password: '1' })))).toEqual([400, 'password']);
+    expect((await api.staff.create(body({ allStores: true, storeIds: ['huiju'] }))).storeIds).toEqual([]);
+    await api.staff.update('s-desk', { active: false });
+    expect(await field(api.staff.create(body({ phone: '13800000003' })))).toEqual([400, 'phone']);
+    expect(await field(api.staff.update('s-manager', { phone: '13800000003' }))).toEqual([400, 'phone']);
+    expect(await field(api.staff.update('s-manager', { storeIds: [] }))).toEqual([400, 'storeIds']);
+    expect(await status(api.staff.update('nope', { name: 'x' }))).toBe(404);
+  });
+
+  it('停用后登录失败，已登录的 token 立即失效；重新启用后能登录', async () => {
+    const { api, login, db } = setup();
+    let deskToken: string | null = null;
+    const desk = createAdminApi({ baseURL: '', gymId: 'benchmark', adapter: createMockAdapter(db), getToken: () => deskToken });
+    deskToken = (await desk.auth.login({ phone: '13800000003', password: '123456' })).token;
+    expect((await desk.auth.me()).id).toBe('s-desk');
+    await login('13800000001');
+    expect(await api.staff.update('s-desk', { active: false })).toMatchObject({ active: false });
+    expect(await status(desk.auth.me())).toBe(401);
+    expect(await status(desk.auth.login({ phone: '13800000003', password: '123456' }))).toBe(403);
+    await api.staff.update('s-desk', { active: true });
+    expect(await status(desk.auth.me())).toBe(401);
+    deskToken = (await desk.auth.login({ phone: '13800000003', password: '123456' })).token;
+    expect((await desk.auth.me()).id).toBe('s-desk');
+    expect(db.auditLogs.map(l => [l.action, l.before, l.after])).toEqual([
+      ['staff.update', { active: true }, { active: false }],
+      ['staff.update', { active: false }, { active: true }],
+    ]);
+  });
+
+  it('重置密码后旧密码不能登录、旧 token 失效；日志不记密码', async () => {
+    const { api, login, db } = setup();
+    let deskToken: string | null = null;
+    const desk = createAdminApi({ baseURL: '', gymId: 'benchmark', adapter: createMockAdapter(db), getToken: () => deskToken });
+    deskToken = (await desk.auth.login({ phone: '13800000003', password: '123456' })).token;
+    await login('13800000001');
+    await api.staff.update('s-desk', { password: 'newpass1' });
+    expect(await status(desk.auth.me())).toBe(401);
+    expect(await status(desk.auth.login({ phone: '13800000003', password: '123456' }))).toBe(401);
+    expect((await desk.auth.login({ phone: '13800000003', password: 'newpass1' })).staff.id).toBe('s-desk');
+    expect(db.auditLogs).toEqual([expect.objectContaining({ action: 'staff.password_reset', targetId: 's-desk', before: null, after: null })]);
+    expect(JSON.stringify(db.auditLogs)).not.toContain('newpass1');
+  });
+
+  it('改角色、门店马上生效，日志只记改了的字段', async () => {
+    const { api, login, db } = setup();
+    await login('13800000001');
+    await api.staff.update('s-desk', { role: 'manager', allStores: false, storeIds: ['bingang', 'huiju'], name: '前台小葵' });
+    expect(db.auditLogs.at(-1)).toMatchObject({ action: 'staff.update', before: { role: 'desk', storeIds: ['bingang'] }, after: { role: 'manager', storeIds: ['bingang', 'huiju'] } });
+    await login('13800000003');
+    expect(await api.auth.me()).toMatchObject({ role: 'manager', storeIds: ['bingang', 'huiju'] });
+  });
+
+  it('不能停用、降级自己；至少留一个在用的馆长', async () => {
+    const { api, login, db } = setup();
+    await login('13800000001');
+    const code = (p: Promise<unknown>) => p.then(() => null, (e: ApiError) => [e.status, (e.data as { code?: string }).code]);
+    expect(await code(api.staff.update('s-owner', { active: false }))).toEqual([422, 'staff-self-deactivate']);
+    expect(await code(api.staff.update('s-owner', { role: 'manager' }))).toEqual([422, 'staff-self-demote']);
+    // 再来一个馆长，可以停用他、降级他；自己还是不行
+    const boss2 = await api.staff.create(body({ phone: '13900000010', name: '二老板', role: 'owner', allStores: true }));
+    expect(await api.staff.update(boss2.id, { role: 'manager' })).toMatchObject({ role: 'manager' });
+    expect(await api.staff.update(boss2.id, { active: false })).toMatchObject({ active: false });
+    expect(await code(api.staff.update('s-owner', { active: false }))).toEqual([422, 'staff-self-deactivate']);
+    expect(db.staff.find(s => s.id === 's-owner')).toMatchObject({ active: true, role: 'owner' });
+    // 改自己的名字、门店可以
+    expect(await api.staff.update('s-owner', { name: '老板' })).toMatchObject({ name: '老板' });
   });
 });

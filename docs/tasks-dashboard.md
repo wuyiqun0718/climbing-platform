@@ -168,11 +168,12 @@
 - 完成标准：状态文字和小程序一致。
 - 补（2026-10-21）：状态跟小程序分支 `referral.ts` 的 `ReferralRecordState` 同值同义：`pending | expired | claimed | used`，文字照小程序已发记录（等朋友领取 / 过期了，没人领 / 朋友领了，还没来 / 朋友来过了），放在 core 的 `shareRecord.ts`（`SHARE_RECORD_STATE_TEXT`、`shareRecordState`），次卡转赠和老带新共用；合并时小程序的 `referralRecords` 和页面里的 `STATE_TEXT` 改用这一份。全部由数据推导：没人领的过了 `expiresOn` 算过期（当天还有效）；领了的看领取人那张卡（体验券 `usedOn`、好友送的次卡 `remaining < total`），撤销入场退回后变回「领了还没来」。「已退回」没做成单独状态：次卡转赠过期没人领退不退回原卡还在等馆方（要问馆方 4），先显示「过期了，没人领」。门店按发起人的归属门店，口径同财务页（`storeScope`）；可按 `kind` 筛；不返回 token。mock 加了 `db.shares`（次卡转赠，领了的有好友送的次卡，送出、领取、入场流水对得上），老带新邀请补了 `expiresOn`（当月底）。页面是入场记录页的「分享」tab（`?tab=shares`），先不分页。
 
-**22. 员工账号**
+**22. 员工账号** ✅
 - 依赖：3、5
 - 涉及文件：`src/pages/StaffPage.vue`、契约 `GET/POST/PATCH /admin/staff`、mock
 - 内容：新增员工（手机号、名字、角色、可操作门店、初始密码）、停用、重置密码；教练也是员工（私教用，见 28）。只有 owner。
 - 完成标准：停用的账号登录失败（mock 单测）。
+- 补（2026-10-22）：规则在 core 的 `staff.ts`（`StaffRole`、`STAFF_ROLE_TEXT` 从 api 挪过来）：`newStaffErrors` / `staffPatchErrors`（手机号规整后全馆唯一，停用的也占着；名字必填；角色三种；可操作门店要么全部门店（存空数组，沿用 `Staff.storeIds` 的约定），要么至少一家存在的店；密码 6–32 位，占位）、`staffChangeBlockedBy`（不能停用、降级自己；改完至少留一个在用的馆长）。重置密码走 `PATCH` 的 `password`，停用、启用走 `active`。mock 只存密码哈希（加盐 FNV-1a，只为不放明文，后端用 bcrypt / argon2），token 带版本号，停用、重置密码后旧 token 立即 401（改自己的密码也要重新登录）；停用的登录 403。每次改动写 `db.auditLogs`（`staff.create` / `staff.update` 只记改了的字段 / `staff.password_reset` 不记密码），字段照 `audit_logs` 表，留给 23。教练资料见 28。
 
 **23. 操作日志**
 - 依赖：4

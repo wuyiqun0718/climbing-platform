@@ -72,13 +72,50 @@ export interface MockRefund extends RevenueRefund {
   staffId?: string;
 }
 
+/** 员工账号（对应 staff 表）。密码只存哈希（mockPasswordHash）；tokenVersion 在停用、重置密码时加 1，旧 token 立即失效 */
+export interface MockStaff extends Staff {
+  passwordHash: string;
+  active: boolean;
+  tokenVersion: number;
+  createdAt: string;
+}
+
+/**
+ * 操作日志（对应 audit_logs 表，任务 23 查）。before / after 只放改了的字段，不放密码。
+ * 目前只有员工变更写这里；改价、调整、退款、撤销入场等 23 一起补。
+ */
+export interface MockAuditLog {
+  id: string;
+  staffId: string;
+  action: 'staff.create' | 'staff.update' | 'staff.password_reset';
+  targetType: 'staff';
+  targetId: string;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+  at: string;
+}
+
+/**
+ * mock 里的密码哈希：加盐（员工 ID）的 FNV-1a，只是为了内存里不放明文，不安全，不能拿到正式环境；
+ * 后端用 bcrypt / argon2。
+ */
+export function mockPasswordHash(staffId: string, password: string): string {
+  let h = 0x811c9dc5;
+  for (const ch of `${staffId}:${password}`) {
+    h ^= ch.codePointAt(0)!;
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return `fnv1a:${h.toString(16).padStart(8, '0')}`;
+}
+
 /** 示例数据生成时的会员：都到过店 */
 type SeedMember = Omit<MockMember, 'phone' | 'lastEntryOn' | 'waiverSignedOn'> & { firstVisitOn: DateKey; firstVisitStoreId: string };
 
 /** mock 后端的内存数据。每次 createMockDb() 都是一份新的，测试之间互不影响。 */
 export interface MockDb {
   stores: Store[];
-  staff: (Staff & { password: string; active: boolean })[];
+  staff: MockStaff[];
+  auditLogs: MockAuditLog[];
   /** 每家店的看板数字（示例），全部门店 = 各店相加 */
   storeStats: Record<string, { monthRevenueCents: number; todayEntries: number; lastWeekSameTimeEntries: number; todayBookings: number; activeMembers: number }>;
   members: MockMember[];
@@ -115,10 +152,11 @@ export interface MockDb {
 
 export function createMockDb(today: DateKey, rules: GymRules = defaultRules): MockDb {
   // 示例账号，密码都是 123456
+  const account = (s: Staff): MockStaff => ({ ...s, passwordHash: mockPasswordHash(s.id, '123456'), active: true, tokenVersion: 0, createdAt: '2026-01-05T10:00:00+08:00' });
   const staff: MockDb['staff'] = [
-    { id: 's-owner', name: '馆长', phone: '13800000001', role: 'owner', storeIds: [], password: '123456', active: true },
-    { id: 's-manager', name: '店长阿凯', phone: '13800000002', role: 'manager', storeIds: ['bingang'], password: '123456', active: true },
-    { id: 's-desk', name: '前台小葵', phone: '13800000003', role: 'desk', storeIds: ['bingang'], password: '123456', active: true },
+    account({ id: 's-owner', name: '馆长', phone: '13800000001', role: 'owner', storeIds: [] }),
+    account({ id: 's-manager', name: '店长阿凯', phone: '13800000002', role: 'manager', storeIds: ['bingang'] }),
+    account({ id: 's-desk', name: '前台小葵', phone: '13800000003', role: 'desk', storeIds: ['bingang'] }),
   ];
   return {
     today,
@@ -129,6 +167,7 @@ export function createMockDb(today: DateKey, rules: GymRules = defaultRules): Mo
       { id: 'huanqiu', name: '环球港店' },
     ],
     staff,
+    auditLogs: [],
     ...withShares(withLedger(withCheckIns(sampleMembers(today), staff, today), staff, today), today),
     ...sampleOrders(today),
     products: sampleProducts(),

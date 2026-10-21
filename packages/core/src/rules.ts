@@ -32,7 +32,10 @@ export type RuleErrorCode =
   | 'order-fully-refunded'
   | 'refund-amount-invalid'
   | 'refund-exceeds'
-  | 'product-off-sale';
+  | 'product-off-sale'
+  | 'staff-self-deactivate'
+  | 'staff-self-demote'
+  | 'staff-last-owner';
 
 export class RuleError extends Error {
   constructor(public code: RuleErrorCode, message: string) {

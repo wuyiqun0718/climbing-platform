@@ -15,6 +15,9 @@ import {
   type CreateDeskOrderBody,
   type CreateMemberBody,
   type CreateProductBody,
+  type CreateStaffBody,
+  type StaffRow,
+  type UpdateStaffBody,
   type DashboardSummary,
   type DeskCheckInResult,
   type DeskFreezeBody,
@@ -75,6 +78,13 @@ import {
   insuranceForEntry,
   entryPolicy,
   shareRecordState,
+  STAFF_BLOCKED_TEXT,
+  STAFF_ROLES,
+  newStaffErrors,
+  staffChangeBlockedBy,
+  staffPatchErrors,
+  staffStoreIds,
+  type StaffRole,
   type ClaimedCard,
   newPolicy,
   countsAsCardPurchase,
@@ -107,7 +117,7 @@ import {
 } from '@climb/core';
 import { addDays, formatYuan, isDateKey, maskPhone, monthOf } from '@climb/utils';
 import { MEMBERS_VISIBLE_ACROSS_STORES, canDo, canSeePage, canSeeStore } from '../../permissions';
-import type { MockCheckIn, MockDb, MockMember, MockOrder } from './db';
+import { mockPasswordHash, type MockAuditLog, type MockCheckIn, type MockDb, type MockMember, type MockOrder, type MockStaff } from './db';
 
 /**
  * 后端没好之前用的假后端：实现 @climb/api 里后台接口的契约，数据放在内存里。
@@ -130,8 +140,17 @@ const fail = (status: number, code: string, message: string): ApiResponse => ({ 
 
 const TOKEN_PREFIX = 'mock-';
 
-function toStaff({ password: _p, active: _a, ...s }: MockDb['staff'][number]): Staff {
-  return s;
+function toStaff({ id, name, phone, role, storeIds }: MockStaff): Staff {
+  return { id, name, phone, role, storeIds };
+}
+
+/** token 里带员工 ID 和版本号；停用、重置密码后版本号加 1，旧 token 就对不上了 */
+const tokenOf = (s: MockStaff) => `${TOKEN_PREFIX}${s.id}.${s.tokenVersion}`;
+
+function staffOfToken(db: MockDb, token: string): MockStaff | undefined {
+  const m = token.startsWith(TOKEN_PREFIX) ? /^(.+)\.(\d+)$/.exec(token.slice(TOKEN_PREFIX.length)) : null;
+  if (!m) return undefined;
+  return db.staff.find(x => x.id === m[1] && x.active && x.tokenVersion === Number(m[2]));
 }
 
 /** 本月 1 日到今天第一次到店的新客，按来源；口径见 @climb/api 的 NewcomerRow */
@@ -301,6 +320,91 @@ function entryRow(db: MockDb, { memberId: _m, void: v, policyId, ...c }: MockChe
     insurance: policy ? { policyId: policy.id, status: policy.status } : null,
     voidInfo: v ? { at: v.at, byName: db.staff.find(s => s.id === v.staffId)?.name ?? '', reason: v.reason } : null,
   };
+}
+
+/** 员工列表的一行：不带密码哈希和 token 版本号 */
+const staffRow = (s: MockStaff): StaffRow => ({ ...toStaff(s), active: s.active, createdAt: s.createdAt });
+
+/** 操作日志里员工的资料（不含密码） */
+const staffAuditFields = (s: MockStaff) => ({ phone: s.phone, name: s.name, role: s.role, storeIds: s.storeIds, active: s.active });
+
+function audit(db: MockDb, actor: Staff, e: Pick<MockAuditLog, 'action' | 'targetId' | 'before' | 'after'>) {
+  db.auditLogs.push({ id: nextId('al-', db.auditLogs), staffId: actor.id, targetType: 'staff', at: nowAt(db), ...e });
+}
+
+/** 员工列表：口径见 @climb/api 的 StaffRow */
+function staffList(db: MockDb, staff: Staff): ApiResponse {
+  if (!canDo(staff.role, 'staff.manage')) return fail(403, 'forbidden', '只有馆长能管员工');
+  const rank = (r: StaffRole) => STAFF_ROLES.indexOf(r);
+  const rows = db.staff
+    .map((s, i) => ({ s, i }))
+    .sort((a, b) => Number(b.s.active) - Number(a.s.active) || rank(a.s.role) - rank(b.s.role) || a.s.createdAt.localeCompare(b.s.createdAt) || a.i - b.i)
+    .map(({ s }) => staffRow(s));
+  return ok(rows);
+}
+
+/** 新建员工：口径见 @climb/api 的 CreateStaffBody，规则在 @climb/core 的 staff.ts */
+function createStaff(db: MockDb, staff: Staff, body: Partial<CreateStaffBody> | null): ApiResponse {
+  if (!canDo(staff.role, 'staff.manage')) return fail(403, 'forbidden', '只有馆长能管员工');
+  const ctx = { storeIds: db.stores.map(st => st.id), staff: db.staff };
+  const errs = newStaffErrors(body ?? {}, ctx);
+  if (errs) {
+    const field = Object.keys(errs)[0] as keyof typeof errs;
+    return badInput(field, errs[field]!);
+  }
+  const b = body as CreateStaffBody;
+  const id = nextId('s-new-', db.staff);
+  const s: MockStaff = {
+    id,
+    name: b.name.trim(),
+    phone: normalizePhone(b.phone),
+    role: b.role,
+    storeIds: staffStoreIds(b.allStores, b.storeIds),
+    passwordHash: mockPasswordHash(id, b.password),
+    active: true,
+    tokenVersion: 0,
+    createdAt: nowAt(db),
+  };
+  db.staff.push(s);
+  audit(db, staff, { action: 'staff.create', targetId: s.id, before: null, after: staffAuditFields(s) });
+  return ok(staffRow(s));
+}
+
+/** 修改员工（改资料、停用启用、重置密码）：口径见 @climb/api 的 UpdateStaffBody */
+function updateStaff(db: MockDb, staff: Staff, id: string, body: UpdateStaffBody | null): ApiResponse {
+  if (!canDo(staff.role, 'staff.manage')) return fail(403, 'forbidden', '只有馆长能管员工');
+  const target = db.staff.find(s => s.id === id);
+  if (!target) return fail(404, 'staff-not-found', '没有这个员工');
+  const patch = body ?? {};
+  const errs = staffPatchErrors(id, patch, { storeIds: db.stores.map(st => st.id), staff: db.staff });
+  if (errs) {
+    const field = Object.keys(errs)[0] as keyof typeof errs;
+    return badInput(field, errs[field]!);
+  }
+  const blocked = staffChangeBlockedBy(staff.id, target, patch, db.staff);
+  if (blocked) return fail(422, blocked, STAFF_BLOCKED_TEXT[blocked]);
+
+  const before = staffAuditFields(target);
+  if (patch.phone !== undefined) target.phone = normalizePhone(patch.phone);
+  if (patch.name !== undefined) target.name = patch.name.trim();
+  if (patch.role !== undefined) target.role = patch.role;
+  if (patch.allStores !== undefined || patch.storeIds !== undefined) target.storeIds = staffStoreIds(patch.allStores ?? false, patch.storeIds ?? []);
+  if (patch.active !== undefined) {
+    if (target.active && !patch.active) target.tokenVersion++;
+    target.active = patch.active;
+  }
+  const after = staffAuditFields(target);
+  const changed = (Object.keys(before) as (keyof typeof before)[]).filter(k => JSON.stringify(before[k]) !== JSON.stringify(after[k]));
+  if (changed.length) {
+    const pick = (o: typeof before) => Object.fromEntries(changed.map(k => [k, o[k]]));
+    audit(db, staff, { action: 'staff.update', targetId: id, before: pick(before), after: pick(after) });
+  }
+  if (patch.password !== undefined) {
+    target.passwordHash = mockPasswordHash(id, patch.password);
+    target.tokenVersion++;
+    audit(db, staff, { action: 'staff.password_reset', targetId: id, before: null, after: null });
+  }
+  return ok(staffRow(target));
 }
 
 /** 分享记录：口径见 @climb/api 的 ShareList，状态按 @climb/core 的 shareRecordState */
@@ -894,14 +998,22 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
     path: /^\/admin\/auth\/login$/,
     auth: false,
     handle: ({ db, body }) => {
-      const s = db.staff.find(x => x.phone === body?.phone);
-      if (!s || s.password !== body?.password) return fail(401, 'bad-credentials', '手机号或密码不对');
+      const s = db.staff.find(x => x.phone === normalizePhone(String(body?.phone ?? '')));
+      if (!s || s.passwordHash !== mockPasswordHash(s.id, String(body?.password ?? ''))) return fail(401, 'bad-credentials', '手机号或密码不对');
       if (!s.active) return fail(403, 'staff-inactive', '这个账号已停用，找馆长开通');
-      const res: LoginResult = { token: TOKEN_PREFIX + s.id, staff: toStaff(s) };
+      const res: LoginResult = { token: tokenOf(s), staff: toStaff(s) };
       return ok(res);
     },
   },
   { method: 'GET', path: /^\/admin\/auth\/me$/, auth: true, handle: ({ staff }) => ok(staff) },
+  { method: 'GET', path: /^\/admin\/staff$/, auth: true, handle: ({ db, staff }) => staffList(db, staff!) },
+  { method: 'POST', path: /^\/admin\/staff$/, auth: true, handle: ({ db, body, staff }) => createStaff(db, staff!, body) },
+  {
+    method: 'PATCH',
+    path: /^\/admin\/staff\/([^/]+)$/,
+    auth: true,
+    handle: ({ db, params, body, staff }) => updateStaff(db, staff!, decodeURIComponent(params[0]!), body),
+  },
   {
     method: 'GET',
     path: /^\/admin\/stores$/,
@@ -1122,7 +1234,7 @@ export function createMockAdapter(db: MockDb, opts: { delayMs?: number } = {}): 
       let staff: Staff | null = null;
       if (r.auth) {
         const token = req.headers.Authorization?.replace(/^Bearer /, '') ?? '';
-        const s = token.startsWith(TOKEN_PREFIX) ? db.staff.find(x => x.id === token.slice(TOKEN_PREFIX.length) && x.active) : undefined;
+        const s = staffOfToken(db, token);
         if (!s) return fail(401, 'unauthorized', '登录已过期，请重新登录');
         staff = toStaff(s);
         settleFrozenCards(db);
