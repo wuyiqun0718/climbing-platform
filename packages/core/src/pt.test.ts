@@ -23,8 +23,7 @@ describe('私教格子', () => {
   it('默认 10:00–23:00 每小时一格；岩馆配置能单独改', () => {
     expect(ptHours(rules)).toEqual([10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]);
     expect(defaultRules.ptRules).toEqual({ openHour: 10, closeHour: 23, cancelBeforeMinutes: 720, needCoachConfirm: false });
-    // 小程序分支的 GymConfig 多一个 entryQrLink，这边还没有；合并后这行用那边的
-    const gym = defineGym({ id: 'x', name: 'x', shortName: 'x', wechatAppId: '', logo: '', openHours: { open: '09:00', close: '22:00' }, theme: {} as never, rules: { ptRules: { openHour: 9, closeHour: 22 } } } as Parameters<typeof defineGym>[0]);
+    const gym = defineGym({ id: 'x', name: 'x', shortName: 'x', wechatAppId: '', entryQrLink: '', logo: '', openHours: { open: '09:00', close: '22:00' }, theme: {} as never, rules: { ptRules: { openHour: 9, closeHour: 22 } } });
     expect(gym.rules.ptRules).toEqual({ ...defaultPtRules, openHour: 9, closeHour: 22 });
   });
 

@@ -3,6 +3,7 @@ import { createHttp, type ClientOptions } from './client';
 
 export * from './client';
 export * from './admin';
+export * from './desk';
 
 /** `GET /coaches?store=`：能约私教的教练（后台教练资料，mvp/dashboard 任务 28） */
 export interface Coach {

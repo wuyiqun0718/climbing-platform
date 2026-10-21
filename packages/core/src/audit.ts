@@ -31,9 +31,11 @@ export type AuditAction =
   | 'pt_slot.unmark'
   | 'pt_booking.confirm'
   | 'pt_booking.cancel'
-  | 'settings.pt_rules';
+  | 'settings.pt_rules'
+  | 'desk_device.bind'
+  | 'desk_device.unbind';
 
-export type AuditTargetType = 'order' | 'check_in' | 'card' | 'product' | 'staff' | 'settings' | 'export' | 'class_type' | 'class_session' | 'class_booking' | 'pt_slot' | 'pt_booking';
+export type AuditTargetType = 'order' | 'check_in' | 'card' | 'product' | 'staff' | 'settings' | 'export' | 'class_type' | 'class_session' | 'class_booking' | 'pt_slot' | 'pt_booking' | 'desk_device';
 
 export const AUDIT_ACTIONS = [
   'order.create',
@@ -64,6 +66,8 @@ export const AUDIT_ACTIONS = [
   'pt_booking.confirm',
   'pt_booking.cancel',
   'settings.pt_rules',
+  'desk_device.bind',
+  'desk_device.unbind',
 ] as const satisfies readonly AuditAction[];
 
 export const AUDIT_ACTION_TEXT: Record<AuditAction, string> = {
@@ -95,6 +99,8 @@ export const AUDIT_ACTION_TEXT: Record<AuditAction, string> = {
   'pt_booking.confirm': '确认私教预约',
   'pt_booking.cancel': '取消私教预约',
   'settings.pt_rules': '改私教规则',
+  'desk_device.bind': '绑定前台平板',
+  'desk_device.unbind': '解绑前台平板',
 };
 
 export interface AuditLogEntry {

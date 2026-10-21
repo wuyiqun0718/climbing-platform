@@ -35,8 +35,7 @@ const remaining = (cards: Card[], m: string) => (cards.find(c => c.id === `k-${m
 describe('团课规则配置', () => {
   it('默认值是占位：开课前 2 小时截止取消、开候补；岩馆配置能单独改一项', () => {
     expect(defaultRules.classRules).toEqual({ cancelBeforeMinutes: 120, waitlist: true, waitlistMax: null, lateGraceMinutes: 15 });
-    // 小程序分支的 GymConfig 多一个 entryQrLink，这边还没有；合并后这行用那边的
-    const gym = defineGym({ id: 'x', name: 'x', shortName: 'x', wechatAppId: '', logo: '', openHours: { open: '10:00', close: '22:00' }, theme: {} as never, rules: { classRules: { waitlist: false } } } as Parameters<typeof defineGym>[0]);
+    const gym = defineGym({ id: 'x', name: 'x', shortName: 'x', wechatAppId: '', entryQrLink: '', logo: '', openHours: { open: '10:00', close: '22:00' }, theme: {} as never, rules: { classRules: { waitlist: false } } });
     expect(gym.rules.classRules).toEqual({ ...defaultClassRules, waitlist: false });
     expect(cancelDeadline(session, rules)).toEqual(at('17:00'));
     expect(isLateForClass(session, at('19:15'), rules)).toBe(false);

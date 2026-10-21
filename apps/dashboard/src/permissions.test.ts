@@ -61,6 +61,7 @@ describe('操作权限', () => {
     'class.attend': ['owner', 'manager', 'desk'],
     'class.cancelBooking': ['owner', 'manager', 'desk'],
     'pt.handle': ['owner', 'manager'],
+    'desk.bind': ['owner', 'manager'],
     'settings.ptRules': ['owner'],
     'settings.classRules': ['owner'],
     'member.fullPhone': ['owner'],

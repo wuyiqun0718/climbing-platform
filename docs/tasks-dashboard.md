@@ -279,11 +279,12 @@
 
 ### J. 前台平板和迁移
 
-**37. 前台平板页：动态入场码**
+**37. 前台平板页：动态入场码** ✅
 - 依赖：1
 - 涉及文件：`src/pages/DeskPage.vue`（不带侧栏的独立路由 `/desk`）、契约 `GET /desk/qr`、mock
 - 内容：已定入场方式：会员用微信扫平板上的动态码，直接进小程序签到页。设备绑定门店后全屏显示二维码（普通二维码跳转小程序，或小程序码，两种都留着，由 `GET /desk/qr` 返回用哪种），码里带门店和一次性 token；每 30 秒换一次，token 用过一次或过期就失效；显示倒计时和门店名；断网时提示。
 - 完成标准：码按时刷新；同一个 token 第二次签到被拒（mock 单测）；离开页面停止轮询。
+- 补（2026-10-22）：`entryQr.ts` 和测试从小程序分支原样拷过来，`GymConfig.entryQrLink`（gym.json 里同小程序的值）、`qr-expired` / `qr-used` 错误码照小程序加；因为有了 `entryQrLink`，之前 `classes.test.ts`、`pt.test.ts` 里改掉的那行也恢复成跟小程序逐字一致。平板的规则在新文件 core 的 `deskQr.ts`：每 30 秒换码只是显示刷新（`deskQrReusable`：没到换码时间、没用掉就接着显示同一个），token 有效期仍是 `ENTRY_QR_TTL_SECONDS`（180 秒），用过即废；`deskQrContent` 用 `entryQrLink` / `entryQrScene` 生成，单测验证小程序那边的 `parseEntryQrLink` / `parseEntryQrParams` 能解析；`newDeskToken`（16 个字符，小程序码 scene 在门店 id 不超过 11 个字符时不超过 32）；`secondsUntil`。设备绑定 `POST /admin/desk-devices`（`desk.bind` 占位店长以上，只能绑自己能操作的店）、`DELETE /admin/desk-devices/:id`，写操作日志；平板用设备 token 调 `GET /desk/qr`（`@climb/api` 新的 `createDeskApi`），返回 kind（link / scene，默认 `DEFAULT_DESK_QR_KIND` = link，占位）、content、imageUrl、issuedAt / refreshAt / expiresAt、serverTime。前端没有二维码库（加依赖要动 lockfile），约定由后端给 `imageUrl`（小程序码本来就要后端调微信生成），mock 为 null，页面先显示 content。平板的轮询、按服务器时差倒计时、断网不显示旧码、解绑提示、离开页面停止轮询在 `pages/deskQr.ts`（单测）。mock 加了会员扫码入场 `POST /check-ins`（用 X-Mock-Member 头代替会员登录），入场跟前台登记共用 `recordCheckIn`（method = scan），成功后 `useEntryQr` 作废；同一个 token 第二次被拒（qr-used）有单测。`/desk` 是不带侧栏的公开路由。
 
 **38. 前台平板页：实时入场列表**
 - 依赖：37

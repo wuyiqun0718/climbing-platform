@@ -69,6 +69,11 @@ export interface GymConfig {
   shortName: string;
   /** 微信小程序 AppID，每个岩馆一个 */
   wechatAppId: string;
+  /**
+   * 前台入场码用「普通链接二维码」时的链接前缀（不带 ?），要在小程序后台配置成跳转签到页。
+   * 码的格式见 entryQr.ts。域名要备案、放校验文件，每个岩馆一个。
+   */
+  entryQrLink: string;
   /** gyms/<id>/assets 里的标志文件名；打包时会复制到各个端的静态目录 */
   logo: string;
   openHours: { open: string; close: string };

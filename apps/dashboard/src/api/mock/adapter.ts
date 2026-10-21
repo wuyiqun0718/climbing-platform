@@ -27,6 +27,8 @@ import {
   type ClassTypeBody,
   type AdminClassRow,
   type PtTimelineView,
+  type DeskDeviceBinding,
+  type DeskQr,
   type MarkPtSlotBody,
   type CancelPtBookingBody,
   type AdminPtSlot,
@@ -103,6 +105,15 @@ import {
   insuranceForEntry,
   entryPolicy,
   shareRecordState,
+  newDeskToken,
+  newEntryQr,
+  checkEntryQr,
+  useEntryQr,
+  deskQrReusable,
+  deskQrRefreshAt,
+  deskQrContent,
+  entryQrIssuedAt,
+  parseEntryQrParams,
   markPtSlot,
   confirmPtBooking,
   deskCancelPtBooking,
@@ -182,6 +193,7 @@ import {
   REFUND_METHOD_BY_CHANNEL,
   type Card,
   type CheckInArgs,
+  type LedgerEntry,
   type EntryCard,
   type MemberSource,
   type PeriodCard,
@@ -203,6 +215,7 @@ interface Ctx {
   params: string[];
   /** 登录的员工；公开接口为空 */
   staff: Staff | null;
+  headers: Record<string, string>;
 }
 
 type Handler = (ctx: Ctx) => ApiResponse;
@@ -798,15 +811,7 @@ function checkInScope(db: MockDb, staff: Staff, body: { memberId?: unknown; stor
   const storeId = String(body?.storeId ?? '');
   if (!db.stores.some(st => st.id === storeId)) return fail(404, 'store-not-found', '没有这家店');
   if (!canSeeStore(staff, storeId)) return fail(403, 'forbidden', '没有这家店的权限');
-  const hasCheckedIn = (memberId: string, on: string) => db.checkIns.some(c => c.memberId === memberId && c.on === on && !c.voided);
-  const args: CheckInArgs = {
-    memberId: m.id,
-    storeId,
-    cards: db.cards.filter(c => c.memberId === m.id),
-    past: db.checkIns.filter(c => c.memberId === m.id),
-    ctx: { today: db.today, rules: db.rules, hasCheckedIn },
-  };
-  return { m, args };
+  return { m, args: checkInArgsOf(db, m, storeId) };
 }
 
 /** 登记入场前列出能用的卡：口径见 @climb/api 的 CheckInPreview */
@@ -828,21 +833,25 @@ function checkInPreview(db: MockDb, staff: Staff, body: Partial<CreateDeskCheckI
   return ok(res);
 }
 
-/** 前台登记入场：口径见 @climb/api 的 CreateDeskCheckInBody，规则都在 @climb/core 的 checkIn.ts */
-function createDeskCheckIn(db: MockDb, staff: Staff, body: Partial<CreateDeskCheckInBody> | null): ApiResponse {
-  if (!canDo(staff.role, 'checkIn.create')) return fail(403, 'forbidden', '没有登记入场的权限');
-  const requestId = String(body?.requestId ?? '');
-  if (!requestId) return badInput('requestId', '缺少 requestId');
-  const done = db.deskCheckInRequests[requestId];
-  if (done) return ok(done);
+/** 入场的会员、门店组装成 @climb/core checkInWith 要的参数（前台登记、扫码入场共用） */
+function checkInArgsOf(db: MockDb, m: MockMember, storeId: string): CheckInArgs {
+  const hasCheckedIn = (memberId: string, on: string) => db.checkIns.some(c => c.memberId === memberId && c.on === on && !c.voided);
+  return {
+    memberId: m.id,
+    storeId,
+    cards: db.cards.filter(c => c.memberId === m.id),
+    past: db.checkIns.filter(c => c.memberId === m.id),
+    ctx: { today: db.today, rules: db.rules, hasCheckedIn },
+  };
+}
 
-  const scope = checkInScope(db, staff, body);
-  if ('status' in scope) return scope;
-  const { m, args } = scope;
-  const cardId = String(body?.cardId ?? '');
+/**
+ * 记一次入场（前台登记 method = desk、扫码 method = scan 共用）：按 core 的 checkInWith 用卡、扣次，写入场记录、流水、保单（insuranceForEntry），
+ * 体验券记下老带新到店，会员记下最近入场和第一次到店。卡不对 404，规则不让 422。
+ */
+function recordCheckIn(db: MockDb, m: MockMember, args: CheckInArgs, cardId: string, method: MockCheckIn['method'], operator: Pick<LedgerEntry, 'operatorType' | 'operatorId'>) {
   const idx = db.cards.findIndex(c => c.id === cardId && c.memberId === m.id);
   if (idx < 0) return fail(404, 'card-not-found', '这个会员没有这张卡');
-
   let used: { card: EntryCard; deducted: number; reentry: boolean };
   try {
     used = checkInWith({ ...args, cardId, waiverSigned: !!m.waiverSignedOn });
@@ -859,7 +868,7 @@ function createDeskCheckIn(db: MockDb, staff: Staff, body: Partial<CreateDeskChe
     cardId: card.id,
     cardName: card.name,
     deducted,
-    method: 'desk',
+    method,
     voided: false,
     policyId: null,
     void: null,
@@ -867,7 +876,7 @@ function createDeskCheckIn(db: MockDb, staff: Staff, body: Partial<CreateDeskChe
   const ins = insuranceForEntry(db.policies, m.id, db.today);
   const policy = ins.policy ?? newPolicy({ id: nextId('ip-', db.policies), memberId: m.id, storeId: args.storeId, on: db.today, checkInId: checkIn.id });
   checkIn.policyId = policy.id;
-  const entry = checkInLedgerEntry({ id: nextId('l-', db.ledger), card, deducted, at: nowAt(db), checkInId: checkIn.id, operator: { operatorType: 'staff', operatorId: staff.id } });
+  const entry = checkInLedgerEntry({ id: nextId('l-', db.ledger), card, deducted, at: nowAt(db), checkInId: checkIn.id, operator });
 
   db.checkIns.push(checkIn);
   db.cards[idx] = card;
@@ -882,6 +891,23 @@ function createDeskCheckIn(db: MockDb, staff: Staff, body: Partial<CreateDeskChe
     m.firstVisitOn = db.today;
     m.firstVisitStoreId = args.storeId;
   }
+  return { checkIn, card, deducted, reentry, ins, policy };
+}
+
+/** 前台登记入场：口径见 @climb/api 的 CreateDeskCheckInBody，规则都在 @climb/core 的 checkIn.ts */
+function createDeskCheckIn(db: MockDb, staff: Staff, body: Partial<CreateDeskCheckInBody> | null): ApiResponse {
+  if (!canDo(staff.role, 'checkIn.create')) return fail(403, 'forbidden', '没有登记入场的权限');
+  const requestId = String(body?.requestId ?? '');
+  if (!requestId) return badInput('requestId', '缺少 requestId');
+  const done = db.deskCheckInRequests[requestId];
+  if (done) return ok(done);
+
+  const scope = checkInScope(db, staff, body);
+  if ('status' in scope) return scope;
+  const { m, args } = scope;
+  const r = recordCheckIn(db, m, args, String(body?.cardId ?? ''), 'desk', { operatorType: 'staff', operatorId: staff.id });
+  if ('status' in r) return r;
+  const { checkIn, card, deducted, reentry, ins, policy } = r;
   audit(db, staff, {
     action: 'check_in.create',
     targetType: 'check_in',
@@ -1699,6 +1725,86 @@ function savePtRules(db: MockDb, staff: Staff, body: any): ApiResponse {
   return ok(db.rules.ptRules);
 }
 
+/** mock 的随机数：node 和浏览器都有 crypto.getRandomValues（后端用 node:crypto） */
+const randomBytes = (n: number) => globalThis.crypto.getRandomValues(new Uint8Array(n));
+
+/** 绑定前台平板：店长以上，门店要是自己能操作的；返回设备 token */
+function bindDeskDevice(db: MockDb, staff: Staff, body: { storeId?: unknown; name?: unknown } | null): ApiResponse {
+  if (!canDo(staff.role, 'desk.bind')) return fail(403, 'forbidden', '店长以上才能绑定前台平板');
+  const storeId = String(body?.storeId ?? '');
+  if (!db.stores.some(st => st.id === storeId)) return fail(404, 'store-not-found', '没有这家店');
+  if (!canSeeStore(staff, storeId)) return fail(403, 'forbidden', '没有这家店的权限');
+  const name = typeof body?.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 20) : '前台平板';
+  const device = { id: nextId('dd-', db.deskDevices), name, storeId, token: `desk-${newDeskToken(randomBytes, 24)}`, boundBy: staff.id, boundAt: nowAt(db), active: true };
+  db.deskDevices.push(device);
+  audit(db, staff, { action: 'desk_device.bind', targetType: 'desk_device', targetId: device.id, storeId, before: null, after: { name, storeId } });
+  const res: DeskDeviceBinding = { deviceId: device.id, deviceToken: device.token, storeId, name };
+  return ok(res);
+}
+
+/** 解绑：这台平板的 token 马上失效 */
+function unbindDeskDevice(db: MockDb, staff: Staff, id: string): ApiResponse {
+  if (!canDo(staff.role, 'desk.bind')) return fail(403, 'forbidden', '店长以上才能解绑前台平板');
+  const device = db.deskDevices.find(d => d.id === id && d.active);
+  if (!device) return fail(404, 'device-not-found', '没有这台平板');
+  if (!canSeeStore(staff, device.storeId)) return fail(403, 'forbidden', '没有这家店的权限');
+  device.active = false;
+  audit(db, staff, { action: 'desk_device.unbind', targetType: 'desk_device', targetId: id, storeId: device.storeId, before: { active: true }, after: { active: false } });
+  return ok(null);
+}
+
+/** 平板要显示的入场码：口径见 @climb/api 的 DeskQr，规则在 core 的 deskQr.ts / entryQr.ts */
+function deskQr(db: MockDb, headers: Record<string, string>): ApiResponse {
+  const token = headers.Authorization?.replace(/^Bearer /, '') ?? '';
+  const device = db.deskDevices.find(d => d.active && d.token === token);
+  if (!device) return fail(401, 'desk-unbound', '这台平板还没绑定门店，或者已经解绑了');
+  const now = mockNow(db);
+  // 这家店最近签发的码：没到换码时间、没被用掉就接着显示，不然签发新的
+  const last = [...db.entryQrs].reverse().find(q => q.storeId === device.storeId);
+  let qr = last;
+  if (!deskQrReusable(qr, now)) {
+    qr = newEntryQr({ token: newDeskToken(randomBytes), storeId: device.storeId, now });
+    db.entryQrs.push(qr);
+  }
+  const res: DeskQr = {
+    storeId: device.storeId,
+    storeName: db.stores.find(st => st.id === device.storeId)?.name ?? '',
+    kind: db.deskQrKind,
+    content: deskQrContent(db.deskQrKind, db.entryQrLink, { storeId: qr!.storeId, token: qr!.token }),
+    imageUrl: null,
+    token: qr!.token,
+    issuedAt: entryQrIssuedAt(qr!).toISOString(),
+    refreshAt: deskQrRefreshAt(qr!).toISOString(),
+    expiresAt: qr!.expiresAt,
+    serverTime: now.toISOString(),
+    today: db.today,
+  };
+  return ok(res);
+}
+
+/**
+ * 会员扫平板上的码入场（小程序分支的 POST /check-ins；这边 mock 只为测平板的码，会员身份用 X-Mock-Member 头代替登录）。
+ * 码要是这家店签发的（payload 是 parseEntryQrParams 能解析的 s=&t=，或者直接给 storeId + qrToken）；用过、过期的 422（qr-used / qr-expired），
+ * 入场成功才作废这个码（useEntryQr）。入场本身跟前台登记同一套（recordCheckIn，method = scan）。
+ */
+function scanCheckIn(db: MockDb, headers: Record<string, string>, body: { scene?: unknown; storeId?: unknown; qrToken?: unknown; cardId?: unknown } | null): ApiResponse {
+  const m = db.members.find(x => x.id === headers['X-Mock-Member']);
+  if (!m) return fail(401, 'unauthorized', '先登录');
+  const payload = typeof body?.scene === 'string' ? parseEntryQrParams(body.scene) : { storeId: String(body?.storeId ?? ''), token: String(body?.qrToken ?? '') };
+  const qr = payload && db.entryQrs.find(q => q.token === payload.token && q.storeId === payload.storeId);
+  if (!qr) return fail(400, 'invalid-qr', '这不是本馆前台的入场码');
+  const now = mockNow(db);
+  try {
+    checkEntryQr(qr, now);
+  } catch (e) {
+    return ruleFail(e);
+  }
+  const r = recordCheckIn(db, m, checkInArgsOf(db, m, qr.storeId), String(body?.cardId ?? ''), 'scan', { operatorType: 'member', operatorId: m.id });
+  if ('status' in r) return r;
+  db.entryQrs[db.entryQrs.indexOf(qr)] = useEntryQr(qr, m.id, now);
+  return ok({ checkIn: entryRow(db, r.checkIn), card: r.card, deducted: r.deducted, reentry: r.reentry });
+}
+
 /** 新建卡种：口径见 @climb/api 的 CreateProductBody，规则都在 @climb/core 的 product.ts */
 function createProduct(db: MockDb, staff: Staff, body: Partial<CreateProductBody> | null): ApiResponse {
   if (!canDo(staff.role, 'product.edit') || !canDo(staff.role, 'product.price')) return fail(403, 'forbidden', '没有新建卡种的权限');
@@ -1752,6 +1858,11 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
   { method: 'GET', path: /^\/admin\/settings\/pt-rules$/, auth: true, handle: ({ db }) => ok(db.rules.ptRules) },
   { method: 'PUT', path: /^\/admin\/settings\/pt-rules$/, auth: true, handle: ({ db, body, staff }) => savePtRules(db, staff!, body) },
   { method: 'GET', path: /^\/admin\/pt-slots$/, auth: true, handle: ({ db, query, staff }) => ptSlotsView(db, staff!, query) },
+  { method: 'POST', path: /^\/admin\/desk-devices$/, auth: true, handle: ({ db, body, staff }) => bindDeskDevice(db, staff!, body) },
+  { method: 'DELETE', path: /^\/admin\/desk-devices\/([^/]+)$/, auth: true, handle: ({ db, params, staff }) => unbindDeskDevice(db, staff!, decodeURIComponent(params[0]!)) },
+  // 前台平板用设备 token，不走员工登录
+  { method: 'GET', path: /^\/desk\/qr$/, auth: false, handle: ({ db, headers }) => deskQr(db, headers) },
+  { method: 'POST', path: /^\/check-ins$/, auth: false, handle: ({ db, headers, body }) => scanCheckIn(db, headers, body) },
   { method: 'GET', path: /^\/admin\/coaches$/, auth: true, handle: ({ db }) => ok(listCoaches(db.staff)) },
   // 小程序的教练列表（mvp/miniapp 的 GET /coaches?store=）：在用、有教练资料的员工，id 是员工 id。小程序 mock 合并后从 db.staff 出
   { method: 'GET', path: /^\/coaches$/, auth: false, handle: ({ db, query }) => ok(listCoaches(db.staff, query.get('store'))) },
@@ -2062,7 +2173,7 @@ export function createMockAdapter(db: MockDb, opts: { delayMs?: number } = {}): 
         settleFrozenCards(db);
       }
       // 返回深拷贝，避免页面改到 mock 里的数据
-      const res = r.handle({ db, body: req.body, query: url.searchParams, params: m.slice(1), staff });
+      const res = r.handle({ db, body: req.body, query: url.searchParams, params: m.slice(1), staff, headers: req.headers });
       return { status: res.status, data: structuredClone(res.data) };
     }
     return fail(404, 'not-found', `mock 还没实现 ${req.method} ${url.pathname}`);

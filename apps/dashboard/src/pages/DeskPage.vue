@@ -1,0 +1,123 @@
+<script setup lang="ts">
+/**
+ * 前台平板页（任务 37）：不带侧栏的独立路由 /desk。
+ * - 还没绑定：店长以上登录后选一家自己能操作的店绑定（POST /admin/desk-devices），设备 token 存在平板上，之后员工可以退出。
+ * - 绑定后全屏显示入场码（GET /desk/qr，用设备 token），门店名、倒计时（按服务器时间）；断网或拉不到时不显示旧码、提示。
+ * 换码、倒计时、断网的逻辑在 deskQr.ts；离开页面停止轮询。实时入场列表见任务 38。
+ */
+import { ApiError } from '@climb/api';
+import { errorText } from '@climb/ui-web';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { api, deskApi, deskDevice } from '../api';
+import { canDo, canSeeStore } from '../permissions';
+import { session } from '../session';
+import { createDeskQrPoller, deskQrDisplay, type DeskQrState } from './deskQr';
+
+const bound = ref(deskDevice.get());
+const state = ref<DeskQrState>({ qr: null, offsetMs: 0, error: null });
+const tick = ref(Date.now());
+const display = computed(() => (tick.value, deskQrDisplay(state.value, Date.now())));
+
+const poller = createDeskQrPoller({ fetch: () => deskApi.qr(), onState: s => (state.value = { ...s }) });
+let clock: ReturnType<typeof setInterval> | null = null;
+
+function startShowing() {
+  poller.stop();
+  state.value = { qr: null, offsetMs: 0, error: null };
+  poller.start();
+}
+onMounted(() => {
+  clock = setInterval(() => (tick.value = Date.now()), 250);
+  if (bound.value) startShowing();
+});
+onBeforeUnmount(() => {
+  poller.stop();
+  if (clock) clearInterval(clock);
+});
+
+// 绑定（只给店长以上，门店是自己能操作的）
+const canBind = computed(() => !!session.state.staff && canDo(session.state.staff.role, 'desk.bind'));
+const stores = computed(() => session.state.stores.filter(st => session.state.staff && canSeeStore(session.state.staff, st.id)));
+const storeId = ref('');
+const bindErr = ref('');
+const binding = ref(false);
+async function bind() {
+  if (binding.value || !storeId.value) return;
+  binding.value = true;
+  bindErr.value = '';
+  try {
+    const b = await api.deskDevices.bind({ storeId: storeId.value });
+    deskDevice.set({ token: b.deviceToken, storeId: b.storeId, deviceId: b.deviceId });
+    bound.value = deskDevice.get();
+    startShowing();
+  } catch (e) {
+    bindErr.value = errorText(e, '绑定失败，请重试');
+  } finally {
+    binding.value = false;
+  }
+}
+function forget() {
+  poller.stop();
+  deskDevice.set(null);
+  bound.value = null;
+}
+const unbound = computed(() => display.value.kind === 'unbound' || (state.value.error instanceof ApiError && state.value.error.status === 401));
+</script>
+
+<template>
+  <main class="desk">
+    <section v-if="!bound || unbound" class="bind">
+      <h1>前台入场码</h1>
+      <p v-if="unbound">这台平板已经解绑了，请重新绑定门店。</p>
+      <template v-if="!session.loggedIn">
+        <p>请店长先登录后台，再回到这个页面绑定门店。</p>
+        <RouterLink :to="{ name: 'login', query: { redirect: '/desk' } }" class="btn">去登录</RouterLink>
+      </template>
+      <p v-else-if="!canBind">只有店长以上能绑定前台平板。</p>
+      <form v-else class="row" @submit.prevent="bind">
+        <select v-model="storeId" aria-label="门店">
+          <option value="" disabled>选门店</option>
+          <option v-for="st in stores" :key="st.id" :value="st.id">{{ st.name }}</option>
+        </select>
+        <button type="submit" class="btn" :disabled="binding || !storeId">{{ binding ? '绑定中…' : '绑定这家店' }}</button>
+      </form>
+      <p v-if="bindErr" class="warn" role="alert">{{ bindErr }}</p>
+      <button v-if="unbound" type="button" class="link" @click="forget">清掉这台平板上的绑定</button>
+    </section>
+
+    <section v-else class="show">
+      <template v-if="display.kind === 'show'">
+        <h1>{{ display.qr.storeName }}</h1>
+        <p class="hint">微信扫码入场</p>
+        <img v-if="display.qr.imageUrl" class="qr" :src="display.qr.imageUrl" alt="入场二维码" />
+        <div v-else class="qr placeholder">
+          <span>{{ display.qr.kind === 'link' ? '二维码内容' : '小程序码 scene' }}</span>
+          <code>{{ display.qr.content }}</code>
+        </div>
+        <p class="count">{{ display.secondsLeft }} 秒后换码</p>
+      </template>
+      <div v-else-if="display.kind === 'offline'" class="offline" role="alert">
+        <h1>网络断了</h1>
+        <p>入场码暂时不能用，请会员稍等，或者找前台登记。网络恢复后会自动显示新码。</p>
+      </div>
+      <p v-else class="hint">加载中…</p>
+    </section>
+  </main>
+</template>
+
+<style scoped>
+.desk { display: grid; min-height: 100vh; place-items: center; padding: 24px; background: var(--page); }
+.bind, .show { display: grid; gap: 16px; justify-items: center; text-align: center; }
+h1 { margin: 0; font-family: var(--font-display); font-size: 40px; font-weight: 400; }
+.hint { margin: 0; font-size: 18px; color: var(--ink-muted); }
+.qr { width: min(70vmin, 520px); height: min(70vmin, 520px); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
+.placeholder { display: grid; place-content: center; gap: 8px; padding: 16px; font-size: 14px; word-break: break-all; }
+.count { margin: 0; font-family: var(--font-number); font-size: 28px; }
+.offline { max-width: 520px; padding: 32px; background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
+.row { display: flex; gap: 8px; }
+.row select { padding: 6px 10px; font: inherit; }
+.btn { padding: 8px 16px; font: inherit; font-weight: 600; color: var(--on-brand); text-decoration: none; background: var(--brand); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.warn { margin: 0; padding: 8px 12px; background: var(--accent-soft); border-radius: var(--radius-sm); }
+.link { padding: 0; font: inherit; color: var(--brand); background: none; border: 0; cursor: pointer; text-decoration: underline; }
+</style>

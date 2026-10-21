@@ -26,3 +26,5 @@ export * from './coach';
 export * from './pt';
 export * from './ptTimeline';
 export * from './ptDesk';
+export * from './entryQr';
+export * from './deskQr';

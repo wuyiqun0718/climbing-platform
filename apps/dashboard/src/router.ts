@@ -48,6 +48,8 @@ export const router = createRouter({
   history: createWebHashHistory(),
   routes: [
     { path: '/login', name: 'login', meta: { label: '登录', public: true }, component: () => import('./pages/LoginPage.vue') },
+    // 前台平板：不带侧栏、不用员工登录（用绑定时拿到的设备 token），绑定时才要店长以上登录
+    { path: '/desk', name: 'desk', meta: { label: '前台入场码', public: true }, component: () => import('./pages/DeskPage.vue') },
     ...NAV.map(n => ({
       path: n.path,
       name: n.name,

@@ -42,6 +42,8 @@ export type ActionKey =
   | 'class.attend'
   /** 帮会员取消团课预约，退次（27）。等馆方：前台、店长、老板都能（要写原因） */
   | 'class.cancelBooking'
+  /** 前台平板绑定门店、解绑（37）。等馆方：先放店长以上 */
+  | 'desk.bind'
   /** 处理私教：标线下约 / 不接课、确认、取消（30）。等馆方：先放店长以上；教练本人处理自己的不看这条（见 canHandlePt） */
   | 'pt.handle'
   /** 改私教规则：营业时间、取消截止、要不要教练确认（30）。等馆方：先只给老板 */
@@ -93,6 +95,7 @@ export const ACTION_ROLES: Record<ActionKey, readonly StaffRole[]> = {
   'class.attend': ALL,
   'class.cancelBooking': ALL,
   'pt.handle': MANAGER_UP,
+  'desk.bind': MANAGER_UP,
   'settings.ptRules': OWNER,
   'settings.classRules': OWNER,
   'member.fullPhone': OWNER,

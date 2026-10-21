@@ -1,5 +1,5 @@
 import { MEMBER_SOURCES, type DeskCheckInResult, type DeskOrderResult, type RefundResult, type EntryMethod, type VoidCheckInResult, type MemberSource, type Staff, type Store } from '@climb/api';
-import { REFUND_METHOD_BY_CHANNEL, type AuditLogEntry, type CoachProfile, type PtBooking, type PtSlotMark, type ClassBooking, type ClassSession, type ClassType, defaultRules, insuranceForEntry, newPolicy, type Card, type RefundMethod, type RefundStatus, type InsurancePolicy, type CountCard, type GiftCard, type LessonCard, type Share, type GymRules, type LedgerEntry, type Product, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
+import { DEFAULT_DESK_QR_KIND, REFUND_METHOD_BY_CHANNEL, type AuditLogEntry, type CoachProfile, type DeskQrKind, type EntryQr, type PtBooking, type PtSlotMark, type ClassBooking, type ClassSession, type ClassType, defaultRules, insuranceForEntry, newPolicy, type Card, type RefundMethod, type RefundStatus, type InsurancePolicy, type CountCard, type GiftCard, type LessonCard, type Share, type GymRules, type LedgerEntry, type Product, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
 import { addDays, addMonths, daysBetween, endOfMonth, fromDateKey, monthOf, type DateKey } from '@climb/utils';
 
 /** 会员（对应 members 表），目前放了看板「新客从哪来」和会员列表用到的字段 */
@@ -118,6 +118,14 @@ export interface MockDb {
   /** 私教：会员约的（对应 pt_bookings）和后台标的线下约、不接课（对应 pt_slot_marks），结构同小程序分支；小程序 mock 合并后读同一份 */
   ptBookings: PtBooking[];
   ptSlotMarks: PtSlotMark[];
+  /** 前台平板（对应 desk_devices）：绑定的门店和设备 token；解绑的 active = false */
+  deskDevices: { id: string; name: string; storeId: string; token: string; boundBy: string; boundAt: string; active: boolean }[];
+  /** 签发过的入场码（对应 entry_qrs），结构同小程序分支的 EntryQr；小程序 mock 合并后读同一份 */
+  entryQrs: EntryQr[];
+  /** 平板显示哪种码（GET /desk/qr 返回），默认 core 的 DEFAULT_DESK_QR_KIND */
+  deskQrKind: DeskQrKind;
+  /** 岩馆的入场链接（GymConfig.entryQrLink），普通二维码用 */
+  entryQrLink: string;
   /** mock 的「现在」几点（HH:mm:ss），测试里固定；不填用本机时间。日期用 today */
   clock?: string;
   /** 每家店的看板数字（示例），全部门店 = 各店相加 */
@@ -174,6 +182,10 @@ export function createMockDb(today: DateKey, rules: GymRules = defaultRules): Mo
     ],
     staff,
     auditLogs: [],
+    deskDevices: [],
+    entryQrs: [],
+    deskQrKind: DEFAULT_DESK_QR_KIND,
+    entryQrLink: 'https://qr.example.com/benchmark/checkin',
     classTypes: [
       { id: 'ct-intro', name: '入门抱石', minutes: 60, capacity: 12, credits: 1, active: true },
       { id: 'ct-rope', name: '顶绳进阶', minutes: 90, capacity: 8, credits: 2, coachId: 's-manager', active: true },

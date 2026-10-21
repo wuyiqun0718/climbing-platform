@@ -3,5 +3,6 @@
   "name": "BENCHMARK 攀岩馆",
   "shortName": "BENCHMARK",
   "wechatAppId": "touristappid",
+  "entryQrLink": "https://qr.example.com/benchmark/checkin",
   "logo": "logo.jpg"
 }

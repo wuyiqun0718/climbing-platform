@@ -382,6 +382,20 @@ export interface CancelPtBookingBody {
 
 export type PtRulesBody = PtRules;
 
+/**
+ * 前台平板绑定门店（任务 37）：店长以上（permissions.ts 的 desk.bind，等馆方）在平板上登录后选一家自己能操作的店绑定，
+ * 拿到设备 token 存在平板上，之后平板用它调 GET /desk/qr（见 desk.ts），码只给这家店签发；员工可以退出登录。
+ * - POST /admin/desk-devices：{ storeId, name }，门店没有 404、不是自己能操作的 403。
+ * - DELETE /admin/desk-devices/:id：解绑，这台平板的 token 马上失效。
+ * 绑定、解绑写操作日志。
+ */
+export interface DeskDeviceBinding {
+  deviceId: string;
+  deviceToken: string;
+  storeId: string;
+  name: string;
+}
+
 /** 后台列表的一页。page 从 1 开始；超出范围时后端夹到最后一页，以返回的 page 为准 */
 export interface PageOf<T> {
   items: T[];
@@ -851,6 +865,10 @@ export function createAdminApi(opts: ClientOptions) {
       update: (id: string, body: UpdateStaffBody) => http<StaffRow>('PATCH', `/admin/staff/${encodeURIComponent(id)}`, body),
     },
     coaches: () => http<CoachView[]>('GET', '/admin/coaches'),
+    deskDevices: {
+      bind: (body: { storeId: string; name?: string }) => http<DeskDeviceBinding>('POST', '/admin/desk-devices', body),
+      unbind: (id: string) => http<null>('DELETE', `/admin/desk-devices/${encodeURIComponent(id)}`),
+    },
     ptSlotMarks: {
       create: (body: MarkPtSlotBody) => http<PtSlotMark>('POST', '/admin/pt-slots', body),
       remove: (id: string) => http<null>('DELETE', `/admin/pt-slots/${encodeURIComponent(id)}`),

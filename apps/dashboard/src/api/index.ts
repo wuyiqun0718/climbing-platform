@@ -1,4 +1,4 @@
-import { createAdminApi, fetchAdapter, type RequestAdapter } from '@climb/api';
+import { createAdminApi, createDeskApi, fetchAdapter, type RequestAdapter } from '@climb/api';
 import { toDateKey } from '@climb/utils';
 import gym from '@gym';
 import { createMockAdapter } from './mock/adapter';
@@ -29,12 +29,46 @@ export function withUnauthorizedHook(adapter: RequestAdapter, cb: () => void): R
   };
 }
 
+function mockAdapter(): RequestAdapter {
+  const db = createMockDb(toDateKey(new Date()), gym.rules);
+  db.entryQrLink = gym.entryQrLink;
+  return createMockAdapter(db, { delayMs: 200 });
+}
+
+/** 后台和前台平板共用一个 adapter（mock 时是同一份数据） */
+const adapter = usingMock ? mockAdapter() : fetchAdapter;
+
 export const api = createAdminApi({
   baseURL: base ?? '',
   gymId: gym.id,
-  adapter: withUnauthorizedHook(
-    usingMock ? createMockAdapter(createMockDb(toDateKey(new Date()), gym.rules), { delayMs: 200 }) : fetchAdapter,
-    () => unauthorized(),
-  ),
+  adapter: withUnauthorizedHook(adapter, () => unauthorized()),
   getToken: () => token,
 });
+
+/** 前台平板绑定门店后拿到的设备 token，存在这台平板上（读写包 try/catch，存不了就每次打开重新绑定） */
+const DESK_TOKEN_KEY = 'climb.deskDevice';
+type DeskDevice = { token: string; storeId: string; deviceId: string };
+let deskMemory: DeskDevice | null = null;
+export const deskDevice = {
+  get(): DeskDevice | null {
+    try {
+      const v = JSON.parse(localStorage.getItem(DESK_TOKEN_KEY) ?? 'null');
+      if (v && typeof v.token === 'string') return v;
+    } catch {
+      // 读不了就用内存里的
+    }
+    return deskMemory;
+  },
+  set(v: DeskDevice | null) {
+    deskMemory = v;
+    try {
+      if (v) localStorage.setItem(DESK_TOKEN_KEY, JSON.stringify(v));
+      else localStorage.removeItem(DESK_TOKEN_KEY);
+    } catch {
+      // 存不了：这次能用，刷新后要重新绑定
+    }
+  },
+};
+
+/** 前台平板接口：用设备 token，401 不影响员工会话 */
+export const deskApi = createDeskApi({ baseURL: base ?? '', gymId: gym.id, adapter, getToken: () => deskDevice.get()?.token });

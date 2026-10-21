@@ -1,5 +1,5 @@
-import { ApiError, createAdminApi, createApi, type AdminClassRow, type CreateClassBody, type CreateStaffBody, type MarkPtSlotBody, type PtTimelineView } from '@climb/api';
-import { defaultFreezeRules, freezeBlockedBy, ledgerMismatch } from '@climb/core';
+import { ApiError, createAdminApi, createApi, createDeskApi, type AdminClassRow, type CreateClassBody, type CreateStaffBody, type MarkPtSlotBody, type PtTimelineView } from '@climb/api';
+import { defaultFreezeRules, freezeBlockedBy, ledgerMismatch, parseEntryQrLink, parseEntryQrParams } from '@climb/core';
 import { addDays, endOfMonth } from '@climb/utils';
 import { describe, expect, it } from 'vitest';
 import { createMockAdapter } from './adapter';
@@ -1974,5 +1974,106 @@ describe('后台 mock：私教预约处理', () => {
     await api.settings.savePtRules({ ...db.rules.ptRules, openHour: 9, closeHour: 21 });
     expect((await api.ptSlots()).hours).toEqual([9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
     expect(db.auditLogs.at(-1)).toMatchObject({ action: 'settings.pt_rules', before: { openHour: 10, closeHour: 23 }, after: { openHour: 9, closeHour: 21 } });
+  });
+});
+
+describe('后台 mock：前台平板动态入场码', () => {
+  const LINK = 'https://qr.example.com/benchmark/checkin';
+  async function deskSetup() {
+    const s = setup();
+    s.db.clock = '12:00:00';
+    await s.login('13800000002');
+    const bound = await s.api.deskDevices.bind({ storeId: 'bingang', name: '滨港前台' });
+    let deviceToken: string | null = bound.deviceToken;
+    const desk = createDeskApi({ baseURL: '', gymId: 'benchmark', adapter: createMockAdapter(s.db), getToken: () => deviceToken });
+    const setDevice = (t: string | null) => (deviceToken = t);
+    return { ...s, bound, desk, setDevice };
+  }
+  /** 会员扫码入场（mock 用 X-Mock-Member 代替会员登录） */
+  const scan = (db: MockDb, memberId: string, body: Record<string, unknown>) =>
+    createMockAdapter(db)({ method: 'POST', url: '/check-ins', headers: { 'X-Mock-Member': memberId }, body });
+  /** 一位今天能用期限卡入场的老会员 */
+  const periodMember = (db: MockDb) => {
+    const c = db.cards.find(x => x.kind === 'period' && x.startsOn <= db.today && x.expiresOn >= db.today && (x.status ?? 'normal') === 'normal' && !db.checkIns.some(ci => ci.memberId === x.memberId && ci.on === db.today))!;
+    db.members.find(m => m.id === c.memberId)!.waiverSignedOn = '2026-01-01';
+    return { memberId: c.memberId, cardId: c.id };
+  };
+
+  it('只有店长以上能绑定，只能绑自己能操作的店；绑定写操作日志', async () => {
+    const { api, login, db } = setup();
+    await login('13800000003');
+    expect(await status(api.deskDevices.bind({ storeId: 'bingang' }))).toBe(403);
+    await login('13800000002');
+    expect(await status(api.deskDevices.bind({ storeId: 'huiju' }))).toBe(403);
+    expect(await status(api.deskDevices.bind({ storeId: 'nope' }))).toBe(404);
+    const b = await api.deskDevices.bind({ storeId: 'bingang' });
+    expect(b).toMatchObject({ storeId: 'bingang', name: '前台平板' });
+    expect(b.deviceToken).toMatch(/^desk-/);
+    expect(db.auditLogs.at(-1)).toMatchObject({ action: 'desk_device.bind', targetId: b.deviceId, storeId: 'bingang' });
+  });
+
+  it('码只给绑定的门店签发；返回码类型、到期时间和服务器时间；能被小程序的解析函数解析', async () => {
+    const { desk, db } = await deskSetup();
+    const q = await desk.qr();
+    expect(q).toMatchObject({ storeId: 'bingang', storeName: '滨港店', kind: 'link' });
+    expect(parseEntryQrLink(LINK, q.content)).toEqual({ storeId: 'bingang', token: q.token });
+    expect(Date.parse(q.refreshAt) - Date.parse(q.issuedAt)).toBe(30_000);
+    expect(Date.parse(q.expiresAt) - Date.parse(q.issuedAt)).toBe(180_000);
+    expect(q.serverTime).toBe(new Date('2026-10-21T12:00:00').toISOString());
+    db.deskQrKind = 'scene';
+    db.clock = '12:00:31';
+    const s = await desk.qr();
+    expect(s.kind).toBe('scene');
+    expect(s.content.length).toBeLessThanOrEqual(32);
+    expect(parseEntryQrParams(s.content)).toEqual({ storeId: 'bingang', token: s.token });
+  });
+
+  it('30 秒内拉到同一个码，到点换新码；旧码在 180 秒内还能用（留时间登录、选卡、签告知书）', async () => {
+    const { desk, db } = await deskSetup();
+    const a = await desk.qr();
+    db.clock = '12:00:29';
+    expect((await desk.qr()).token).toBe(a.token);
+    db.clock = '12:00:30';
+    const b = await desk.qr();
+    expect(b.token).not.toBe(a.token);
+    db.clock = '12:02:30'; // 第一个码签发后 150 秒
+    const { memberId, cardId } = periodMember(db);
+    expect((await scan(db, memberId, { storeId: 'bingang', qrToken: a.token, cardId })).status).toBe(200);
+  });
+
+  it('同一个 token 第二次签到被拒；用掉后平板马上换码', async () => {
+    const { desk, db } = await deskSetup();
+    const q = await desk.qr();
+    const { memberId, cardId } = periodMember(db);
+    const first = await scan(db, memberId, { scene: `s=bingang&t=${q.token}`, cardId });
+    expect(first.status).toBe(200);
+    expect(first.data).toMatchObject({ checkIn: { method: 'scan', storeId: 'bingang' } });
+    expect(db.entryQrs.find(x => x.token === q.token)).toMatchObject({ usedBy: memberId });
+    const again = await scan(db, memberId, { scene: `s=bingang&t=${q.token}`, cardId });
+    expect(again).toMatchObject({ status: 422, data: { code: 'qr-used' } });
+    const other = periodMember(db);
+    expect(await scan(db, other.memberId, { storeId: 'bingang', qrToken: q.token, cardId: other.cardId })).toMatchObject({ status: 422, data: { code: 'qr-used' } });
+    expect((await desk.qr()).token).not.toBe(q.token);
+  });
+
+  it('过期的码被拒；别的店、乱写的码不认；入场没成功不作废', async () => {
+    const { desk, db } = await deskSetup();
+    const q = await desk.qr();
+    const { memberId, cardId } = periodMember(db);
+    expect(await scan(db, memberId, { storeId: 'huiju', qrToken: q.token, cardId })).toMatchObject({ status: 400, data: { code: 'invalid-qr' } });
+    expect(await scan(db, memberId, { scene: 'whatever', cardId })).toMatchObject({ status: 400 });
+    expect(await scan(db, memberId, { storeId: 'bingang', qrToken: q.token, cardId: 'nope' })).toMatchObject({ status: 404 });
+    expect(db.entryQrs.find(x => x.token === q.token)!.usedAt).toBeUndefined();
+    db.clock = '12:03:01';
+    expect(await scan(db, memberId, { storeId: 'bingang', qrToken: q.token, cardId })).toMatchObject({ status: 422, data: { code: 'qr-expired' } });
+  });
+
+  it('没绑定、解绑后平板拿不到码（401）', async () => {
+    const { desk, api, bound, setDevice } = await deskSetup();
+    expect((await desk.qr()).storeId).toBe('bingang');
+    await api.deskDevices.unbind(bound.deviceId);
+    expect(await status(desk.qr())).toBe(401);
+    setDevice('desk-whatever');
+    expect(await status(desk.qr())).toBe(401);
   });
 });

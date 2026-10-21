@@ -63,7 +63,10 @@ export type RuleErrorCode =
   | 'pt-started'
   | 'pt-cancel-too-late'
   | 'pt-booking-not-pending'
-  | 'pt-reason-required';
+  | 'pt-reason-required'
+  // 前台平板入场码（entryQr.ts，跟小程序分支同名）
+  | 'qr-expired'
+  | 'qr-used';
 
 export class RuleError extends Error {
   constructor(public code: RuleErrorCode, message: string) {
