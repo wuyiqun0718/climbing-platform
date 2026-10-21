@@ -80,8 +80,18 @@ const confirm = (title: string, content: string, confirmText = '确定') => new 
   uni.showModal({ title, content, confirmText, success: r => resolve(r.confirm), fail: () => resolve(false) });
 });
 
-/** 正在提交的课；提交中不能再点（防连点），幂等键每次点「确定」生成一个，重试也带同一个 */
+/** 正在提交的课；提交中不能再点（防连点） */
 const busy = ref('');
+
+/**
+ * 一次「预约尝试」的幂等键：第一次打开某节课的确认框时生成，失败了（网络断、超时）再点同一节课还用它，
+ * 后端已经约上的会原样返回，不会约两次。约成功或者换了一节课才换新的。
+ */
+let attempt: { sessionId: string; key: string } | null = null;
+const attemptKey = (sessionId: string) => {
+  if (attempt?.sessionId !== sessionId) attempt = { sessionId, key: `cb-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}` };
+  return attempt.key;
+};
 
 const cancelHours = gym.rules.classRules.cancelBeforeMinutes / 60;
 const cancelHint = `开课前 ${cancelHours} 小时以前可以自己取消，次数退回；之后要找前台。`;
@@ -96,10 +106,10 @@ async function book(s: ClassSessionView) {
     const content = waitlist
       ? `${s.name}已经约满，排候补不扣次；有人取消时按顺序自动补上，补上时从团课课包扣 ${s.credits} 次。`
       : `${dayLabel(s.on)} ${s.startTime}，${s.storeName}。从${classPack.value ? `「${classPack.value.name}」` : '团课课包'}扣 ${s.credits} 次。${cancelHint}`;
+    const idempotencyKey = attemptKey(s.id);
     if (!(await confirm(waitlist ? '排候补？' : `约${s.name}？`, content))) return;
-    // 幂等键：这次提交生成一个，请求重试带同一个，后端只约一次
-    const idempotencyKey = `cb-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
     const b = await member.changeCards(() => run(() => api.classes.book(s.id, { idempotencyKey }), { loading: '预约中' }));
+    attempt = null;
     uni.showToast({ title: b.status === 'waitlisted' ? `已排候补第 ${b.position} 位` : '约好了', icon: 'none' });
   } catch {
     // run 已经提示过了
