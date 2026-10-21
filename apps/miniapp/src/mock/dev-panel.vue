@@ -1,10 +1,9 @@
 <script setup lang="ts">
 // 开发用：切换示例会员、重置 mock 数据，顺便能发分享、领分享，方便两个人的流程在一台电脑上走通。
 // 只在走 mock 时显示；真后端下 mock 为 null，这个组件什么都不渲染。
-import { ApiError } from '@climb/api';
 import type { Card, Share } from '@climb/core';
 import { computed, ref } from 'vue';
-import { api, mock } from '../api';
+import { api, mock, run } from '../api';
 
 const open = ref(false);
 const cards = ref<Card[]>([]);
@@ -31,13 +30,13 @@ async function refresh() {
   claimable.value = (mock?.db.shares ?? []).filter(s => s.status === 'pending' && s.fromMemberId !== current.value);
 }
 
-async function run(task: () => Promise<unknown>, done: string) {
+/** 出错的中文提示由 run 统一弹 */
+async function act(task: () => Promise<unknown>, done: string) {
   try {
-    await task();
+    await run(task);
     uni.showToast({ title: done, icon: 'none' });
-  } catch (e) {
-    const msg = e instanceof ApiError ? (e.data as { message?: string })?.message : String(e);
-    uni.showToast({ title: msg || '出错了', icon: 'none' });
+  } catch {
+    // run 已经提示过了
   }
   await refresh();
 }
@@ -73,9 +72,9 @@ function reset() {
   });
 }
 
-const giveOne = () => countCard.value && run(() => api.shares.createCount({ cardId: countCard.value!.id, quantity: 1 }), '送出 1 次');
-const invite = () => run(() => api.shares.createReferral(), '发了一张老带新邀请');
-const claim = (s: Share) => run(() => api.shares.claim(s.id), '领到了');
+const giveOne = () => countCard.value && act(() => api.shares.createCount({ cardId: countCard.value!.id, quantity: 1 }), '送出 1 次');
+const invite = () => act(() => api.shares.createReferral(), '发了一张老带新邀请');
+const claim = (s: Share) => act(() => api.shares.claim(s.id), '领到了');
 </script>
 
 <template>
