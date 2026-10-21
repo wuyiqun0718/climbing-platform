@@ -92,3 +92,36 @@ export interface CheckIn {
   /** 扣了几次（期限卡和同日再次入场为 0） */
   deducted: number;
 }
+
+/** 流水原因，和后端 card_ledger.reason 一致 */
+export type LedgerReason =
+  | 'purchase'
+  | 'check_in'
+  | 'check_in_void'
+  | 'share_out'
+  | 'share_return'
+  | 'claim'
+  | 'adjust'
+  | 'refund'
+  | 'import'
+  | 'freeze'
+  | 'unfreeze';
+
+/** 卡的流水：次数或有效期每变一次记一笔，只追加不修改 */
+export interface LedgerEntry {
+  id: string;
+  cardId: string;
+  /** 次数变化，比如 -1；只改有效期（或期限卡）时为 0 */
+  delta: number;
+  /** 变化后还剩几次；期限卡没有 */
+  remainingAfter?: number;
+  expiresOnAfter: DateKey;
+  reason: LedgerReason;
+  refType?: 'check_in' | 'order' | 'share';
+  refId?: string;
+  /** 业务日期 */
+  on: DateKey;
+  /** 记录时间（ISO） */
+  at: string;
+  note?: string;
+}

@@ -1,4 +1,4 @@
-import type { Card, CheckIn, Product, Share } from '@climb/core';
+import type { Card, CheckIn, LedgerEntry, Product, Share } from '@climb/core';
 import { createHttp, type ClientOptions } from './client';
 
 export * from './client';
@@ -10,6 +10,12 @@ export interface Me {
   phone: string;
   /** 当前版本的风险告知书签过没有 */
   waiverSigned: boolean;
+}
+
+/** `GET /me/cards/:id/ledger` 的一条：流水加上会员看得懂的上下文 */
+export interface CardLedgerItem extends LedgerEntry {
+  /** 入场的门店名 */
+  storeName?: string;
 }
 
 /**
@@ -47,6 +53,8 @@ export function createApi(opts: ClientOptions) {
     me: {
       get: () => http<Me>('GET', '/me'),
       cards: () => http<Card[]>('GET', '/me/cards'),
+      /** 一张卡的使用记录，最新的在前 */
+      cardLedger: (cardId: string) => http<CardLedgerItem[]>('GET', `/me/cards/${encodeURIComponent(cardId)}/ledger`),
     },
     checkIns: {
       /** 扫前台码入场：qrToken 是前台二维码里的内容 */

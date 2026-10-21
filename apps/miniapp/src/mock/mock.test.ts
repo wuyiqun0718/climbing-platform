@@ -78,6 +78,53 @@ describe('mock 接口', () => {
   });
 });
 
+describe('使用记录 GET /me/cards/:id/ledger', () => {
+  it('示例数据的流水跟卡对得上：最新的在前，入场带门店名', async () => {
+    const { ajie } = setup();
+    const ledger = await ajie.me.cardLedger('card-ajie-c10');
+    expect(ledger.map(l => [l.reason, l.delta, l.remainingAfter])).toEqual([
+      ['check_in', -1, 6], ['check_in', -1, 7], ['check_in', -1, 8], ['check_in', -1, 9], ['purchase', 10, 10],
+    ]);
+    expect(ledger[0].storeName).toBe('环球港店');
+  });
+
+  it('入场扣次多一条，同日再次入场、期限卡入场不记', async () => {
+    const { ajie } = setup();
+    await ajie.checkIns.create({ qrToken: 'store:binggang', cardId: 'card-ajie-c10' });
+    await ajie.checkIns.create({ qrToken: 'store:binggang', cardId: 'card-ajie-c10' });
+    await ajie.checkIns.create({ qrToken: 'store:binggang', cardId: 'card-ajie-year' });
+    const [latest, prev] = await ajie.me.cardLedger('card-ajie-c10');
+    expect(latest).toMatchObject({ reason: 'check_in', delta: -1, remainingAfter: 5, storeName: '滨港店', on: TODAY, refType: 'check_in' });
+    expect(prev.remainingAfter).toBe(6);
+    expect((await ajie.me.cardLedger('card-ajie-year')).map(l => l.reason)).toEqual(['purchase']);
+  });
+
+  it('转赠：原卡记 share_out -N，领取人的卡记 claim +N，用掉再记入场', async () => {
+    const { ajie, xiaolu } = setup();
+    const share = await ajie.shares.createCount({ cardId: 'card-ajie-c10', quantity: 2 });
+    expect((await ajie.me.cardLedger('card-ajie-c10'))[0]).toMatchObject({ reason: 'share_out', delta: -2, remainingAfter: 4, refId: share.id });
+
+    const { card } = await xiaolu.shares.claim(share.id);
+    expect(await xiaolu.me.cardLedger(card.id)).toMatchObject([{ reason: 'claim', delta: 2, remainingAfter: 2, refId: share.id }]);
+    await xiaolu.checkIns.create({ qrToken: 'store:huiju', cardId: card.id });
+    expect((await xiaolu.me.cardLedger(card.id)).map(l => [l.reason, l.remainingAfter])).toEqual([['check_in', 1], ['claim', 2]]);
+  });
+
+  it('体验券：领取记一条，用掉记一条', async () => {
+    const { ajie, xiaolu } = setup();
+    const { card } = await xiaolu.shares.claim((await ajie.shares.createReferral()).id);
+    await ajie.checkIns.create({ qrToken: 'store:huiju', cardId: 'card-ajie-year' });
+    await xiaolu.checkIns.create({ qrToken: 'store:huiju', cardId: card.id });
+    expect((await xiaolu.me.cardLedger(card.id)).map(l => [l.reason, l.delta, l.remainingAfter])).toEqual([['check_in', -1, 0], ['claim', 1, 1]]);
+  });
+
+  it('看不到别人的卡的记录', async () => {
+    const { xiaolu, guest } = setup();
+    expect(await codeOf(xiaolu.me.cardLedger('card-ajie-c10'))).toEqual({ status: 404, code: 'card-not-found' });
+    expect(await codeOf(guest.me.cardLedger('card-ajie-c10'))).toEqual({ status: 401, code: 'unauthorized' });
+  });
+});
+
 describe('mock 数据持久化、切换身份、重置', () => {
   const memoryStorage = (): MockStorage & { data: Map<string, unknown> } => {
     const data = new Map<string, unknown>();

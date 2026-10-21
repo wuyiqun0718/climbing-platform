@@ -1,4 +1,4 @@
-import type { Card, CheckIn, Product, Share } from '@climb/core';
+import { ledgerEntry, type Card, type CheckIn, type LedgerEntry, type Product, type Share } from '@climb/core';
 import { addDays, type DateKey } from '@climb/utils';
 
 export interface MockMember {
@@ -24,6 +24,8 @@ export interface MockDb {
   cards: Card[];
   shares: Share[];
   checkIns: (CheckIn & { storeId: string })[];
+  /** 卡的流水，只追加 */
+  ledger: LedgerEntry[];
   /** 自增序号，用来生成 id */
   seq: number;
 }
@@ -45,6 +47,21 @@ export const mockWxToken = (openid: string) => `mock-wx:${openid}`;
  * 价格是原型里的占位价（docs/project-context.md 第 7 节）。
  */
 export function seedDb(today: DateKey): MockDb {
+  const year: Card = { id: 'card-ajie-year', kind: 'period', memberId: MOCK_MEMBERS.ajie, productId: 'year', name: '年卡', startsOn: addDays(today, -209), expiresOn: addDays(today, 155) };
+  const c10: Card = { id: 'card-ajie-c10', kind: 'count', memberId: MOCK_MEMBERS.ajie, productId: 'c10', name: '10 次卡', total: 10, remaining: 6, expiresOn: addDays(today, 118) };
+  const c20: Card = { id: 'card-laozhou-c20', kind: 'count', memberId: MOCK_MEMBERS.laozhou, productId: 'c20', name: '20 次卡', total: 20, remaining: 8, expiresOn: addDays(today, 200) };
+  // 阿杰的 10 次卡：买了以后带朋友来用过 4 次，流水和入场记录对得上
+  const c10Visits = [[-50, 'binggang'], [-36, 'huiju'], [-21, 'binggang'], [-7, 'huanqiugang']] as const;
+  const checkIns = c10Visits.map(([d, storeId], i) => ({ id: `ci-seed-${i + 1}`, memberId: MOCK_MEMBERS.ajie, cardId: c10.id, on: addDays(today, d), deducted: 1, storeId }));
+  const at = (on: DateKey) => `${on}T03:00:00.000Z`;
+  const ledger: LedgerEntry[] = [
+    ledgerEntry({ id: 'led-seed-1', card: year, delta: 0, reason: 'purchase', on: year.startsOn, at: at(year.startsOn) }),
+    ledgerEntry({ id: 'led-seed-2', card: { ...c10, remaining: 10 }, delta: 10, reason: 'purchase', on: addDays(today, -62), at: at(addDays(today, -62)) }),
+    ...checkIns.map((ci, i) => ledgerEntry({
+      id: `led-seed-${i + 3}`, card: { ...c10, remaining: 9 - i }, delta: -1, reason: 'check_in', on: ci.on, at: at(ci.on), ref: { type: 'check_in', id: ci.id },
+    })),
+    ledgerEntry({ id: 'led-seed-7', card: c20, delta: 8, reason: 'import', on: addDays(today, -3), at: at(addDays(today, -3)), note: '青橙导入' }),
+  ];
   const p = (id: string, category: Product['category'], name: string, yuan: number, extra: Partial<Product> = {}): Product => ({
     id, category, name, priceCents: yuan * 100, perks: [], onSale: true, ...extra,
   });
@@ -73,13 +90,10 @@ export function seedDb(today: DateKey): MockDb {
       p('class10', 'class', '团课 10 次', 1080, { quantity: 10, validMonths: 6 }),
       p('class20', 'class', '团课 20 次', 1980, { quantity: 20, validMonths: 12 }),
     ],
-    cards: [
-      { id: 'card-ajie-year', kind: 'period', memberId: MOCK_MEMBERS.ajie, productId: 'year', name: '年卡', startsOn: addDays(today, -209), expiresOn: addDays(today, 155) },
-      { id: 'card-ajie-c10', kind: 'count', memberId: MOCK_MEMBERS.ajie, productId: 'c10', name: '10 次卡', total: 10, remaining: 6, expiresOn: addDays(today, 118) },
-      { id: 'card-laozhou-c20', kind: 'count', memberId: MOCK_MEMBERS.laozhou, productId: 'c20', name: '20 次卡', total: 20, remaining: 8, expiresOn: addDays(today, 200) },
-    ],
+    cards: [year, c10, c20],
     shares: [],
-    checkIns: [],
+    checkIns,
+    ledger,
     seq: 0,
   };
 }
@@ -93,7 +107,7 @@ export interface MockStorage {
 const DB_KEY = 'mock:db';
 const WX_KEY = 'mock:wx';
 /** 示例数据的结构改了就加 1，存着的旧数据会被丢掉、重新生成 */
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 /** 读存着的数据；没有或者版本不对就用示例数据重新生成 */
 export function loadDb(storage: MockStorage, today: DateKey): MockDb {

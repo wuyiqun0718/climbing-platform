@@ -1,8 +1,12 @@
-import { applyEntry, claimShare, createReferral, shareFromCountCard, type EntryCard, type EntryContext, type GymRules } from '@climb/core';
+import {
+  applyEntry, claimShare, createReferral, entryLedgerDelta, ledgerEntry, shareFromCountCard,
+  type Card, type EntryCard, type EntryContext, type GymRules, type LedgerEntry,
+} from '@climb/core';
 import type { DateKey } from '@climb/utils';
 import type { MockDb } from './db';
 import { MockHttpError, type MockContext, type MockRoutes } from './router';
 import { createAuthRoutes } from './routes/auth';
+import { createCardRoutes } from './routes/cards';
 
 /**
  * 按 @climb/api 的契约实现接口。规则全部调 @climb/core，这里只负责存取数据。
@@ -30,19 +34,20 @@ export function createRoutes(db: MockDb, env: { rules: GymRules; today: () => Da
     return card;
   };
 
-  const replaceCard = (card: (typeof db.cards)[number]) => {
+  const replaceCard = (card: Card) => {
     db.cards = db.cards.map(c => (c.id === card.id ? card : c));
+  };
+
+  /** 卡变了就记一笔流水（card 是变化后的卡），跟后端同一个事务里写流水一样 */
+  const record = (card: Card, delta: number, reason: LedgerEntry['reason'], ref?: { type: NonNullable<LedgerEntry['refType']>; id: string }) => {
+    db.ledger.push(ledgerEntry({ id: nextId('led'), card, delta, reason, on: env.today(), at: new Date().toISOString(), ref }));
   };
 
   return {
     ...createAuthRoutes(db, { nextId, requireMember }),
+    ...createCardRoutes(db, { requireMember, myCard }),
 
     'GET /products': () => db.products.filter(p => p.onSale),
-
-    'GET /me/cards': ctx => {
-      const me = requireMember(ctx);
-      return db.cards.filter(c => c.memberId === me);
-    },
 
     'POST /check-ins': ctx => {
       const me = requireMember(ctx);
@@ -59,6 +64,8 @@ export function createRoutes(db: MockDb, env: { rules: GymRules; today: () => Da
       replaceCard(updated);
       const checkIn = { id: nextId('ci'), memberId: me, cardId, on: today, deducted, storeId: store.id };
       db.checkIns.push(checkIn);
+      const delta = entryLedgerDelta(card, updated, deducted);
+      if (delta !== null) record(updated, delta, 'check_in', { type: 'check_in', id: checkIn.id });
       return checkIn;
     },
 
@@ -70,6 +77,7 @@ export function createRoutes(db: MockDb, env: { rules: GymRules; today: () => Da
       const { card: updated, share } = shareFromCountCard({ id: nextId('share'), card, quantity, today: env.today() });
       replaceCard(updated);
       db.shares.push(share);
+      record(updated, -quantity, 'share_out', { type: 'share', id: share.id });
       return share;
     },
 
@@ -93,6 +101,8 @@ export function createRoutes(db: MockDb, env: { rules: GymRules; today: () => Da
       const result = claimShare({ share, claimerId: me, cardId: nextId('card'), today: env.today() });
       db.shares = db.shares.map(s => (s.id === share.id ? result.share : s));
       db.cards.push(result.card);
+      // 好友送的次卡记 +N，跟原卡的 share_out -N 对得上；体验券算 1 次
+      record(result.card, result.card.kind === 'gift' ? result.card.total : 1, 'claim', { type: 'share', id: share.id });
       return result;
     },
   };

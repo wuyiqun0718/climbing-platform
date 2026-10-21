@@ -36,7 +36,7 @@
 |---|---|---|---|---|
 | 9 ✅ | 首页：会员卡摘要、扫码入场大按钮、老带新/分享入口、今日团课、近期活动（后两块先占位） | 5 | `src/pages/index/index.vue`、`packages/ui-mp/*` | 和原型首页一致；没有卡时引导去购卡 |
 | 10 ✅ | 卡包列表：期限卡、次卡、好友送的次卡、体验券、课时卡分组展示，过期/用完的折叠 | 5 | `src/pages/cards/index.vue`、`packages/ui-mp/MemberCard.vue` | 五种卡都能正确显示剩余次数/天数 |
-| 11 | 契约 + mock + 页面：卡详情和使用记录 `GET /me/cards/:id/ledger` | 10 | `packages/api`、`src/mock/routes/cards.ts`、`src/pages/cards/detail.vue` | 入场、转赠、领取后流水里多一条，原因显示成中文 |
+| 11 ✅ | 契约 + mock + 页面：卡详情和使用记录 `GET /me/cards/:id/ledger` | 10 | `packages/api`、`src/mock/routes/cards.ts`、`src/pages/cards/detail.vue` | 入场、转赠、领取后流水里多一条，原因显示成中文 |
 | 12 | ⏸ 期限卡冻结：`@climb/core` 加冻结规则（一次几天、一年几次，先用占位值，放进 `GymRules`）；卡详情里申请冻结/解冻 | 11 | `packages/core/src/rules.ts`、`gyms/benchmark/src/index.ts`、`src/pages/cards/detail.vue` | 核心规则有单测；冻结中的卡不能入场 |
 
 ## D. 购卡和支付

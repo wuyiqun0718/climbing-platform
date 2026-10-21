@@ -15,6 +15,12 @@
       }
     },
     {
+      "path": "pages/cards/detail",
+      "style": {
+        "navigationBarTitleText": "卡详情"
+      }
+    },
+    {
       "path": "pages/me/index",
       "style": {
         "navigationBarTitleText": "我的"
