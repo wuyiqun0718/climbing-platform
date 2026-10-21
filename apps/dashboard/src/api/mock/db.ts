@@ -19,6 +19,8 @@ export interface MockMember {
   lastEntryOn: DateKey | null;
   /** 签风险告知书的日期（第一次入场时签），没签为 null */
   waiverSignedOn: DateKey | null;
+  /** 青橙导入的历史入场次数（不在入场记录里）；有的话在我们系统里第一次入场不算「首次」 */
+  legacyEntries?: number;
 }
 
 /** 入场记录（对应 check_ins 表） */
@@ -37,6 +39,12 @@ export interface MockCheckIn {
   policyId: string | null;
   /** 撤销的才有（对应 voided_at、voided_by_staff_id、void_reason） */
   void: { at: string; staffId: string; reason: string } | null;
+  /** 登记的先后（对应自增 id），平板列表按它排 */
+  order: number;
+  /** 变更序号：新建、撤销、扣次改了都换成全馆递增的新号（db.checkInSeq），平板增量拉取用（core 的 deskFeedChanges） */
+  seq: number;
+  /** 入场时间（ISO）；示例数据没有 */
+  at?: string;
 }
 
 /** 老带新邀请（对应 shares 表 kind = referral） */
@@ -151,6 +159,8 @@ export interface MockDb {
   refunds: MockRefund[];
   /** 入场记录：每个到过店的会员最近几次；次卡扣的次数记在 ledger 里，跟卡上的剩余对得上 */
   checkIns: MockCheckIn[];
+  /** 入场记录的变更序号，全馆递增（见 MockCheckIn.seq） */
+  checkInSeq: number;
   /** 入场保单（对应 insurance_policies），一人一天一张；示例入场记录按 @climb/core 的 insuranceForEntry 配好（以前的已投保，撤销的那条已退保） */
   policies: InsurancePolicy[];
   /** 卡流水（对应 card_ledger），按写入顺序；改卡的地方都要在这里追加一笔 */
@@ -292,7 +302,8 @@ function withContact(members: SeedMember[], today: DateKey): MockMember[] {
     const phone = `1${[39, 58, 86, 37][i % 4]}${String(i).padStart(4, '0')}${String(rand(10000)).padStart(4, '0')}`;
     const never = m.source === 'legacy_import' && i % 2 === 0;
     const lastEntryOn = never ? null : addDays(m.firstVisitOn, rand(daysBetween(m.firstVisitOn, today) + 1));
-    return { ...m, phone, lastEntryOn, waiverSignedOn: never ? null : m.firstVisitOn };
+    // 青橙导入的会员在青橙里有历史入场
+    return { ...m, phone, lastEntryOn, waiverSignedOn: never ? null : m.firstVisitOn, ...(m.source === 'legacy_import' ? { legacyEntries: 12 } : {}) };
   });
 }
 
@@ -317,7 +328,7 @@ function newcomerCountCards(members: SeedMember[]): CountCard[] {
  * 用当天能用的卡（期限卡优先，其次次卡），没有就记单次票（美团来的记美团券）；
  * 大约十分之一是前台登记，有一条撤销了的（撤销的那条不是最晚的那次，lastEntryOn 不受影响）。
  */
-function withCheckIns<T extends Pick<MockDb, 'members' | 'cards'>>(data: T, staff: MockDb['staff'], today: DateKey): T & Pick<MockDb, 'checkIns' | 'policies'> {
+function withCheckIns<T extends Pick<MockDb, 'members' | 'cards'>>(data: T, staff: MockDb['staff'], today: DateKey): T & Pick<MockDb, 'checkIns' | 'policies' | 'checkInSeq'> {
   let seed = 31;
   const rand = (n: number) => {
     seed = (seed * 1103515245 + 12345) % 2147483648;
@@ -348,9 +359,13 @@ function withCheckIns<T extends Pick<MockDb, 'members' | 'cards'>>(data: T, staf
         voided: false,
         policyId: null,
         void: null,
+        order: 0,
+        seq: 0,
       });
     }
   }
+  // 登记序号和变更序号按日期先后给（数组顺序不动，同一天按生成顺序）
+  [...checkIns].sort((a, b) => a.on.localeCompare(b.on)).forEach((c, i) => (c.order = c.seq = i + 1));
   // 撤销一条：找一个入场两次以上的老会员，撤销其中较早的一次
   const twice = checkIns.find((c, i) => c.memberId.startsWith('m-old-') && checkIns[i + 1]?.memberId === c.memberId);
   if (twice) {
@@ -367,7 +382,7 @@ function withCheckIns<T extends Pick<MockDb, 'members' | 'cards'>>(data: T, staf
     c.policyId = policy.id;
     if (c.voided) policy.status = 'refunded';
   }
-  return { ...data, checkIns, policies };
+  return { ...data, checkIns, policies, checkInSeq: checkIns.length };
 }
 
 /**

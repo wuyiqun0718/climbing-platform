@@ -1,4 +1,5 @@
 import type { DeskQrKind } from '@climb/core';
+import type { EntryMethod } from './admin';
 import type { DateKey } from '@climb/utils';
 import { createHttp, type ClientOptions } from './client';
 
@@ -31,10 +32,45 @@ export interface DeskQr {
   today: DateKey;
 }
 
+/**
+ * GET /desk/feed?since=：这台平板绑定的门店今天的入场，增量拉（任务 38）。规则见 @climb/core 的 deskFeed.ts：
+ * - since 是上次返回的 cursor（第一次不带或 0，拿今天的全部）；只返回 since 之后新建或改过的（撤销、扣次改了也算），按变更先后排，
+ *   平板按 id 覆盖（mergeDeskFeed），voided 的从列表去掉。since 不是 0 以上的整数 400。
+ * - first：这个会员在系统里第一次没撤销的入场（青橙导入过历史入场的不算），前台要讲安全须知。
+ * - 只给平板要显示的：名字、头像、用的卡、方式、是否首次；不给手机号、会员 id。
+ * - today 变了（过了零点）平板清空列表重新拉。
+ * 设备 token 不对或解绑了 401。先轮询，以后有推送再换。
+ */
+export interface DeskFeedRow {
+  id: string;
+  /** 登记先后，列表按它排（后入场的在前） */
+  order: number;
+  /** 变更序号 */
+  seq: number;
+  /** 入场时间（ISO），没有为 null */
+  at: string | null;
+  memberName: string;
+  /** 会员头像，没有为 null（现在会员资料里还没有头像） */
+  avatarUrl: string | null;
+  cardName: string;
+  method: EntryMethod;
+  first: boolean;
+  voided: boolean;
+}
+
+export interface DeskFeed {
+  storeId: string;
+  today: DateKey;
+  /** 下次带的 since */
+  cursor: number;
+  items: DeskFeedRow[];
+}
+
 export function createDeskApi(opts: ClientOptions) {
   const http = createHttp(opts);
   return {
     qr: () => http<DeskQr>('GET', '/desk/qr'),
+    feed: (since = 0) => http<DeskFeed>('GET', since ? `/desk/feed?since=${since}` : '/desk/feed'),
   };
 }
 

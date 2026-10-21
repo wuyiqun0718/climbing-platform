@@ -28,3 +28,4 @@ export * from './ptTimeline';
 export * from './ptDesk';
 export * from './entryQr';
 export * from './deskQr';
+export * from './deskFeed';

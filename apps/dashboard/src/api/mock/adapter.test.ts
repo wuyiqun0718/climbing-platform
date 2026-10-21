@@ -1,5 +1,5 @@
 import { ApiError, createAdminApi, createApi, createDeskApi, type AdminClassRow, type CreateClassBody, type CreateStaffBody, type MarkPtSlotBody, type PtTimelineView } from '@climb/api';
-import { defaultFreezeRules, freezeBlockedBy, ledgerMismatch, parseEntryQrLink, parseEntryQrParams } from '@climb/core';
+import { defaultFreezeRules, freezeBlockedBy, ledgerMismatch, mergeDeskFeed, parseEntryQrLink, parseEntryQrParams } from '@climb/core';
 import { addDays, endOfMonth } from '@climb/utils';
 import { describe, expect, it } from 'vitest';
 import { createMockAdapter } from './adapter';
@@ -2075,5 +2075,87 @@ describe('后台 mock：前台平板动态入场码', () => {
     expect(await status(desk.qr())).toBe(401);
     setDevice('desk-whatever');
     expect(await status(desk.qr())).toBe(401);
+  });
+});
+
+describe('后台 mock：前台平板实时入场列表', () => {
+  async function feedSetup() {
+    const s = setup();
+    s.db.clock = '12:00:00';
+    await s.login('13800000002');
+    const bound = await s.api.deskDevices.bind({ storeId: 'bingang' });
+    let deviceToken: string | null = bound.deviceToken;
+    const desk = createDeskApi({ baseURL: '', gymId: 'benchmark', adapter: createMockAdapter(s.db), getToken: () => deviceToken });
+    await s.login('13800000003');
+    // 新会员开一张 10 次卡，前台登记入场用
+    const m = await s.api.members.create({ phone: '13912345678', name: '第一次来', source: 'walkin', storeId: 'bingang' });
+    const { card } = await s.api.orders.create({ requestId: 'o1', memberId: m.id, productId: 'p-10x', storeId: 'bingang', channel: 'desk_cash', amountCents: 128_000, priceReason: '' });
+    const enter = (requestId: string, storeId = 'bingang') => s.api.checkIns.create({ requestId, memberId: m.id, storeId, cardId: card.id });
+    return { ...s, desk, m, enter, setDevice: (t: string | null) => (deviceToken = t), bound };
+  }
+
+  it('第一次拉：只给绑定门店今天的入场；字段最少，不带手机号和会员 id', async () => {
+    const { desk, db } = await feedSetup();
+    const f = await desk.feed();
+    expect(f).toMatchObject({ storeId: 'bingang', today: '2026-10-21' });
+    const expected = db.checkIns.filter(c => c.storeId === 'bingang' && c.on === '2026-10-21').map(c => c.id).sort();
+    expect(f.items.map(i => i.id).sort()).toEqual(expected);
+    expect(f.cursor).toBe(Math.max(0, ...f.items.map(i => i.seq)));
+    for (const i of f.items) expect(Object.keys(i).sort()).toEqual(['at', 'avatarUrl', 'cardName', 'first', 'id', 'memberName', 'method', 'order', 'seq', 'voided']);
+    expect(JSON.stringify(f)).not.toMatch(/1[3-9]\d{9}/);
+  });
+
+  it('前台登记一次入场，下一次增量拉就出现，首次高亮；同日再进不是首次；不重复', async () => {
+    const { desk, enter } = await feedSetup();
+    const start = await desk.feed();
+    const first = await enter('c1');
+    const a = await desk.feed(start.cursor);
+    expect(a.items).toEqual([expect.objectContaining({ id: first.checkIn.id, memberName: '第一次来', cardName: '10 次卡', method: 'desk', first: true, voided: false })]);
+    expect((await desk.feed(a.cursor)).items).toEqual([]);
+    const again = await enter('c2');
+    const b = await desk.feed(a.cursor);
+    expect(b.items.map(i => [i.id, i.first])).toEqual([[again.checkIn.id, false]]);
+  });
+
+  it('撤销的入场再发一次（voided），平板去掉；第一次那条撤销了，下一条变成首次也会再发', async () => {
+    const { desk, enter, api, login } = await feedSetup();
+    const first = await enter('c1');
+    const again = await enter('c2');
+    const before = await desk.feed();
+    await login('13800000002');
+    await api.checkIns.void(first.checkIn.id, { reason: '扫错了' });
+    const changes = await desk.feed(before.cursor);
+    // 撤销了的那条不再算首次；同一天下一条没撤销的变成首次，也换了新的变更序号再发一次
+    expect(changes.items.map(i => [i.id, i.voided, i.first])).toEqual([
+      [first.checkIn.id, true, false],
+      [again.checkIn.id, false, true],
+    ]);
+    const list = mergeDeskFeed(before.items, changes.items);
+    expect(list.map(i => i.id)).not.toContain(first.checkIn.id);
+    expect(list.find(i => i.id === again.checkIn.id)).toMatchObject({ first: true });
+  });
+
+  it('青橙导入过历史入场的会员第一次在这里入场也不是首次', async () => {
+    const { desk, enter, db, m } = await feedSetup();
+    db.members.find(x => x.id === m.id)!.legacyEntries = 3;
+    const start = await desk.feed();
+    await enter('c1');
+    expect((await desk.feed(start.cursor)).items.map(i => i.first)).toEqual([false]);
+  });
+
+  it('别的店的入场不出现；since 不对 400；解绑了 401', async () => {
+    const { desk, api, login, bound, setDevice } = await feedSetup();
+    const start = await desk.feed();
+    await login('13800000001');
+    // 前台小葵只能登记滨港，这里用馆长登记汇聚店的入场
+    const m2 = await api.members.create({ phone: '13912340000', name: '去汇聚的', source: 'walkin', storeId: 'huiju' });
+    const { card } = await api.orders.create({ requestId: 'o2', memberId: m2.id, productId: 'p-10x', storeId: 'huiju', channel: 'desk_cash', amountCents: 128_000, priceReason: '' });
+    await api.checkIns.create({ requestId: 'h1', memberId: m2.id, storeId: 'huiju', cardId: card.id });
+    expect((await desk.feed(start.cursor)).items).toEqual([]);
+    expect(await status(desk.feed(-1))).toBe(400);
+    await api.deskDevices.unbind(bound.deviceId);
+    expect(await status(desk.feed())).toBe(401);
+    setDevice(null);
+    expect(await status(desk.feed())).toBe(401);
   });
 });

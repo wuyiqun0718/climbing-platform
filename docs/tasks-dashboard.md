@@ -286,11 +286,12 @@
 - 完成标准：码按时刷新；同一个 token 第二次签到被拒（mock 单测）；离开页面停止轮询。
 - 补（2026-10-22）：`entryQr.ts` 和测试从小程序分支原样拷过来，`GymConfig.entryQrLink`（gym.json 里同小程序的值）、`qr-expired` / `qr-used` 错误码照小程序加；因为有了 `entryQrLink`，之前 `classes.test.ts`、`pt.test.ts` 里改掉的那行也恢复成跟小程序逐字一致。平板的规则在新文件 core 的 `deskQr.ts`：每 30 秒换码只是显示刷新（`deskQrReusable`：没到换码时间、没用掉就接着显示同一个），token 有效期仍是 `ENTRY_QR_TTL_SECONDS`（180 秒），用过即废；`deskQrContent` 用 `entryQrLink` / `entryQrScene` 生成，单测验证小程序那边的 `parseEntryQrLink` / `parseEntryQrParams` 能解析；`newDeskToken`（16 个字符，小程序码 scene 在门店 id 不超过 11 个字符时不超过 32）；`secondsUntil`。设备绑定 `POST /admin/desk-devices`（`desk.bind` 占位店长以上，只能绑自己能操作的店）、`DELETE /admin/desk-devices/:id`，写操作日志；平板用设备 token 调 `GET /desk/qr`（`@climb/api` 新的 `createDeskApi`），返回 kind（link / scene，默认 `DEFAULT_DESK_QR_KIND` = link，占位）、content、imageUrl、issuedAt / refreshAt / expiresAt、serverTime。前端没有二维码库（加依赖要动 lockfile），约定由后端给 `imageUrl`（小程序码本来就要后端调微信生成），mock 为 null，页面先显示 content。平板的轮询、按服务器时差倒计时、断网不显示旧码、解绑提示、离开页面停止轮询在 `pages/deskQr.ts`（单测）。mock 加了会员扫码入场 `POST /check-ins`（用 X-Mock-Member 头代替会员登录），入场跟前台登记共用 `recordCheckIn`（method = scan），成功后 `useEntryQr` 作废；同一个 token 第二次被拒（qr-used）有单测。`/desk` 是不带侧栏的公开路由。
 
-**38. 前台平板页：实时入场列表**
+**38. 前台平板页：实时入场列表** ✅
 - 依赖：37
 - 涉及文件：`DeskPage.vue`、契约 `GET /desk/feed?since=`、mock
 - 内容：右侧显示刚入场的人：头像、名字、用的卡、是否首次（首次的高亮，提醒前台讲安全）。先轮询，后端有推送再换。
 - 完成标准：mock 里手动登记一次入场，平板列表几秒内出现。
+- 补（2026-10-22）：`checkIn.ts`、`entryQr.ts` 没动。规则在新文件 core 的 `deskFeed.ts`：`firstEntryIds`（会员在系统里第一次没撤销的入场；第一次那条撤销了顺延到下一条；青橙导入过历史入场的会员不算首次）、`deskFeedChanges` / `parseFeedSince`（按变更序号增量，cursor 是拿到的最大序号）、`mergeDeskFeed`（按 id 覆盖，撤销的去掉，按登记先后排）。`GET /desk/feed?since=` 用设备 token，只给绑定门店今天的入场，字段只有名字、头像（暂无）、卡名、方式、首次、撤销、时间，不带手机号和会员 id；撤销的照样发（voided），平板去掉。mock 的入场记录加了 `order`（登记先后）和 `seq`（变更序号，全馆递增 `db.checkInSeq`，新建、撤销时换新号；撤销时这个会员之后的入场也换新号，「首次」顺延和扣次转移平板能拿到），会员加了 `legacyEntries`（青橙导入的历史入场次数，示例里青橙导入的会员都有）；前台登记和扫码入场记 `at`。平板每 3 秒带 cursor 增量拉（`pages/deskFeed.ts`，过了零点清空重拉，失败留着列表，离开页面停止），列表在平板页右侧，首次的高亮提示讲安全须知。
 
 **39. 青橙导入：上传和进度**
 - 依赖：5

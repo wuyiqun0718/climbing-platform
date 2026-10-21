@@ -29,6 +29,8 @@ import {
   type PtTimelineView,
   type DeskDeviceBinding,
   type DeskQr,
+  type DeskFeed,
+  type DeskFeedRow,
   type MarkPtSlotBody,
   type CancelPtBookingBody,
   type AdminPtSlot,
@@ -106,6 +108,9 @@ import {
   entryPolicy,
   shareRecordState,
   newDeskToken,
+  firstEntryIds,
+  deskFeedChanges,
+  parseFeedSince,
   newEntryQr,
   checkEntryQr,
   useEntryQr,
@@ -411,7 +416,7 @@ function createMember(db: MockDb, staff: Staff, body: Partial<CreateMemberBody> 
 }
 
 /** 会员详情、入场记录、登记和撤销结果里的入场行：撤销人换成员工名字，保单按 @climb/core 的 entryPolicy */
-function entryRow(db: MockDb, { memberId: _m, void: v, policyId, ...c }: MockCheckIn): MemberEntryRow {
+function entryRow(db: MockDb, { memberId: _m, void: v, policyId, order: _o, seq: _s, at: _a, ...c }: MockCheckIn): MemberEntryRow {
   const policy = entryPolicy(db.policies, { policyId });
   return {
     ...c,
@@ -872,6 +877,9 @@ function recordCheckIn(db: MockDb, m: MockMember, args: CheckInArgs, cardId: str
     voided: false,
     policyId: null,
     void: null,
+    order: Math.max(0, ...db.checkIns.map(c => c.order)) + 1,
+    seq: ++db.checkInSeq,
+    at: nowAt(db),
   };
   const ins = insuranceForEntry(db.policies, m.id, db.today);
   const policy = ins.policy ?? newPolicy({ id: nextId('ip-', db.policies), memberId: m.id, storeId: args.storeId, on: db.today, checkInId: checkIn.id });
@@ -960,6 +968,7 @@ function voidDeskCheckIn(db: MockDb, staff: Staff, id: string, body: Partial<Voi
   const policyBefore = r.policy ? db.policies.find(p => p.id === r.policy!.id) : undefined;
   checkIn.voided = true;
   checkIn.void = { at, staffId: staff.id, reason };
+  checkIn.seq = ++db.checkInSeq;
   const operator = { operatorType: 'staff' as const, operatorId: staff.id };
   const card = r.card;
   const moved = r.moved;
@@ -984,6 +993,10 @@ function voidDeskCheckIn(db: MockDb, staff: Staff, id: string, body: Partial<Voi
       const entry = checkInLedgerEntry({ id: nextId('l-', db.ledger), card: moved.card, deducted: moved.checkIn.deducted, at, checkInId: movedRow.id, operator, note });
       if (entry) db.ledger.push(entry);
     }
+  }
+  // 这个会员这次以后的入场都换新的变更序号：扣次可能转过去了，「首次」也可能落到下一条上，平板要重新拿
+  for (const c of db.checkIns) {
+    if (c !== checkIn && c.memberId === checkIn.memberId && !c.voided && c.on >= checkIn.on) c.seq = ++db.checkInSeq;
   }
   if (r.policy) {
     const i = db.policies.findIndex(p => p.id === r.policy!.id);
@@ -1753,10 +1766,37 @@ function unbindDeskDevice(db: MockDb, staff: Staff, id: string): ApiResponse {
   return ok(null);
 }
 
+/** 平板的设备：按 Authorization 里的设备 token 找在用的绑定 */
+function deskDeviceOf(db: MockDb, headers: Record<string, string>) {
+  const token = headers.Authorization?.replace(/^Bearer /, '') ?? '';
+  return db.deskDevices.find(d => d.active && d.token === token);
+}
+
+/** 平板的实时入场列表：口径见 @climb/api 的 DeskFeed，规则在 core 的 deskFeed.ts */
+function deskFeed(db: MockDb, headers: Record<string, string>, sinceRaw: string | null): ApiResponse {
+  const device = deskDeviceOf(db, headers);
+  if (!device) return fail(401, 'desk-unbound', '这台平板还没绑定门店，或者已经解绑了');
+  const since = parseFeedSince(sinceRaw);
+  if (since === null) return badInput('since', 'since 要是 0 以上的整数');
+  // 首次按全馆所有入场算（会员可能先去过别的店），按入场先后排
+  const chronological = [...db.checkIns].sort((a, b) => a.on.localeCompare(b.on) || a.order - b.order);
+  const legacy = new Set(db.members.filter(m => (m.legacyEntries ?? 0) > 0).map(m => m.id));
+  const first = firstEntryIds(chronological, legacy);
+  const names = new Map(db.members.map(m => [m.id, m.name]));
+  const rows = db.checkIns
+    .filter(c => c.storeId === device.storeId && c.on === db.today)
+    .map((c): DeskFeedRow => ({
+      id: c.id, order: c.order, seq: c.seq, at: c.at ?? null, memberName: names.get(c.memberId) ?? '', avatarUrl: null,
+      cardName: c.cardName, method: c.method, first: first.has(c.id), voided: c.voided,
+    }));
+  const r = deskFeedChanges(rows, since);
+  const res: DeskFeed = { storeId: device.storeId, today: db.today, cursor: r.cursor, items: r.items };
+  return ok(res);
+}
+
 /** 平板要显示的入场码：口径见 @climb/api 的 DeskQr，规则在 core 的 deskQr.ts / entryQr.ts */
 function deskQr(db: MockDb, headers: Record<string, string>): ApiResponse {
-  const token = headers.Authorization?.replace(/^Bearer /, '') ?? '';
-  const device = db.deskDevices.find(d => d.active && d.token === token);
+  const device = deskDeviceOf(db, headers);
   if (!device) return fail(401, 'desk-unbound', '这台平板还没绑定门店，或者已经解绑了');
   const now = mockNow(db);
   // 这家店最近签发的码：没到换码时间、没被用掉就接着显示，不然签发新的
@@ -1862,6 +1902,7 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
   { method: 'DELETE', path: /^\/admin\/desk-devices\/([^/]+)$/, auth: true, handle: ({ db, params, staff }) => unbindDeskDevice(db, staff!, decodeURIComponent(params[0]!)) },
   // 前台平板用设备 token，不走员工登录
   { method: 'GET', path: /^\/desk\/qr$/, auth: false, handle: ({ db, headers }) => deskQr(db, headers) },
+  { method: 'GET', path: /^\/desk\/feed$/, auth: false, handle: ({ db, headers, query }) => deskFeed(db, headers, query.get('since')) },
   { method: 'POST', path: /^\/check-ins$/, auth: false, handle: ({ db, headers, body }) => scanCheckIn(db, headers, body) },
   { method: 'GET', path: /^\/admin\/coaches$/, auth: true, handle: ({ db }) => ok(listCoaches(db.staff)) },
   // 小程序的教练列表（mvp/miniapp 的 GET /coaches?store=）：在用、有教练资料的员工，id 是员工 id。小程序 mock 合并后从 db.staff 出
