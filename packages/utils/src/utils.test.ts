@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, addMonths, daysBetween, endOfMonth, formatYuan, formatYuanCompact } from './index';
+import { addDays, addMonths, daysBetween, endOfMonth, formatYuan, formatYuanCompact, maskPhone } from './index';
 
 describe('date', () => {
   it('跨月加减天数', () => {
@@ -19,5 +19,12 @@ describe('money', () => {
     expect(formatYuan(59950)).toBe('¥599.50');
     expect(formatYuan(499900)).toBe('¥4,999');
     expect(formatYuanCompact(12_800_000)).toBe('12.8万');
+  });
+});
+
+describe('phone', () => {
+  it('脱敏中间四位', () => {
+    expect(maskPhone('13812345678')).toBe('138****5678');
+    expect(maskPhone('021-1234')).toBe('02****34');
   });
 });

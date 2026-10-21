@@ -1,11 +1,12 @@
 import { MEMBER_SOURCES, type MemberSource, type Staff, type Store } from '@climb/api';
-import { defaultRules, type GymRules, type PeriodCard, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
-import { addDays, monthOf, type DateKey } from '@climb/utils';
+import { defaultRules, type Card, type CountCard, type GymRules, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
+import { addDays, addMonths, daysBetween, monthOf, type DateKey } from '@climb/utils';
 
-/** 看板「新客从哪来」用到的会员字段（对应 members 表） */
+/** 会员（对应 members 表），目前放了看板「新客从哪来」和会员列表用到的字段 */
 export interface MockMember {
   id: string;
   name: string;
+  phone: string;
   source: MemberSource;
   /** 归属门店（按办卡门店，等馆方） */
   homeStoreId: string;
@@ -13,6 +14,8 @@ export interface MockMember {
   firstVisitStoreId: string;
   /** 第一次买期限卡或次卡的日期，没买过为 null */
   firstCardOn: DateKey | null;
+  /** 最近一次入场。等任务 15 有了入场记录再改成从入场记录算 */
+  lastEntryOn: DateKey | null;
 }
 
 /** 老带新邀请（对应 shares 表 kind = referral） */
@@ -44,8 +47,8 @@ export interface MockDb {
   storeStats: Record<string, { monthRevenueCents: number; todayEntries: number; lastWeekSameTimeEntries: number; todayBookings: number; activeMembers: number }>;
   members: MockMember[];
   referrals: MockReferral[];
-  /** 会员的卡（目前只放了期限卡，给「7 天内到期」用） */
-  cards: PeriodCard[];
+  /** 会员的卡：老会员的期限卡（给「7 天内到期」用）和本月新客办的次卡 */
+  cards: Card[];
   /** 订单和退款（财务页用；看板的营收目前还是 storeStats 里的示例数字） */
   orders: MockOrder[];
   refunds: MockRefund[];
@@ -92,9 +95,9 @@ function sampleMembers(today: DateKey): Pick<MockDb, 'members' | 'referrals' | '
   const storeIds = ['bingang', 'huiju', 'huanqiu'];
   const monthStart = `${monthOf(today)}-01`;
   const daysSoFar = Number(today.slice(8, 10));
-  const members: MockMember[] = [];
+  const members: Omit<MockMember, 'phone' | 'lastEntryOn'>[] = [];
   const referrals: MockReferral[] = [];
-  const cards: PeriodCard[] = [];
+  const cards: Card[] = [];
   let named = 0;
   const nextName = () => `${SURNAMES[named % SURNAMES.length]}${GIVEN[Math.floor(named++ / SURNAMES.length) % GIVEN.length]}`;
 
@@ -147,7 +150,41 @@ function sampleMembers(today: DateKey): Pick<MockDb, 'members' | 'referrals' | '
     }
     referrals.push({ id: `r-${i}`, fromMemberId: from, createdOn, claimedByMemberId, usedOn });
   }
-  return { members, referrals, cards };
+  return { members: withContact(members, today), referrals, cards: [...cards, ...newcomerCountCards(members)] };
+}
+
+/**
+ * 会员列表要的手机号和最近入场，单独用一个伪随机数生成，不影响上面看板示例数字。
+ * 手机号前 4 位后面接序号，保证不重复；青橙导入的有一半还没来过。
+ */
+function withContact(members: Omit<MockMember, 'phone' | 'lastEntryOn'>[], today: DateKey): MockMember[] {
+  let seed = 23;
+  const rand = (n: number) => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed % n;
+  };
+  return members.map((m, i) => {
+    const phone = `1${[39, 58, 86, 37][i % 4]}${String(i).padStart(4, '0')}${String(rand(10000)).padStart(4, '0')}`;
+    const never = m.source === 'legacy_import' && i % 2 === 0;
+    const lastEntryOn = never ? null : addDays(m.firstVisitOn, rand(daysBetween(m.firstVisitOn, today) + 1));
+    return { ...m, phone, lastEntryOn };
+  });
+}
+
+/** 本月办了卡的新客每人一张 10 次卡，用掉几次；有一张已经用完、一张冻结了（都不算有效卡） */
+function newcomerCountCards(members: Omit<MockMember, 'phone' | 'lastEntryOn'>[]): CountCard[] {
+  const bought = members.filter(m => !m.id.startsWith('m-old-') && m.firstCardOn);
+  return bought.map((m, i): CountCard => ({
+    id: `c-${m.id}`,
+    kind: 'count',
+    memberId: m.id,
+    productId: 'p-10x',
+    name: '10 次卡',
+    total: 10,
+    remaining: i === 0 ? 0 : 10 - (i % 4),
+    expiresOn: addMonths(m.firstCardOn!, 6),
+    ...(i === 1 ? { status: 'frozen' as const } : {}),
+  }));
 }
 
 /** 示例订单：三家店最近 70 天，每天几笔，渠道和品类照原型的比例大致铺开；再放几笔退款 */

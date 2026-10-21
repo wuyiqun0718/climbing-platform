@@ -15,7 +15,7 @@ function setup() {
 
 type M = MockDb['members'][number];
 const member = (id: string, source: M['source'], store: string, firstVisitOn: string, firstCardOn: string | null = null): M => ({
-  id, name: `会员${id}`, source, homeStoreId: store, firstVisitOn, firstVisitStoreId: store, firstCardOn,
+  id, name: `会员${id}`, phone: '', source, homeStoreId: store, firstVisitOn, firstVisitStoreId: store, firstCardOn, lastEntryOn: null,
 });
 
 const status = (p: Promise<unknown>) => p.then(() => 200, (e: ApiError) => e.status);
@@ -241,5 +241,71 @@ describe('后台 mock：财务', () => {
     expect(await status(api.finance({ ...range, store: 'huiju' }))).toBe(403);
     expect(await status(api.finance(range))).toBe(403);
     expect(await status(api.finance({ from: '2026-10-21', to: '2026-10-01', store: 'bingang' }))).toBe(400);
+  });
+});
+
+describe('后台 mock：会员列表', () => {
+  const m = (id: string, name: string, phone: string, lastEntryOn: string | null, firstVisitOn = '2026-09-01'): M => ({
+    ...member(id, 'walkin', 'huiju', firstVisitOn), name, phone, lastEntryOn,
+  });
+
+  it('按手机号（数字）或名字搜，手机号脱敏，最近入场的在前', async () => {
+    const { api, login, db } = setup();
+    db.members = [
+      m('a', '林小满', '13812345678', '2026-10-01'),
+      m('b', '陈一鸣', '13987655678', '2026-10-20'),
+      m('c', '林舟', '13700001111', null, '2026-10-02'),
+      m('d', '王越', '13600002222', null, '2026-10-05'),
+    ];
+    await login('13800000003');
+    const all = await api.members.list();
+    expect(all).toMatchObject({ total: 4, page: 1, pageSize: 20 });
+    expect(all.items.map(r => r.id)).toEqual(['b', 'a', 'd', 'c']);
+    expect(all.items[1]).toMatchObject({ phoneMasked: '138****5678', source: 'walkin', firstVisitOn: '2026-09-01', lastEntryOn: '2026-10-01' });
+    expect(JSON.stringify(all)).not.toContain('13812345678');
+    expect((await api.members.list({ q: '5678' })).items.map(r => r.id)).toEqual(['b', 'a']);
+    expect((await api.members.list({ q: ' 林 ' })).items.map(r => r.id)).toEqual(['a', 'c']);
+    expect(await api.members.list({ q: '没有这个人' })).toMatchObject({ items: [], total: 0, page: 1 });
+  });
+
+  it('有效卡数按 @climb/core：过期、用完、冻结的不算', async () => {
+    const { api, login, db } = setup();
+    db.members = [m('a', '林小满', '13812345678', null)];
+    const count = (id: string, extra: object = {}) => ({ id, kind: 'count' as const, memberId: 'a', productId: 'p', name: '10 次卡', total: 10, remaining: 3, expiresOn: '2026-12-31', ...extra });
+    db.cards = [
+      count('ok'),
+      count('used', { remaining: 0 }),
+      count('expired', { expiresOn: '2026-10-20' }),
+      count('frozen', { status: 'frozen' }),
+      { id: 'p1', kind: 'period', memberId: 'a', productId: 'p', name: '月卡', startsOn: '2026-10-01', expiresOn: '2026-10-21' },
+      count('other', { memberId: 'b' }),
+    ];
+    await login('13800000003');
+    expect((await api.members.list()).items[0].validCards).toBe(2);
+  });
+
+  it('分页：每页 20 条，超出夹到最后一页，页码不对返回 400', async () => {
+    const { api, login, db } = setup();
+    await login('13800000001');
+    const total = db.members.length;
+    const p1 = await api.members.list();
+    const p2 = await api.members.list({ page: 2 });
+    expect(p1.total).toBe(total);
+    expect(p1.items).toHaveLength(20);
+    expect(new Set([...p1.items, ...p2.items].map(r => r.id)).size).toBe(40);
+    const last = Math.ceil(total / 20);
+    const far = await api.members.list({ page: 999 });
+    expect(far.page).toBe(last);
+    expect(far.items).toHaveLength(total - (last - 1) * 20);
+    expect(await status(api.members.list({ page: 1.5 }))).toBe(400);
+  });
+
+  it('示例数据：手机号不重复，本月办卡的新客有有效卡', async () => {
+    const { db, api, login } = setup();
+    expect(new Set(db.members.map(x => x.phone)).size).toBe(db.members.length);
+    expect(db.members.every(x => /^1\d{10}$/.test(x.phone))).toBe(true);
+    await login('13800000001');
+    const rows = (await api.members.list({ page: 1 })).items;
+    expect(rows.some(r => r.validCards > 0)).toBe(true);
   });
 });

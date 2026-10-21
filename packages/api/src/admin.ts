@@ -146,6 +146,36 @@ export interface FinanceRefundRow {
   reason: string;
 }
 
+/** 后台列表的一页。page 从 1 开始；超出范围时后端夹到最后一页，以返回的 page 为准 */
+export interface PageOf<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/** 会员列表每页条数 */
+export const MEMBERS_PAGE_SIZE = 20;
+
+/**
+ * 会员列表 GET /admin/members?q=&page=
+ * - q 去掉首尾空格后：全是数字按手机号包含查（前台常问后四位），否则按名字包含查；空的列出全部。
+ * - 排序：最近入场的在前，没入场过的排最后；再按首次到店倒序。
+ * - 哪些员工能看到哪些店的会员见 dashboard 的 permissions.ts（等馆方，先都能看全部）。
+ */
+export interface MemberListRow {
+  id: string;
+  name: string;
+  /** 脱敏到中间四位，完整号码只在会员详情里给 */
+  phoneMasked: string;
+  source: MemberSource;
+  /** 还没到过店（比如领了体验券没来）为 null */
+  firstVisitOn: DateKey | null;
+  /** 有效卡数，口径见 @climb/core 的 isCardValid */
+  validCards: number;
+  lastEntryOn: DateKey | null;
+}
+
 export const CHANNEL_TEXT: Record<RevenueChannel, string> = {
   wechat: '微信支付',
   desk_cash: '现金',
@@ -178,6 +208,15 @@ export function createAdminApi(opts: ClientOptions) {
     finance: (q: { from: DateKey; to: DateKey; store?: string }) => {
       const store = q.store ? `&store=${encodeURIComponent(q.store)}` : '';
       return http<FinanceSummary>('GET', `/admin/finance?from=${encodeURIComponent(q.from)}&to=${encodeURIComponent(q.to)}${store}`);
+    },
+    members: {
+      list: (q: { q?: string; page?: number } = {}) => {
+        const qs = new URLSearchParams();
+        if (q.q?.trim()) qs.set('q', q.q.trim());
+        if (q.page && q.page > 1) qs.set('page', String(q.page));
+        const s = qs.toString();
+        return http<PageOf<MemberListRow>>('GET', s ? `/admin/members?${s}` : '/admin/members');
+      },
     },
   };
 }

@@ -62,6 +62,12 @@ export const canDo = (role: StaffRole, action: ActionKey) => ACTION_ROLES[action
 
 // ---- 门店 ----
 
+/**
+ * 只管部分门店的员工能不能在会员列表里看到、搜到别的店的会员。
+ * 等馆方：先都能看（会员可以去任何一家店，前台要给别的店的会员登记入场）；改成 false 就只看归属自己店的。
+ */
+export const MEMBERS_VISIBLE_ACROSS_STORES = true;
+
 /** storeIds 为空表示能看全部门店；只有这种员工能选「全部门店」（接口不带 store 就是全部门店） */
 export const canSeeAllStores = (staff: Pick<Staff, 'storeIds'>) => staff.storeIds.length === 0;
 

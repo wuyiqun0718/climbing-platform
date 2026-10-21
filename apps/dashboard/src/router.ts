@@ -23,6 +23,7 @@ export const navFor = (role: StaffRole) => NAV.filter(n => canSeePage(role, n.na
 const PAGES: Partial<Record<PageKey, () => Promise<unknown>>> = {
   dashboard: () => import('./pages/DashboardPage.vue'),
   finance: () => import('./pages/FinancePage.vue'),
+  members: () => import('./pages/MembersPage.vue'),
 };
 
 declare module 'vue-router' {
@@ -45,7 +46,7 @@ export const router = createRouter({
       meta: { label: n.label, page: n.name },
       component: PAGES[n.name] ?? (() => import('./pages/TodoPage.vue')),
     })),
-    // 会员详情（任务 11 再做页面），看板「7 天内到期」点进来
+    // 会员详情（任务 11 再做页面），会员列表和看板「7 天内到期」点进来
     { path: '/members/:id', name: 'member', meta: { label: '会员详情', page: 'members' as const }, component: () => import('./pages/TodoPage.vue') },
     { path: '/:rest(.*)*', redirect: '/' },
   ],

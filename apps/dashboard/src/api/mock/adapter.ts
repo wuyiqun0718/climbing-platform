@@ -1,5 +1,6 @@
 import {
   MEMBER_SOURCES,
+  MEMBERS_PAGE_SIZE,
   type ApiRequest,
   type ApiResponse,
   type DashboardSummary,
@@ -7,15 +8,17 @@ import {
   type FinanceRefundRow,
   type FinanceSummary,
   type LoginResult,
+  type MemberListRow,
   type NewcomerRow,
+  type PageOf,
   type ReferralFunnel,
   type RequestAdapter,
   type Staff,
   type StoreCompareRow,
 } from '@climb/api';
-import { expiringPeriodCards, financeRangeError, summarizeRevenue, type RevenueChannel } from '@climb/core';
-import { monthOf } from '@climb/utils';
-import { canSeePage, canSeeStore } from '../../permissions';
+import { expiringPeriodCards, financeRangeError, isCardValid, summarizeRevenue, type RevenueChannel } from '@climb/core';
+import { maskPhone, monthOf } from '@climb/utils';
+import { MEMBERS_VISIBLE_ACROSS_STORES, canSeePage, canSeeStore } from '../../permissions';
 import type { MockDb } from './db';
 
 /**
@@ -104,6 +107,29 @@ function storeScope(db: MockDb, staff: Staff, storeId: string | null): string[] 
   return storeId ? [storeId] : db.stores.map(st => st.id);
 }
 
+/** 会员列表：搜索、排序和分页的口径见 @climb/api 的 MemberListRow */
+function memberList(db: MockDb, staff: Staff, q: string, page: number): PageOf<MemberListRow> {
+  const visible = MEMBERS_VISIBLE_ACROSS_STORES ? db.members : db.members.filter(m => canSeeStore(staff, m.homeStoreId));
+  const matched = !q ? visible : /^\d+$/.test(q) ? visible.filter(m => m.phone.includes(q)) : visible.filter(m => m.name.includes(q));
+  const sorted = [...matched].sort(
+    (a, b) =>
+      (b.lastEntryOn ?? '').localeCompare(a.lastEntryOn ?? '') || b.firstVisitOn.localeCompare(a.firstVisitOn) || a.id.localeCompare(b.id),
+  );
+  const pageSize = MEMBERS_PAGE_SIZE;
+  const last = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const cur = Math.min(Math.max(1, page), last);
+  const items = sorted.slice((cur - 1) * pageSize, cur * pageSize).map((m): MemberListRow => ({
+    id: m.id,
+    name: m.name,
+    phoneMasked: maskPhone(m.phone),
+    source: m.source,
+    firstVisitOn: m.firstVisitOn,
+    validCards: db.cards.filter(c => c.memberId === m.id && isCardValid(c, db.today)).length,
+    lastEntryOn: m.lastEntryOn,
+  }));
+  return { items, total: sorted.length, page: cur, pageSize };
+}
+
 const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handle: Handler }[] = [
   {
     method: 'POST',
@@ -186,6 +212,16 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
       });
       const res: FinanceSummary = { ...s, storeId, from, to, refunds };
       return ok(res);
+    },
+  },
+  {
+    method: 'GET',
+    path: /^\/admin\/members$/,
+    auth: true,
+    handle: ({ db, query, staff }) => {
+      const page = Number(query.get('page') ?? '1');
+      if (!Number.isInteger(page) || page < 1) return fail(400, 'bad-page', '页码不对');
+      return ok(memberList(db, staff!, (query.get('q') ?? '').trim(), page));
     },
   },
 ];

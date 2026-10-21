@@ -84,6 +84,17 @@ export function expiringPeriodCards(cards: Card[], today: DateKey, rules: GymRul
     .sort((a, b) => a.expiresOn.localeCompare(b.expiresOn) || a.id.localeCompare(b.id));
 }
 
+/**
+ * 有效卡：状态正常、没过期、没用完（次卡、课包还有剩余，体验券没用过）。续费买的、还没开始的期限卡也算。
+ * 后台会员列表的「有效卡数」和看板的「有效会员」都按这个算。
+ */
+export function isCardValid(card: Card, today: DateKey): boolean {
+  if ((card.status ?? 'normal') !== 'normal' || card.expiresOn < today) return false;
+  if (card.kind === 'period') return true;
+  if (card.kind === 'referral') return !card.usedOn;
+  return card.remaining > 0;
+}
+
 /** 本月还能不能发老带新邀请 */
 export function referralQuotaLeft(cards: Card[], sent: Share[], memberId: string, today: DateKey, rules: GymRules): number {
   const hasPeriod = cards.some(c => c.kind === 'period' && c.memberId === memberId && isPeriodActive(c, today));

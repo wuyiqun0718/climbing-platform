@@ -18,12 +18,17 @@ export interface Product {
   onSale: boolean;
 }
 
+/** 卡的状态：正常、冻结、作废、已退款。冻结和解冻的规则见任务 17 */
+export type CardStatus = 'normal' | 'frozen' | 'void' | 'refunded';
+
 interface CardBase {
   id: string;
   memberId: string;
   name: string;
   /** 最后可用的那一天（含） */
   expiresOn: DateKey;
+  /** 不填为 normal */
+  status?: CardStatus;
 }
 
 /** 期限卡：有效期内不限次入场，每月可以发老带新邀请 */
