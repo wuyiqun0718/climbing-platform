@@ -751,5 +751,5 @@ const Mini = (() => {
   // 给演示路线用：把某部手机跳到指定页面
   function start(uid, route) { P[uid].stack = route.r === 'home' || TABS[route.r] ? [route] : [{ r: 'home' }, route]; P[uid].sheet = null; render(uid, true); }
 
-  return { reset, render, renderAll: () => Object.keys(P).forEach(u => render(u)), bind, start, openWechat, P };
+  return { reset, render, renderAll: () => Object.keys(P).forEach(u => render(u)), bind, start, openWechat, P, statusBar, capsule };
 })();

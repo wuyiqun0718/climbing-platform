@@ -2,7 +2,7 @@
 
 const Admin = (() => {
   let page = 'dash';
-  const ST0 = { memFilter: 'all', memQuery: '', courseTab: 'class', entryTab: 'in', drawer: null, toast: null, priceDraft: {}, rsBranch: 'all', rsWin: 14, rsSel: null, rsSort: 'date', dashStore: 'all' };
+  const ST0 = { memFilter: 'all', memQuery: '', courseTab: 'class', entryTab: 'in', drawer: null, toast: null, priceDraft: {}, rsBranch: 'all', rsWin: 14, rsSel: null, rsSort: 'date', dashStore: 'all', ptDay: 0 };
   const st = { ...ST0 };
   const NAV = [
     ['dash', '数据看板', 'chart'],
@@ -394,16 +394,7 @@ const Admin = (() => {
             ${list.map(k => `<div class="wk-item lv-bg-${k.level} ${k.fresh ? 'is-new' : ''}"><time>${k.start}–${k.end}</time><b>${esc(k.name)}</b><small>${storeName(k.store)}，${esc(coach(k.coach).name)}，${k.level}</small>
               <span class="seats"><i style="width:${k.booked / k.cap * 100}%"></i></span><small>${k.booked}/${k.cap} 人${k.members.length ? `，含 ${k.members.map(userName).join('、')}` : ''}</small></div>`).join('') || '<p class="wk-empty">没有课</p>'}</div>`;
         }).join('')}</div>`;
-      } else {
-        body = `<div class="grid g-4">${COACHES.map((c, i) => {
-          const keys = Object.keys(S.ptTaken).filter(k => k.startsWith(c.id + '|'));
-          const demo = keys.filter(k => typeof S.ptTaken[k] === 'string');
-          const todayN = keys.filter(k => k.split('|')[1] === todayKey()).length;
-          return `<div class="card coach-card">${holdAvatar(c.ab, c.tone, 52, i)}<h3>${esc(c.name)}</h3><p class="sub">${c.tags.join('、')}，${yuan(c.price)}/节</p>
-            <dl><div><dt>今天</dt><dd>${todayN} 节</dd></div><div><dt>未来 7 天</dt><dd>${keys.length} 节</dd></div><div><dt>空闲时段</dt><dd>${PT_HOURS.length * 7 - keys.length}</dd></div></dl>
-            ${demo.length ? `<ul class="pt-demo">${demo.map(k => { const [, d, h] = k.split('|'); return `<li class="is-new">${newChip}${userName(S.ptTaken[k])}，${fmtMD(parseKey(d))} ${pad(+h)}:00</li>`; }).join('')}</ul>` : ''}</div>`;
-        }).join('')}</div>`;
-      }
+      } else body = ptTimeline();
       return `<header class="page-h"><div><h1>课程排期</h1><p class="sub">未来 7 天，团课 ${S.classes.length} 节</p></div>
         <button class="btn primary" data-x="openDrawer" data-v="class">${icon('plus', 16)}发布团课</button></header>${tabs}${body}`;
     },
@@ -577,11 +568,49 @@ const Admin = (() => {
     toast('已发布。小程序「约课 → 活动」里能看到了');
   }
 
+  // ---------- 私教时间轴 ----------
+  const TL_HOURS = Array.from({ length: 13 }, (_, i) => 10 + i); // 10:00–23:00，每格 1 小时
+  function ptTimeline() {
+    const day = st.ptDay, key = dkey(addDays(TODAY, day));
+    const days = [0, 1, 2, 3, 4, 5, 6].map(i => { const d = addDays(TODAY, i); return [i, i === 0 ? '今天' : i === 1 ? '明天' : `${WEEK[d.getDay()]} ${d.getMonth() + 1}/${d.getDate()}`]; });
+    const nowH = new Date().getHours() + new Date().getMinutes() / 60;
+    const showNow = day === 0 && nowH >= 10 && nowH < 23;
+    let booked = 0, free = 0;
+    const rows = COACHES.map((c, i) => {
+      const cells = TL_HOURS.map(h => {
+        const k = `${c.id}|${key}|${h}`, who = ptHolder(k), offered = PT_HOURS.includes(h);
+        const past = day === 0 && h + 1 <= nowH;
+        if (who) { booked++; return `<button class="tl-cell bk bk-${who.kind}" data-x="ptSlot" data-v="${k}" title="${pad(h)}:00 ${esc(who.name)}"><b>${esc(who.name)}</b><small>${pad(h)}:00</small></button>`; }
+        if (!offered) return '<span class="tl-cell off" aria-hidden="true"></span>';
+        if (past) return '<span class="tl-cell past" aria-hidden="true"></span>';
+        free++;
+        return `<button class="tl-cell free" data-x="ptSlot" data-v="${k}" aria-label="${esc(c.name)} ${pad(h)}:00 空闲，点一下标记为线下约的"><span>空</span></button>`;
+      }).join('');
+      const n = TL_HOURS.filter(h => ptHolder(`${c.id}|${key}|${h}`)).length;
+      return `<div class="tl-row"><div class="tl-coach">${holdAvatar(c.ab, c.tone, 34, i)}<span><b>${esc(c.name)}</b><small>${n} 节，${yuan(c.price)}/节</small></span></div>${cells}</div>`;
+    }).join('');
+    return `<div class="toolbar"><div class="chips-row">${days.map(([i, l]) => `<button class="fchip ${day === i ? 'on' : ''}" data-x="ptDay" data-v="${i}">${l}</button>`).join('')}</div></div>
+      <div class="card flush"><div class="card-h pad"><div><h2>${day === 0 ? '今天' : fmtMD(parseKey(key))}的私教</h2><p class="sub">已约 ${booked} 节，还有 ${free} 个空闲时段。点空闲格子可以标记「线下约的」，小程序里这个时段马上变成约满</p></div>
+        <div class="tl-legend"><span><i class="lg-base"></i>会员在小程序约的</span><span><i class="lg-desk"></i>线下约的</span><span><i class="lg-rest"></i>教练有事</span><span><i class="lg-free"></i>空闲</span><span><i class="lg-off"></i>不排课</span></div></div>
+        <div class="tl-wrap"><div class="tl-grid" style="--cols:${TL_HOURS.length}">
+          <div class="tl-row tl-head"><div class="tl-coach"></div>${TL_HOURS.map(h => `<span class="tl-h">${pad(h)}:00</span>`).join('')}</div>
+          ${rows}
+          ${showNow ? `<span class="tl-now" style="--at:${(nowH - 10) / TL_HOURS.length}"><em>${nowHM()}</em></span>` : ''}
+        </div></div></div>`;
+  }
+
   // ---------- 事件 ----------
   const ACT = {
     nav: v => { page = v; st.drawer = null; render(); scrollTo(0, 0); },
     memFilter: v => { st.memFilter = v; render(); },
     courseTab: v => { st.courseTab = v; render(); },
+    ptDay: v => { st.ptDay = +v; render(); },
+    ptSlot: v => {
+      const who = ptHolder(v), [cid, d, h] = v.split('|'), label = `${coach(cid).name} ${fmtMD(parseKey(d))} ${pad(+h)}:00`;
+      if (!who) { S.ptTaken[v] = 'desk'; pushFeed('admin', `${label} 标记为线下约的私教`); Mini.renderAll(); Coach.render(); return toast(`${label} 已标记为线下约的，小程序里这个时段已经约满`); }
+      if (who.kind === 'desk' || who.kind === 'rest') { delete S.ptTaken[v]; delete S.ptNotes[v]; Mini.renderAll(); Coach.render(); return toast(`${label} 已改回空闲`); }
+      toast(`${label}：${who.name}${who.kind === 'demo' ? '，刚在小程序里约的' : ''}`);
+    },
     entryTab: v => { st.entryTab = v; render(); },
     dashStore: v => { st.dashStore = v; render(); },
     ask: v => Ask.preset(v),

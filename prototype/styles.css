@@ -260,6 +260,42 @@ img { display: block; max-width: 100%; }
 .coach-head { display: flex; align-items: center; gap: 14px; padding: 18px 16px 0; }
 .coach-head h2 { margin: 0 0 4px; font: 400 30px/1 var(--f-display); }
 .coach-head small { display: block; margin-top: 4px; font-size: 12px; color: var(--ink-3); }
+
+/* ---------- 教练端：我的排班 ---------- */
+.co-hero { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: var(--chalk-100); border-bottom: 2px solid var(--ink); }
+.co-hero > div { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+.co-hero b { font: 400 22px/1.1 var(--f-display); }
+.co-hero small { font-size: 12.5px; color: var(--ink-2); }
+.cs-list { display: grid; gap: 6px; }
+.cs-row { display: grid; grid-template-columns: 46px 1fr; gap: 8px; align-items: stretch; }
+.cs-row time { font: 700 13px var(--f-num); padding-top: 9px; color: var(--ink-2); }
+.cs-b { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 42px; padding: 7px 12px; border: 2px solid var(--ink); border-radius: 12px; text-align: left; font-size: 14px; }
+.cs-b b { font-size: 14.5px; }
+.cs-b small { font-size: 12px; color: var(--ink-2); }
+.cs-b.bk-base, .cs-b.bk-demo { background: var(--olive); }
+.cs-b.bk-demo { box-shadow: 0 0 0 3px var(--ink); }
+.cs-b.bk-desk { background: var(--chalk); }
+.cs-b.bk-rest { background: var(--volume); }
+.cs-b.free { background: var(--white); border-style: dashed; }
+.cs-b.free b { color: var(--olive-700); }
+.cs-b.off { border: 1.5px solid var(--line); background: repeating-linear-gradient(135deg, var(--volume-100) 0 5px, transparent 5px 10px); min-height: 32px; }
+.cs-b.past { border: 1.5px solid var(--line); background: var(--paper); min-height: 32px; }
+.cs-b.off small, .cs-b.past small { color: var(--ink-4); }
+.mp-footer.coach-ft { display: block; padding: 8px 0 22px; }
+.say-chips { display: flex; gap: 6px; overflow-x: auto; padding: 0 12px 8px; scrollbar-width: none; }
+.say-chips::-webkit-scrollbar { display: none; }
+.say-chips button { flex: none; border: 1.5px solid var(--ink); background: var(--olive-50); border-radius: 999px; padding: 5px 11px; font-size: 12.5px; white-space: nowrap; }
+.say-row { display: flex; align-items: center; gap: 8px; padding: 0 12px; }
+.say-row input { flex: 1; min-width: 0; height: 40px; border: 2px solid var(--ink); border-radius: 12px; padding: 0 11px; font: inherit; font-size: 14px; background: var(--white); }
+.say-row .btn { flex: none; min-width: 0; }
+.say-mic { flex: none; width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--ink); background: var(--chalk); display: grid; place-items: center; }
+.say-name { width: 100%; height: 40px; border: 2px solid var(--ink); border-radius: 12px; padding: 0 11px; font: inherit; font-size: 14px; }
+.heard { margin: 0 0 10px; padding: 10px 12px; border-radius: 12px; background: #95ec69; color: #111; font-size: 14px; align-self: flex-end; }
+.guess { display: block; font-size: 11.5px; font-weight: 400; color: var(--ink-3); }
+.say-warn { display: flex; gap: 8px; margin: 12px 0 0; padding: 10px 12px; border: 2px solid var(--ink); border-radius: 12px; background: #fdecc8; font-size: 13px; }
+.say-warn p { margin: 0; }
+.say-warn .ic { flex: none; margin-top: 1px; }
+.sheet .say-warn + .row, .sheet .kv + .row { margin-top: 14px; }
 .coach-bio { margin: 14px 16px 0; font-size: 14px; color: var(--ink-2); }
 .slots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .slot { border: 2px solid var(--ink); border-radius: 12px; background: var(--white); padding: 8px 0; display: flex; flex-direction: column; align-items: center; line-height: 1.25; }
@@ -689,13 +725,38 @@ details.done .mcard { opacity: .55; box-shadow: none; }
 .lv-bg-进阶 { background: var(--olive-100); }
 .lv-bg-全部 { background: var(--volume-100); }
 .wk-empty { margin: 0; padding: 12px; font-size: 12px; color: var(--ink-4); text-align: center; border: 2px dashed var(--ink-4); border-radius: 12px; }
-.coach-card { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
-.coach-card h3 { margin-top: 8px; font: 400 24px var(--f-display); }
-.coach-card dl { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; margin: 12px 0 0; border-top: 1px solid var(--line); padding-top: 10px; }
-.coach-card dt { font-size: 11.5px; color: var(--ink-3); }
-.coach-card dd { margin: 0; font: 700 18px var(--f-num); }
-.pt-demo { list-style: none; margin: 10px 0 0; padding: 0; width: 100%; font-size: 12.5px; }
-.pt-demo li { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; background: var(--olive-50); margin-top: 4px; }
+/* 私教时间轴：每位教练一行，10:00–23:00 每小时一格 */
+.tl-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--ink-2); }
+.tl-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.tl-legend i { width: 14px; height: 10px; border-radius: 3px; border: 1.5px solid var(--ink); }
+.lg-base { background: var(--olive); }
+.lg-desk { background: var(--chalk); }
+.lg-rest { background: var(--volume); }
+.lg-free { background: var(--white); border-style: dashed !important; }
+.lg-off { background: repeating-linear-gradient(135deg, var(--volume-100) 0 4px, var(--white) 4px 8px); border-color: var(--ink-4) !important; }
+.tl-wrap { overflow-x: auto; padding: 4px 18px 18px; }
+.tl-grid { --coach: 150px; position: relative; min-width: 820px; display: grid; gap: 6px; }
+.tl-row { display: grid; grid-template-columns: var(--coach) repeat(var(--cols), minmax(0, 1fr)); gap: 4px; align-items: stretch; }
+.tl-head { position: sticky; top: 0; }
+.tl-h { font: 600 11.5px var(--f-num); color: var(--ink-3); padding-left: 2px; border-left: 1px solid var(--line); }
+.tl-coach { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tl-coach span { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.tl-coach b { font-size: 14px; }
+.tl-coach small { font-size: 11.5px; color: var(--ink-3); white-space: nowrap; }
+.tl-cell { min-height: 46px; border-radius: 9px; border: 1.5px solid var(--ink); display: flex; flex-direction: column; justify-content: center; padding: 3px 6px; min-width: 0; text-align: left; font-size: 11.5px; line-height: 1.25; }
+.tl-cell b { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tl-cell small { font: 600 10.5px var(--f-num); color: var(--ink-2); }
+.tl-cell.bk { cursor: pointer; }
+.tl-cell.bk-base { background: var(--olive); }
+.tl-cell.bk-demo { background: var(--olive); box-shadow: 0 0 0 3px var(--ink); }
+.tl-cell.bk-desk { background: var(--chalk); }
+.tl-cell.bk-rest { background: var(--volume); }
+.tl-cell.free { background: var(--white); border-style: dashed; color: var(--ink-4); align-items: center; cursor: pointer; }
+.tl-cell.free:hover { background: var(--olive-50); color: var(--olive-700); border-style: solid; }
+.tl-cell.off { border-color: var(--line); background: repeating-linear-gradient(135deg, var(--volume-100) 0 5px, var(--white) 5px 10px); }
+.tl-cell.past { border-color: var(--line); background: var(--paper); }
+.tl-now { position: absolute; top: 18px; bottom: 0; width: 2px; background: var(--bad); left: calc(var(--coach) + 4px + (100% - var(--coach) - 4px) * var(--at)); pointer-events: none; }
+.tl-now em { position: absolute; top: -18px; left: -18px; font: 700 10.5px var(--f-num); font-style: normal; color: #fff; background: var(--bad); border-radius: 4px; padding: 1px 4px; }
 .ev-list { display: grid; gap: 10px; }
 .ev-row { display: grid; grid-template-columns: 58px minmax(0, 1.4fr) 110px minmax(0, 1fr) 72px; align-items: center; gap: 18px; padding: 12px 18px; }
 .ev-row.is-new { box-shadow: 0 0 0 3px var(--olive); }

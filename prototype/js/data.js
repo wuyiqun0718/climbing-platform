@@ -136,6 +136,7 @@ function seedState() {
     classes, ptTaken, events, users,
     shares: [], orders: [], checkins: [], feed: [],
     policies: [], // 小程序里入场时自动投的当日保险；保费是馆里的成本
+    ptNotes: {}, // 线下约的私教时段写了学员名字的，key 和 ptTaken 一样
     chats: {
       lu: [{ from: 'jie', type: 'text', text: '周末来爬墙吗？我带你', time: '昨天 21:14' }, { from: 'lu', type: 'text', text: '好啊！但我一次都没爬过😂', time: '昨天 21:16' }],
       jie: [{ from: 'jie', type: 'text', text: '周末来爬墙吗？我带你', time: '昨天 21:14' }, { from: 'lu', type: 'text', text: '好啊！但我一次都没爬过😂', time: '昨天 21:16' }],
@@ -271,6 +272,18 @@ const userName = id => S.users[id]?.name ?? id;
 const todayKey = () => dkey(TODAY);
 const checkedInToday = uid => S.users[uid].checkins.length > 0;
 const periodCard = uid => S.users[uid].cards.find(c => c.kind === 'period' && c.start <= todayKey() && c.end >= todayKey());
+/**
+ * 私教时段被谁占了。S.ptTaken 的值：会员 id（在小程序约的）、'desk'（教练或前台填的线下约课）、
+ * 'rest'（教练有事不接课）；历史模拟数据是 true，按 key 固定配一个会员名。
+ */
+function ptHolder(key) {
+  const v = S.ptTaken[key];
+  if (!v) return null;
+  if (v === 'desk') return { kind: 'desk', name: S.ptNotes[key] || '线下约的' };
+  if (v === 'rest') return { kind: 'rest', name: '教练有事' };
+  if (typeof v === 'string') return { kind: 'demo', name: userName(v), uid: v };
+  return { kind: 'base', name: BASE.members[Math.floor(hash01('pt|' + key) * BASE.members.length)].name };
+}
 const canRefer = uid => !!periodCard(uid) && S.users[uid].referralMonth !== monthKey(TODAY);
 
 function pushFeed(kind, text) { S.feed.unshift({ kind, text, time: nowHM(), at: Date.now() }); }

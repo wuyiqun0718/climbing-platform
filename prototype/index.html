@@ -15,6 +15,7 @@
   <div class="brand"><img src="assets/logo.jpg" alt="BENCHMARK 攀岩馆标志"><span><b>BENCHMARK</b><small>攀岩馆 小程序与后台原型</small></span></div>
   <nav class="mode-switch" role="tablist" aria-label="切换原型">
     <button role="tab" data-mode="mini" aria-selected="true">微信小程序</button>
+    <button role="tab" data-mode="coach" aria-selected="false">教练端</button>
     <button role="tab" data-mode="admin" aria-selected="false">管理后台</button>
   </nav>
   <button class="reset-btn" id="reset" title="清空所有演示操作，回到初始数据">重置演示</button>
@@ -22,14 +23,15 @@
 
 <main id="mini" class="stage">
   <aside class="guide">
-    <h1>两部手机，一套数据</h1>
-    <p class="lede">左边是年卡会员阿杰，右边是第一次来的小鹿。次卡分享和老带新都能在两部手机之间真的走一遍，每一步也会同步到管理后台。</p>
+    <h1 id="guide-title">两部手机，一套数据</h1>
+    <p class="lede" id="guide-lede">左边是年卡会员阿杰，右边是第一次来的小鹿。次卡分享和老带新都能在两部手机之间真的走一遍，每一步也会同步到管理后台。</p>
     <div id="routes" class="routes"></div>
   </aside>
   <section class="phones" id="phones">
     <div class="phone-switch" role="tablist" aria-label="切换手机">
       <button role="tab" data-focus="jie" aria-selected="true">阿杰的手机<i class="dot"></i></button>
       <button role="tab" data-focus="lu" aria-selected="false">小鹿的手机<i class="dot"></i></button>
+      <button role="tab" data-focus="coach" aria-selected="false" hidden>教练 Max 的手机<i class="dot"></i></button>
     </div>
     <div class="phone-col" data-col="jie">
       <div class="phone-label" data-label="jie"></div>
@@ -38,6 +40,10 @@
     <div class="phone-col" data-col="lu">
       <div class="phone-label" data-label="lu"></div>
       <div class="phone"><div class="screen" id="phone-lu" data-uid="lu"></div></div>
+    </div>
+    <div class="phone-col" data-col="coach" hidden>
+      <div class="phone-label" data-label="coach"></div>
+      <div class="phone"><div class="screen" id="phone-coach"></div></div>
     </div>
   </section>
 </main>
@@ -50,6 +56,7 @@
 <script src="js/data.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/mini.js"></script>
+<script src="js/coach.js"></script>
 <script src="js/routes.js"></script>
 <script src="js/admin.js"></script>
 <script src="js/ask.js"></script>
