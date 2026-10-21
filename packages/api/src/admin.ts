@@ -194,6 +194,35 @@ export interface AuditLogRow extends AuditLogEntry {
   staffName: string;
 }
 
+/**
+ * 导出 Excel POST /admin/exports/:kind（任务 24；mvp-plan 第 6 节写的是 GET，因为要写操作日志改成 POST）。
+ * 筛选和门店权限跟对应的列表接口完全一样，导出的就是列表能看到的那些（不分页）：
+ * - members：同 GET /admin/members 的 q；cards：q 搜到的会员的全部卡（含过期、用完、冻结、退款的）；
+ * - orders：同财务页 GET /admin/finance 的 from、to、store（要能看财务），按付款日在区间内的订单（含青橙导入的，没付款的不算）；
+ * - check-ins：同 GET /admin/check-ins 的 date、store。
+ * 要 data.export 权限（等馆方，见 permissions.ts），不是 403；筛选不对 400，门店没权限 403，跟列表一样。
+ * 手机号跟会员列表一样打码（maskPhone），有 member.fullPhone 权限的才给完整号码。金额按元两位小数。
+ * 文件是 CSV（UTF-8 带 BOM，Excel 直接打开不乱码），生成用 @climb/utils 的 toCsv（转义、防公式注入）。
+ * 每次导出写一条操作日志（data.export：种类、筛选、行数）。
+ * 后端生成文件放对象存储，url 是有时效的下载地址；mock 直接返回 data: URL。
+ */
+export type ExportKind = 'members' | 'cards' | 'orders' | 'check-ins';
+
+export interface ExportFilters {
+  members: { q?: string };
+  cards: { q?: string };
+  orders: { from: DateKey; to: DateKey; store?: string };
+  'check-ins': { date?: DateKey; store?: string };
+}
+
+export interface ExportResult {
+  kind: ExportKind;
+  fileName: string;
+  url: string;
+  /** 数据行数（不含表头） */
+  rows: number;
+}
+
 /** 后台列表的一页。page 从 1 开始；超出范围时后端夹到最后一页，以返回的 page 为准 */
 export interface PageOf<T> {
   items: T[];
@@ -711,6 +740,9 @@ export function createAdminApi(opts: ClientOptions) {
       if (q.kind) qs.set('kind', q.kind);
       const s = qs.toString();
       return http<ShareList>('GET', s ? `/admin/shares?${s}` : '/admin/shares');
+    },
+    exports: {
+      create: <K extends ExportKind>(kind: K, filters: ExportFilters[K]) => http<ExportResult>('POST', `/admin/exports/${kind}`, filters),
     },
     auditLogs: (q: { store?: string; action?: AuditAction; page?: number } = {}) => {
       const qs = new URLSearchParams();

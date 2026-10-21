@@ -5,6 +5,7 @@ import { DataTable, StatTile, errorText, type Column } from '@climb/ui-web';
 import { formatDot, formatYuan, toDateKey } from '@climb/utils';
 import { computed, ref, watch } from 'vue';
 import { api } from '../api';
+import ExportButton from '../components/ExportButton.vue';
 import { session } from '../session';
 import { createLatest, pct } from './dashboard';
 import { RANGE_PRESETS, presetRange, type RangePreset } from './finance';
@@ -88,6 +89,7 @@ const show = (v: number | undefined) => (v === undefined ? '—' : formatYuan(v)
     <label>从 <input v-model="from" type="date" :max="to" required /></label>
     <label>到 <input v-model="to" type="date" :min="from" required /></label>
     <span v-if="rangeError" class="bad" role="alert">{{ rangeError }}</span>
+    <ExportButton kind="orders" :filters="{ from, to, ...(session.state.storeId ? { store: session.state.storeId } : {}) }" label="导出订单" :disabled="!!rangeError" />
   </div>
   <p v-if="error" class="state error" role="alert">
     {{ error }}<button type="button" class="retry" @click="load">重试</button>

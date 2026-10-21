@@ -17,3 +17,10 @@ export function formatYuanCompact(cents: Cents): string {
   if (yuan >= 10_000) return `${+(yuan / 10_000).toFixed(1)}万`;
   return Math.round(yuan).toLocaleString('zh-CN');
 }
+
+/** 导出用：分 → 元，固定两位小数，不带 ¥ 和千分位。59900 → 599.00；-1250 → -12.50 */
+export function centsToYuanText(cents: Cents): string {
+  const sign = cents < 0 ? '-' : '';
+  const abs = Math.abs(Math.round(cents));
+  return `${sign}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, '0')}`;
+}

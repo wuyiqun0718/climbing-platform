@@ -1359,3 +1359,85 @@ describe('后台 mock：操作日志', () => {
     expect(db.auditLogs.map(l => l.action)).toEqual(['staff.create', 'staff.password_reset']);
   });
 });
+
+describe('后台 mock：导出', () => {
+  /** data: URL 里的 CSV 文字 */
+  const csvOf = (url: string) => decodeURIComponent(url.slice(url.indexOf(',') + 1));
+  /** 不带引号的简单行按逗号切（测试数据里没有逗号） */
+  const linesOf = (url: string) => csvOf(url).replace(/^﻿/, '').split('\r\n').filter(Boolean).map(l => l.split(','));
+
+  it('会员：跟会员列表同一套搜索和顺序；带 BOM；店长导出的手机号打码，老板的完整；写操作日志', async () => {
+    const { api, login, db } = setup();
+    await login('13800000002');
+    const res = await api.exports.create('members', { q: '林' });
+    expect(res).toMatchObject({ kind: 'members', fileName: '会员-2026-10-21.csv' });
+    expect(csvOf(res.url).startsWith('﻿名字,手机号,')).toBe(true);
+    const list: string[] = [];
+    for (let page = 1; ; page++) {
+      const p = await api.members.list({ q: '林', page });
+      list.push(...p.items.map(r => `${r.name}|${r.phoneMasked}`));
+      if (page * p.pageSize >= p.total) break;
+    }
+    const lines = linesOf(res.url).slice(1);
+    expect(res.rows).toBe(list.length);
+    expect(lines.map(l => `${l[0]}|${l[1]}`)).toEqual(list);
+    expect(db.auditLogs.at(-1)).toMatchObject({ staffId: 's-manager', action: 'data.export', targetType: 'export', targetId: 'members', storeId: null, after: { kind: 'members', filters: { q: '林' }, rows: list.length, fullPhone: false } });
+
+    await login('13800000001');
+    const full = linesOf((await api.exports.create('members', { q: '林' })).url).slice(1);
+    expect(full[0]![1]).toMatch(/^1\d{10}$/);
+  });
+
+  it('卡：搜到的会员的全部卡，带状态和次数', async () => {
+    const { api, login, db } = setup();
+    await login('13800000001');
+    const m = db.members.find(x => db.cards.filter(c => c.memberId === x.id).length > 1)!;
+    const res = await api.exports.create('cards', { q: m.phone });
+    expect(res.rows).toBe(db.cards.filter(c => c.memberId === m.id).length);
+    expect(linesOf(res.url)[0]).toEqual(['会员', '手机号', '卡', '类别', '状态', '剩余次数', '总次数', '开始', '到期']);
+  });
+
+  it('订单：跟财务页同一套日期和门店权限；金额按元两位小数', async () => {
+    const { api, login } = setup();
+    await login('13800000003');
+    expect(await status(api.exports.create('orders', { from: '2026-10-01', to: '2026-10-21', store: 'bingang' }))).toBe(403);
+    await login('13800000002');
+    expect(await status(api.exports.create('orders', { from: '2026-10-01', to: '2026-10-21' }))).toBe(403);
+    expect(await status(api.exports.create('orders', { from: '2026-10-01', to: '2026-10-21', store: 'huiju' }))).toBe(403);
+    expect(await status(api.exports.create('orders', { from: '2026-10-21', to: '2026-10-01', store: 'bingang' }))).toBe(400);
+    const res = await api.exports.create('orders', { from: '2026-10-01', to: '2026-10-21', store: 'bingang' });
+    const lines = linesOf(res.url);
+    expect(lines[0]).toEqual(['付款日', '订单号', '门店', '会员', '手机号', '商品', '品类', '支付方式', '实收（元）', '已退（元）', '状态']);
+    expect(res.rows).toBeGreaterThan(0);
+    for (const l of lines.slice(1)) {
+      expect(l[2]).toBe('滨港店');
+      expect(l[0]! >= '2026-10-01' && l[0]! <= '2026-10-21').toBe(true);
+      expect(l[8]).toMatch(/^\d+\.\d{2}$/);
+      expect(l[9]).toMatch(/^\d+\.\d{2}$/);
+    }
+  });
+
+  it('入场记录：跟入场记录列表同一套日期和门店', async () => {
+    const { api, login } = setup();
+    await login('13800000003');
+    expect(await status(api.exports.create('check-ins', { date: '2026-10-21', store: 'bingang' }))).toBe(403);
+    await login('13800000002');
+    expect(await status(api.exports.create('check-ins', { date: '2026-10-21' }))).toBe(403);
+    expect(await status(api.exports.create('check-ins', { date: '2026-10-21', store: 'huiju' }))).toBe(403);
+    expect(await status(api.exports.create('check-ins', { date: '2026-02-30', store: 'bingang' }))).toBe(400);
+    const res = await api.exports.create('check-ins', { date: '2026-10-21', store: 'bingang' });
+    const list = await api.checkIns.list({ date: '2026-10-21', store: 'bingang' });
+    expect(res.rows).toBe(list.items.length);
+    expect(linesOf(res.url).slice(1).map(l => l[2])).toEqual(list.items.map(r => r.memberName));
+  });
+
+  it('单元格里的公式、逗号、引号照规则处理；不认识的导出 404', async () => {
+    const { api, login, db } = setup();
+    await login('13800000001');
+    const m = db.members[0]!;
+    m.name = '=HYPERLINK("x"),林';
+    const csv = csvOf((await api.exports.create('members', { q: m.phone })).url);
+    expect(csv).toContain(`"'=HYPERLINK(""x""),林"`);
+    expect(await status(api.exports.create('nope' as never, {} as never))).toBe(404);
+  });
+});

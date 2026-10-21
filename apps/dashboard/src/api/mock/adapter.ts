@@ -1,6 +1,13 @@
 import {
   MEMBER_SOURCES,
   MEMBERS_PAGE_SIZE,
+  ENTRY_METHOD_TEXT,
+  MEMBER_SOURCE_TEXT,
+  ORDER_STATUS_TEXT,
+  PAY_CHANNEL_TEXT,
+  REVENUE_CATEGORY_TEXT,
+  type ExportKind,
+  type ExportResult,
   AUDIT_PAGE_SIZE,
   type AuditLogRow,
   MEMBER_RECENT_LIMIT,
@@ -81,6 +88,10 @@ import {
   entryPolicy,
   shareRecordState,
   auditDiff,
+  CARD_KIND_TEXT,
+  CARD_STATE_TEXT,
+  POLICY_STATUS_TEXT,
+  cardState,
   AUDIT_ACTIONS,
   auditSnapshot,
   STAFF_BLOCKED_TEXT,
@@ -120,7 +131,7 @@ import {
   type PeriodCard,
   type RevenueChannel,
 } from '@climb/core';
-import { addDays, formatYuan, isDateKey, maskPhone, monthOf } from '@climb/utils';
+import { addDays, centsToYuanText, formatYuan, isDateKey, maskPhone, monthOf, toCsv, type CsvCell } from '@climb/utils';
 import { MEMBERS_VISIBLE_ACROSS_STORES, canDo, canSeeAllAuditLogs, canSeePage, canSeeStore } from '../../permissions';
 import { mockPasswordHash, type MockAuditLog, type MockCheckIn, type MockDb, type MockMember, type MockOrder, type MockStaff } from './db';
 
@@ -221,14 +232,27 @@ function storeScope(db: MockDb, staff: Staff, storeId: string | null): string[] 
   return storeId ? [storeId] : db.stores.map(st => st.id);
 }
 
+/** 财务页（和订单导出）的权限、日期区间、门店校验；通过返回要算的门店 */
+function financeScope(db: MockDb, staff: Staff, from: string, to: string, storeId: string | null): string[] | ApiResponse {
+  if (!canSeePage(staff.role, 'finance')) return fail(403, 'forbidden', '没有财务权限');
+  const bad = financeRangeError(from, to);
+  if (bad) return fail(400, 'bad-range', bad);
+  return storeScope(db, staff, storeId);
+}
+
 /** 会员列表：搜索、排序和分页的口径见 @climb/api 的 MemberListRow */
-function memberList(db: MockDb, staff: Staff, q: string, page: number): PageOf<MemberListRow> {
+/** 会员列表（和导出）搜到的会员，排好序，不分页 */
+function matchedMembers(db: MockDb, staff: Staff, q: string): MockMember[] {
   const visible = MEMBERS_VISIBLE_ACROSS_STORES ? db.members : db.members.filter(m => canSeeStore(staff, m.homeStoreId));
   const matched = !q ? visible : /^\d+$/.test(q) ? visible.filter(m => m.phone.includes(q)) : visible.filter(m => m.name.includes(q));
-  const sorted = [...matched].sort(
+  return [...matched].sort(
     (a, b) =>
       (b.lastEntryOn ?? '').localeCompare(a.lastEntryOn ?? '') || (b.firstVisitOn ?? '').localeCompare(a.firstVisitOn ?? '') || a.id.localeCompare(b.id),
   );
+}
+
+function memberList(db: MockDb, staff: Staff, q: string, page: number): PageOf<MemberListRow> {
+  const sorted = matchedMembers(db, staff, q);
   const pageSize = MEMBERS_PAGE_SIZE;
   const last = Math.max(1, Math.ceil(sorted.length / pageSize));
   const cur = Math.min(Math.max(1, page), last);
@@ -439,6 +463,79 @@ function updateStaff(db: MockDb, staff: Staff, id: string, body: UpdateStaffBody
     audit(db, staff, { action: 'staff.password_reset', targetType: 'staff', targetId: id, storeId: null, before: null, after: null });
   }
   return ok(staffRow(target));
+}
+
+/** 导出：口径见 @climb/api 的 ExportFilters。筛选和门店权限都调列表接口同一套代码，CSV 用 @climb/utils 的 toCsv */
+function createExport(db: MockDb, staff: Staff, kind: string, body: Record<string, unknown> | null): ApiResponse {
+  if (!canDo(staff.role, 'data.export')) return fail(403, 'forbidden', '没有导出权限');
+  const f = body ?? {};
+  const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+  const phone = (p: string) => (canDo(staff.role, 'member.fullPhone') ? p : maskPhone(p));
+  const member = (id: string) => db.members.find(m => m.id === id);
+  const storeName = (id: string | null) => db.stores.find(st => st.id === id)?.name ?? '';
+  let name: string;
+  let header: string[];
+  let rows: CsvCell[][];
+  let filters: Record<string, string>;
+  let storeId: string | null = null;
+
+  if (kind === 'members' || kind === 'cards') {
+    if (!canSeePage(staff.role, 'members')) return fail(403, 'forbidden', '没有看会员的权限');
+    const q = str(f.q) ?? '';
+    filters = q ? { q } : {};
+    const members = matchedMembers(db, staff, q);
+    if (kind === 'members') {
+      name = '会员';
+      header = ['名字', '手机号', '来源', '归属门店', '首次到店', '有效卡', '最近入场'];
+      rows = members.map(m => [m.name, phone(m.phone), MEMBER_SOURCE_TEXT[m.source], storeName(m.homeStoreId), m.firstVisitOn, db.cards.filter(c => c.memberId === m.id && isCardValid(c, db.today)).length, m.lastEntryOn]);
+    } else {
+      name = '卡';
+      header = ['会员', '手机号', '卡', '类别', '状态', '剩余次数', '总次数', '开始', '到期'];
+      rows = members.flatMap(m =>
+        db.cards
+          .filter(c => c.memberId === m.id)
+          .map(c => [m.name, phone(m.phone), c.name, CARD_KIND_TEXT[c.kind], CARD_STATE_TEXT[cardState(c, db.today)], 'remaining' in c ? c.remaining : null, 'total' in c ? c.total : null, c.kind === 'period' ? c.startsOn : null, c.expiresOn]),
+      );
+    }
+  } else if (kind === 'orders') {
+    const from = String(f.from ?? '');
+    const to = String(f.to ?? '');
+    storeId = str(f.store);
+    const ids = financeScope(db, staff, from, to, storeId);
+    if (!Array.isArray(ids)) return ids;
+    filters = { from, to, ...(storeId ? { store: storeId } : {}) };
+    name = '订单';
+    header = ['付款日', '订单号', '门店', '会员', '手机号', '商品', '品类', '支付方式', '实收（元）', '已退（元）', '状态'];
+    rows = db.orders
+      .filter(o => ids.includes(o.storeId) && o.paidOn !== null && o.paidOn >= from && o.paidOn <= to)
+      .sort((a, b) => b.paidOn!.localeCompare(a.paidOn!) || b.id.localeCompare(a.id, undefined, { numeric: true }))
+      .map(o => {
+        const r = orderRow(db, o);
+        const m = member(o.memberId);
+        return [o.paidOn, o.id, storeName(o.storeId), m?.name ?? '', m ? phone(m.phone) : '', o.productName, REVENUE_CATEGORY_TEXT[o.category], PAY_CHANNEL_TEXT[o.channel], centsToYuanText(o.amountCents), centsToYuanText(r.refundedCents), ORDER_STATUS_TEXT[r.status]];
+      });
+  } else if (kind === 'check-ins') {
+    if (!canSeePage(staff.role, 'entries')) return fail(403, 'forbidden', '没有看入场记录的权限');
+    storeId = str(f.store);
+    const res = checkInList(db, staff, str(f.date), storeId);
+    if (res.status !== 200) return res;
+    const list = res.data as CheckInList;
+    filters = { date: list.date, ...(storeId ? { store: storeId } : {}) };
+    name = '入场记录';
+    header = ['日期', '门店', '会员', '手机号', '用的卡', '扣次', '方式', '保险', '撤销', '撤销原因'];
+    rows = list.items.map(r => {
+      const m = member(r.memberId);
+      return [r.on, storeName(r.storeId), r.memberName, m ? phone(m.phone) : '', r.cardName, r.deducted, ENTRY_METHOD_TEXT[r.method], r.insurance ? POLICY_STATUS_TEXT[r.insurance.status] : '没有保单', r.voided ? '已撤销' : '', r.voidInfo?.reason ?? ''];
+    });
+  } else {
+    return fail(404, 'not-found', '没有这种导出');
+  }
+
+  const csv = toCsv(header, rows);
+  const fileName = `${name}-${db.today}.csv`;
+  audit(db, staff, { action: 'data.export', targetType: 'export', targetId: kind, storeId, before: null, after: { kind, filters, rows: rows.length, fullPhone: canDo(staff.role, 'member.fullPhone') } });
+  const res: ExportResult = { kind: kind as ExportKind, fileName, url: `data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`, rows: rows.length };
+  return ok(res);
 }
 
 /** 操作日志：口径见 @climb/api 的 AuditLogRow，只读 */
@@ -1172,13 +1269,10 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
     path: /^\/admin\/finance$/,
     auth: true,
     handle: ({ db, query, staff }) => {
-      if (!canSeePage(staff!.role, 'finance')) return fail(403, 'forbidden', '没有财务权限');
       const from = query.get('from') ?? '';
       const to = query.get('to') ?? '';
-      const bad = financeRangeError(from, to);
-      if (bad) return fail(400, 'bad-range', bad);
       const storeId = query.get('store');
-      const ids = storeScope(db, staff!, storeId);
+      const ids = financeScope(db, staff!, from, to, storeId);
       if (!Array.isArray(ids)) return ids;
       const orders = db.orders.filter(o => ids.includes(o.storeId));
       const s = summarizeRevenue(orders, db.refunds, from, to);
@@ -1271,6 +1365,12 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
     path: /^\/admin\/orders\/([^/]+)\/refund$/,
     auth: true,
     handle: ({ db, params, body, staff }) => refundOrder(db, staff!, decodeURIComponent(params[0]!), body),
+  },
+  {
+    method: 'POST',
+    path: /^\/admin\/exports\/([^/]+)$/,
+    auth: true,
+    handle: ({ db, params, body, staff }) => createExport(db, staff!, decodeURIComponent(params[0]!), body),
   },
   {
     method: 'GET',

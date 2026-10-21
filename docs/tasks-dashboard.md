@@ -182,11 +182,12 @@
 - 完成标准：做过 14–18 的操作都能在这里查到。
 - 补（2026-10-22）：动作名、文字和写法在 core 的 `audit.ts`（`AuditLogEntry` 照 `audit_logs` 表，多了 `storeId`、`reason`；`auditDiff` 只留改了的字段，`auditSnapshot` 去掉 password / passwordHash / token / tokenVersion）。mock 的 `audit()` 扩成通用的，补上：线下收款开卡（标价、实收、改价原因）、前台登记入场、撤销入场（次数、保单改前改后，重复撤销不再记）、调整次数和有效期、冻结、解冻（卡改前改后，跟着挪的期限卡）、退款（订单和卡改前改后、退款单）、新建和修改卡种（改价、上下架）、员工变更，另外改冻结规则也记。系统自动解冻不进操作日志（卡流水里有）。门店：订单和入场按它的门店，卡按会员的归属门店，卡种、员工、设置为全馆（null）。查询 `GET /admin/audit-logs?store=&action=&page=`，最新的在前、每页 50；只读，改、删一律 405。权限占位：新页面 `audit` 店长以上；`canSeeAllAuditLogs`（老板都能看全部，别的角色要能看全部门店）才能不带门店查、看全馆的，否则只能按自己的店查。
 
-**24. 导出 Excel**
+**24. 导出 Excel** ✅
 - 依赖：10、20
 - 涉及文件：`src/components/ExportButton.vue`、契约 `GET /admin/exports/:kind`、mock
 - 内容：会员、卡、订单、入场记录按当前筛选导出；后端生成文件返回下载地址，mock 直接在前端生成 CSV。
 - 完成标准：下载的文件 Excel 打开中文不乱码。
+- 补（2026-10-22）：接口改成 `POST /admin/exports/:kind`（要写操作日志，不用 GET），返回 `{ fileName, url, rows }`，mock 的 url 是 data: URL（在 mock adapter 里生成，不是在页面里）。筛选和门店权限直接调列表接口那套：会员、卡同会员列表的 `q`（卡是搜到的会员的全部卡），订单同财务页的 `from / to / store`（`financeScope`，按付款日，含青橙导入，没付款的不算），入场记录同 `GET /admin/check-ins`。CSV 用 utils 的 `toCsv`（UTF-8 BOM、CRLF、逗号引号换行转义、= + - @ 制表符开头的文字前加 '，纯数字不加），金额用 `centsToYuanText`（元两位小数）。手机号同会员列表打码，`member.fullPhone` 才给完整号码。权限占位：`data.export` 店长以上，每种导出另外要能看对应页面（订单要财务）；`member.fullPhone` 只给老板。每次导出写一条 `data.export` 操作日志（种类、筛选、行数、是否完整手机号）。按钮在会员页（会员、卡）、入场记录页、财务页（订单）。
 
 ### E. 团课
 

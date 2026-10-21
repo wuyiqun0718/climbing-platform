@@ -34,6 +34,10 @@ export type ActionKey =
   | 'staff.manage'
   /** 青橙导入（39） */
   | 'import.run'
+  /** 导出 Excel（24）。等馆方：先放店长以上；每种导出另外要能看对应的页面（订单要财务） */
+  | 'data.export'
+  /** 导出时手机号不打码（24）。等馆方：先只给老板，其余跟会员列表一样打码 */
+  | 'member.fullPhone'
   /** 改冻结规则（17.5）。已定老板能改；店长能不能改等定了权限再说 */
   | 'settings.freezeRules';
 
@@ -69,6 +73,8 @@ export const ACTION_ROLES: Record<ActionKey, readonly StaffRole[]> = {
   'staff.manage': OWNER,
   'import.run': OWNER,
   'settings.freezeRules': OWNER,
+  'data.export': MANAGER_UP,
+  'member.fullPhone': OWNER,
 };
 
 export const canSeePage = (role: StaffRole, page: PageKey) => PAGE_ROLES[page].includes(role);

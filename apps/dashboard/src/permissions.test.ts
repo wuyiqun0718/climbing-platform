@@ -55,6 +55,8 @@ describe('操作权限', () => {
     'staff.manage': ['owner'],
     'import.run': ['owner'],
     'settings.freezeRules': ['owner'],
+    'data.export': ['owner', 'manager'],
+    'member.fullPhone': ['owner'],
   };
 
   it.each(Object.keys(ACTION_ROLES) as ActionKey[])('%s', action => {

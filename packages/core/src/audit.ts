@@ -16,9 +16,10 @@ export type AuditAction =
   | 'staff.create'
   | 'staff.update'
   | 'staff.password_reset'
-  | 'settings.freeze_rules';
+  | 'settings.freeze_rules'
+  | 'data.export';
 
-export type AuditTargetType = 'order' | 'check_in' | 'card' | 'product' | 'staff' | 'settings';
+export type AuditTargetType = 'order' | 'check_in' | 'card' | 'product' | 'staff' | 'settings' | 'export';
 
 export const AUDIT_ACTIONS = [
   'order.create',
@@ -34,6 +35,7 @@ export const AUDIT_ACTIONS = [
   'staff.update',
   'staff.password_reset',
   'settings.freeze_rules',
+  'data.export',
 ] as const satisfies readonly AuditAction[];
 
 export const AUDIT_ACTION_TEXT: Record<AuditAction, string> = {
@@ -50,6 +52,7 @@ export const AUDIT_ACTION_TEXT: Record<AuditAction, string> = {
   'staff.update': '修改员工',
   'staff.password_reset': '重置密码',
   'settings.freeze_rules': '改冻结规则',
+  'data.export': '导出',
 };
 
 export interface AuditLogEntry {

@@ -5,6 +5,7 @@ import { formatDot } from '@climb/utils';
 import { onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from '../api';
+import ExportButton from '../components/ExportButton.vue';
 import DeskOrderModal from '../components/DeskOrderModal.vue';
 import MemberForm from '../components/MemberForm.vue';
 import { canDo } from '../permissions';
@@ -92,6 +93,8 @@ const emptyText = () => (qFromRoute() ? `没找到「${qFromRoute()}」，换个
       <p>所有门店的会员；点一行看详情</p>
     </div>
     <div class="actions">
+      <ExportButton kind="members" :filters="{ q: qFromRoute() }" label="导出会员" />
+      <ExportButton kind="cards" :filters="{ q: qFromRoute() }" label="导出卡" />
       <button v-if="canOrder()" type="button" class="create" @click="orderOpen = true">收款开卡</button>
       <button v-if="canCreate()" type="button" class="create" @click="formOpen = true">新建会员</button>
     </div>

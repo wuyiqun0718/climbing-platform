@@ -10,6 +10,7 @@ import { formatDot, isDateKey, toDateKey } from '@climb/utils';
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from '../api';
+import ExportButton from '../components/ExportButton.vue';
 import ShareRecords from '../components/ShareRecords.vue';
 import { entryInsuranceText, voidMessage, voidResultText, voidText } from '../components/checkInVoid';
 import { canDo } from '../permissions';
@@ -77,7 +78,10 @@ function onVoided() {
       <h1>入场与分享</h1>
       <p>{{ tab === 'entries' ? '扫码和前台登记的都在这里；点一行看会员' : '次卡转赠和老带新邀请，按发起人的归属门店；点一行看发起人' }}</p>
     </div>
-    <label v-if="tab === 'entries'" class="date">日期 <input v-model="date" type="date" :max="toDateKey(new Date())" /></label>
+    <div v-if="tab === 'entries'" class="tools">
+      <label class="date">日期 <input v-model="date" type="date" :max="toDateKey(new Date())" /></label>
+      <ExportButton kind="check-ins" :filters="{ date, ...(session.state.storeId ? { store: session.state.storeId } : {}) }" :disabled="!isDateKey(date)" />
+    </div>
   </header>
   <nav class="tabs" role="tablist">
     <button type="button" role="tab" :aria-selected="tab === 'entries'" :class="{ on: tab === 'entries' }" @click="setTab('entries')">入场</button>
@@ -122,6 +126,7 @@ function onVoided() {
 .page-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .page-h h1 { margin: 0; font-family: var(--font-display); font-size: 34px; font-weight: 400; }
 .page-h p { margin: 4px 0 16px; font-size: 13px; color: var(--ink-muted); }
+.tools { display: flex; align-items: center; gap: 12px; }
 .date { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .date input { padding: 5px 8px; font: inherit; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); }
 .state { margin: 0 0 16px; font-size: 13px; color: var(--ink-muted); }
