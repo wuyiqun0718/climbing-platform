@@ -1,6 +1,6 @@
 import { ApiError, createAdminApi, createApi } from '@climb/api';
 import { defaultFreezeRules, freezeBlockedBy, ledgerMismatch } from '@climb/core';
-import { addDays } from '@climb/utils';
+import { addDays, endOfMonth } from '@climb/utils';
 import { describe, expect, it } from 'vitest';
 import { createMockAdapter } from './adapter';
 import { createMockDb, type MockDb } from './db';
@@ -109,7 +109,7 @@ describe('后台 mock', () => {
       member('n4', 'referral', 'bingang', '2026-09-28', '2026-09-28'),
     ];
     const r = (id: string, from: string, createdOn: string, by: string | null = null, usedOn: string | null = null) => ({
-      id, fromMemberId: from, createdOn, claimedByMemberId: by, usedOn,
+      id, fromMemberId: from, createdOn, expiresOn: endOfMonth(createdOn), claimedByMemberId: by, usedOn,
     });
     db.referrals = [
       r('r1', 'old1', '2026-10-03', 'n1', '2026-10-03'), // 发出、领取、到店、办卡
@@ -1049,5 +1049,70 @@ describe('后台 mock：入场记录', () => {
     await api.checkIns.void(ci.checkIn.id, { reason: '扫错了卡' });
     const row = (await api.checkIns.list({ store: 'bingang' })).items.find(r => r.id === ci.checkIn.id)!;
     expect(row).toMatchObject({ voided: true, voidInfo: { byName: '前台小葵', reason: '扫错了卡' }, insurance: { status: 'refund_pending' } });
+  });
+});
+
+describe('后台 mock：分享记录', () => {
+  it('次卡转赠和老带新都列出来，最近发的在前；示例数据里的送出、领取、入场流水对得上', async () => {
+    const { api, login, db } = setup();
+    await login('13800000001');
+    const { storeId, items } = await api.shares();
+    expect(storeId).toBeNull();
+    expect(items).toHaveLength(db.shares.length + db.referrals.length);
+    expect(items.map(r => r.createdOn)).toEqual([...items.map(r => r.createdOn)].sort().reverse());
+    const counts = items.filter(r => r.kind === 'count');
+    expect(counts.map(r => r.state).sort()).toEqual(['claimed', 'pending', 'used']);
+    expect(counts.find(r => r.state === 'pending')).toMatchObject({ createdOn: '2026-10-21', claimerId: null, claimerName: null, quantity: 2 });
+    expect(counts.find(r => r.state === 'used')!.usedOn).toBeTruthy();
+    expect(items.some(r => r.kind === 'referral' && r.state === 'used' && r.usedOn)).toBe(true);
+    expect(items[0]).not.toHaveProperty('token');
+    for (const sh of db.shares) {
+      expect(ledgerMismatch(db.cards.find(c => c.memberId === sh.fromMemberId && c.kind === 'count')!, db.ledger)).toBeNull();
+      const gift = db.cards.find(c => c.kind === 'gift' && c.shareId === sh.id);
+      if (gift) expect(ledgerMismatch(gift, db.ledger)).toBeNull();
+    }
+  });
+
+  it('状态由数据推导：过了 expiresOn 没人领是过期，到期当天还算等朋友领取', async () => {
+    const { api, login, db } = setup();
+    await login('13800000001');
+    const from = db.members.find(m => m.id.startsWith('m-old-'))!.id;
+    db.referrals = [
+      { id: 'r-a', fromMemberId: from, createdOn: '2026-09-10', expiresOn: '2026-09-30', claimedByMemberId: null, usedOn: null },
+      { id: 'r-b', fromMemberId: from, createdOn: '2026-10-01', expiresOn: '2026-10-21', claimedByMemberId: null, usedOn: null },
+      { id: 'r-c', fromMemberId: from, createdOn: '2026-09-12', expiresOn: '2026-09-30', claimedByMemberId: 'm-walkin-0', usedOn: null },
+    ];
+    const rows = (await api.shares({ kind: 'referral' })).items;
+    expect(rows.map(r => [r.id, r.state])).toEqual([['r-b', 'pending'], ['r-c', 'claimed'], ['r-a', 'expired']]);
+    expect(rows.every(r => r.kind === 'referral')).toBe(true);
+    expect((await api.shares({ kind: 'count' })).items.every(r => r.kind === 'count')).toBe(true);
+    expect(await status(api.shares({ kind: 'gift' as never }))).toBe(400);
+  });
+
+  it('朋友用送的次卡入场变 used，撤销那次入场变回领了还没来', async () => {
+    const { api, login, db } = setup();
+    await login('13800000001');
+    const used = (await api.shares({ kind: 'count' })).items.find(r => r.state === 'used')!;
+    const gift = db.cards.find(c => c.kind === 'gift' && c.shareId === used.id)!;
+    const ci = db.checkIns.find(c => c.cardId === gift.id)!;
+    await api.checkIns.void(ci.id, { reason: '登记错了' });
+    expect((await api.shares({ kind: 'count' })).items.find(r => r.id === used.id)).toMatchObject({ state: 'claimed', usedOn: null });
+
+    const claimed = (await api.shares({ kind: 'count' })).items.find(r => r.state === 'claimed' && r.id !== used.id)!;
+    const card = db.cards.find(c => c.kind === 'gift' && c.shareId === claimed.id)!;
+    await api.checkIns.create({ requestId: 'g1', memberId: card.memberId, storeId: db.members.find(m => m.id === card.memberId)!.homeStoreId, cardId: card.id });
+    expect((await api.shares({ kind: 'count' })).items.find(r => r.id === claimed.id)).toMatchObject({ state: 'used', usedOn: '2026-10-21' });
+  });
+
+  it('按发起人的归属门店过滤；只管部分门店的必须带自己的店', async () => {
+    const { api, login, db } = setup();
+    await login('13800000003');
+    expect(await status(api.shares())).toBe(403);
+    expect(await status(api.shares({ store: 'huiju' }))).toBe(403);
+    expect(await status(api.shares({ store: 'nope' }))).toBe(404);
+    const mine = await api.shares({ store: 'bingang' });
+    expect(mine.items.length).toBeGreaterThan(0);
+    const home = (id: string) => db.members.find(m => m.id === id)!.homeStoreId;
+    expect(mine.items.every(r => r.storeId === 'bingang' && home(r.fromMemberId) === 'bingang')).toBe(true);
   });
 });

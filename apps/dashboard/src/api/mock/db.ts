@@ -1,6 +1,6 @@
 import { MEMBER_SOURCES, type DeskCheckInResult, type DeskOrderResult, type RefundResult, type EntryMethod, type VoidCheckInResult, type MemberSource, type Staff, type Store } from '@climb/api';
-import { REFUND_METHOD_BY_CHANNEL, defaultRules, insuranceForEntry, newPolicy, type Card, type RefundMethod, type RefundStatus, type InsurancePolicy, type CountCard, type GymRules, type LedgerEntry, type Product, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
-import { addDays, addMonths, daysBetween, monthOf, type DateKey } from '@climb/utils';
+import { REFUND_METHOD_BY_CHANNEL, defaultRules, insuranceForEntry, newPolicy, type Card, type RefundMethod, type RefundStatus, type InsurancePolicy, type CountCard, type GiftCard, type Share, type GymRules, type LedgerEntry, type Product, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
+import { addDays, addMonths, daysBetween, endOfMonth, monthOf, type DateKey } from '@climb/utils';
 
 /** 会员（对应 members 表），目前放了看板「新客从哪来」和会员列表用到的字段 */
 export interface MockMember {
@@ -44,6 +44,8 @@ export interface MockReferral {
   id: string;
   fromMemberId: string;
   createdOn: DateKey;
+  /** 体验券当月底前有效（同小程序 createReferral） */
+  expiresOn: DateKey;
   claimedByMemberId: string | null;
   /** 领取人用体验券入场的日期 */
   usedOn: DateKey | null;
@@ -81,6 +83,8 @@ export interface MockDb {
   storeStats: Record<string, { monthRevenueCents: number; todayEntries: number; lastWeekSameTimeEntries: number; todayBookings: number; activeMembers: number }>;
   members: MockMember[];
   referrals: MockReferral[];
+  /** 次卡转赠（对应 shares 表 kind = count）；领了的在 cards 里有一张好友送的次卡（shareId 指回来） */
+  shares: Share[];
   /** 会员的卡：老会员的期限卡（给「7 天内到期」用）和本月新客办的次卡 */
   cards: Card[];
   /** 卡种（对应 products 表），示例卡和示例订单的价格照这里 */
@@ -125,7 +129,7 @@ export function createMockDb(today: DateKey, rules: GymRules = defaultRules): Mo
       { id: 'huanqiu', name: '环球港店' },
     ],
     staff,
-    ...withLedger(withCheckIns(sampleMembers(today), staff, today), staff, today),
+    ...withShares(withLedger(withCheckIns(sampleMembers(today), staff, today), staff, today), today),
     ...sampleOrders(today),
     products: sampleProducts(),
     deskOrderRequests: {},
@@ -207,7 +211,7 @@ function sampleMembers(today: DateKey): Pick<MockDb, 'members' | 'referrals' | '
         members.push({ id: claimedByMemberId, name: nextName(), source: 'referral', homeStoreId: store, firstVisitOn: usedOn, firstVisitStoreId: store, firstCardOn: rand(3) === 0 ? usedOn : null });
       }
     }
-    referrals.push({ id: `r-${i}`, fromMemberId: from, createdOn, claimedByMemberId, usedOn });
+    referrals.push({ id: `r-${i}`, fromMemberId: from, createdOn, expiresOn: endOfMonth(createdOn), claimedByMemberId, usedOn });
   }
   return { members: withContact(members, today), referrals, cards: [...cards, ...newcomerCountCards(members)] };
 }
@@ -359,6 +363,77 @@ function withLedger<T extends Pick<MockDb, 'members' | 'cards' | 'checkIns'>>(da
     return { ...card, remaining };
   });
   return { ...data, cards, ledger };
+}
+
+/**
+ * 示例次卡转赠，跟卡、流水、入场记录对得上：
+ * 1. 已用完的那张次卡最后送出去的那几次（withLedger 里的 share_out）补上分享记录，一位「好友送的」新客领了还没用；
+ * 2. 另一张次卡送 2 次，领取人后来用它入场了一次（把他那天的单次票入场改成用这张卡）；
+ * 3. 再一张今天送 2 次，还没人领。
+ * 分享的有效期跟原卡一致；送出、领取、入场各记一笔流水。
+ */
+function withShares<T extends Pick<MockDb, 'members' | 'cards' | 'checkIns' | 'ledger'>>(data: T, today: DateKey): T & Pick<MockDb, 'shares'> {
+  const { ledger, checkIns } = data;
+  const cards = [...data.cards];
+  const shares: Share[] = [];
+  const add = (e: Omit<LedgerEntry, 'id' | 'note' | 'operatorType'> & { operatorId: string }) => ledger.push({ id: `l-${ledger.length + 1}`, note: '', operatorType: 'member', ...e });
+  const dayOf = (at: string) => at.slice(0, 10);
+  const lastOn = (cardId: string) => ledger.filter(e => e.cardId === cardId).reduce((max, e) => (dayOf(e.at) > max ? dayOf(e.at) : max), '');
+  const gifts = data.members.filter(m => m.source === 'gift');
+  const taken = new Set<string>();
+  const countCards = () => cards.filter((c): c is CountCard => c.kind === 'count' && (c.status ?? 'normal') === 'normal' && c.remaining >= 3);
+
+  const share = (card: CountCard, quantity: number, on: DateKey): Share => {
+    const sh: Share = { id: `sh-${shares.length + 1}`, kind: 'count', fromMemberId: card.memberId, quantity, createdOn: on, expiresOn: card.expiresOn, status: 'pending' };
+    shares.push(sh);
+    return sh;
+  };
+  const sendOut = (card: CountCard, quantity: number, on: DateKey) => {
+    const sh = share(card, quantity, on);
+    const next = { ...card, remaining: card.remaining - quantity };
+    cards[cards.findIndex(c => c.id === card.id)] = next;
+    add({ cardId: card.id, at: `${on}T23:10:00+08:00`, delta: -quantity, remainingAfter: next.remaining, expiresOnAfter: card.expiresOn, reason: 'share_out', ref: { type: 'share', id: sh.id }, operatorId: card.memberId });
+    return sh;
+  };
+  const claim = (sh: Share, memberId: string): GiftCard => {
+    sh.status = 'claimed';
+    sh.claimedBy = memberId;
+    taken.add(memberId);
+    const gift: GiftCard = { id: `c-gift-${sh.id}`, kind: 'gift', memberId, fromMemberId: sh.fromMemberId, shareId: sh.id, name: '好友送的次卡', total: sh.quantity!, remaining: sh.quantity!, expiresOn: sh.expiresOn };
+    cards.push(gift);
+    add({ cardId: gift.id, at: `${sh.createdOn}T23:30:00+08:00`, delta: gift.total, remainingAfter: gift.total, expiresOnAfter: gift.expiresOn, reason: 'claim', ref: { type: 'share', id: sh.id }, operatorId: memberId });
+    return gift;
+  };
+
+  // 1. 已用完那张送出去的
+  const out = ledger.find(e => e.reason === 'share_out' && !e.ref);
+  const recipient1 = gifts[0];
+  if (out && recipient1) {
+    const card = cards.find(c => c.id === out.cardId) as CountCard;
+    const sh = share(card, -out.delta, dayOf(out.at));
+    out.ref = { type: 'share', id: sh.id };
+    claim(sh, recipient1.id);
+  }
+
+  // 2. 送出后朋友用它来过：找一张次卡和一位好友送的新客，新客在送出那天以后有一次没用卡的入场
+  outer: for (const card of countCards()) {
+    const on = lastOn(card.id);
+    for (const g of gifts.filter(x => !taken.has(x.id))) {
+      const ci = checkIns.find(c => c.memberId === g.id && !c.voided && !c.cardId && c.on >= on && c.on <= card.expiresOn);
+      if (!ci) continue;
+      const gift = claim(sendOut(card, 2, on), g.id);
+      gift.remaining -= 1;
+      Object.assign(ci, { cardId: gift.id, cardName: gift.name, deducted: 1 });
+      add({ cardId: gift.id, at: `${ci.on}T23:45:00+08:00`, delta: -1, remainingAfter: gift.remaining, expiresOnAfter: gift.expiresOn, reason: 'check_in', ref: { type: 'check_in', id: ci.id }, operatorId: g.id });
+      break outer;
+    }
+  }
+
+  // 3. 今天送出、还没人领
+  const pendingCard = countCards().find(c => !shares.some(sh => sh.fromMemberId === c.memberId));
+  if (pendingCard) sendOut(pendingCard, 2, today);
+
+  return { ...data, cards, shares };
 }
 
 /** 示例订单：三家店最近 70 天，每天几笔，渠道和品类照原型的比例大致铺开；再放几笔退款 */

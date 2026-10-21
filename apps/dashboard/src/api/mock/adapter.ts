@@ -40,6 +40,8 @@ import {
   type RefundResult,
   type RefundRow,
   type RequestAdapter,
+  type ShareList,
+  type ShareRow,
   type Staff,
   type StoreCompareRow,
   type UpdateProductBody,
@@ -72,6 +74,8 @@ import {
   voidCheckIn,
   insuranceForEntry,
   entryPolicy,
+  shareRecordState,
+  type ClaimedCard,
   newPolicy,
   countsAsCardPurchase,
   deskOrderErrors,
@@ -297,6 +301,46 @@ function entryRow(db: MockDb, { memberId: _m, void: v, policyId, ...c }: MockChe
     insurance: policy ? { policyId: policy.id, status: policy.status } : null,
     voidInfo: v ? { at: v.at, byName: db.staff.find(s => s.id === v.staffId)?.name ?? '', reason: v.reason } : null,
   };
+}
+
+/** 分享记录：口径见 @climb/api 的 ShareList，状态按 @climb/core 的 shareRecordState */
+function shareList(db: MockDb, staff: Staff, storeId: string | null, kind: string | null): ApiResponse {
+  if (kind !== null && kind !== 'count' && kind !== 'referral') return badInput('kind', '分享类型不对');
+  const scope = storeScope(db, staff, storeId);
+  if (!Array.isArray(scope)) return scope;
+  const member = (id: string | null | undefined) => (id ? db.members.find(m => m.id === id) : undefined);
+  const firstUse = (cardId: string) =>
+    db.checkIns.filter(c => c.cardId === cardId && !c.voided).reduce<string | null>((min, c) => (!min || c.on < min ? c.on : min), null);
+  const rows: (ShareRow & { order: number })[] = [];
+  if (kind !== 'referral') {
+    db.shares.forEach((sh, order) => {
+      const gift = db.cards.find(c => c.kind === 'gift' && c.shareId === sh.id);
+      const state = shareRecordState(sh, gift && gift.kind === 'gift' ? gift : null, db.today);
+      rows.push({
+        order, id: sh.id, kind: 'count', storeId: member(sh.fromMemberId)?.homeStoreId ?? '', fromMemberId: sh.fromMemberId, fromMemberName: member(sh.fromMemberId)?.name ?? '',
+        claimerId: sh.claimedBy ?? null, claimerName: sh.claimedBy ? (member(sh.claimedBy)?.name ?? '') : null, quantity: sh.quantity ?? null,
+        createdOn: sh.createdOn, expiresOn: sh.expiresOn, state, usedOn: state === 'used' && gift ? firstUse(gift.id) : null,
+      });
+    });
+  }
+  if (kind !== 'count') {
+    db.referrals.forEach((r, order) => {
+      // 示例数据里体验券没有建卡，用没用记在邀请上（usedOn，前台登记、撤销时跟着改）
+      const voucher: ClaimedCard | null = r.claimedByMemberId ? { kind: 'referral', usedOn: r.usedOn ?? undefined } : null;
+      const state = shareRecordState({ status: r.claimedByMemberId ? 'claimed' : 'pending', expiresOn: r.expiresOn }, voucher, db.today);
+      rows.push({
+        order, id: r.id, kind: 'referral', storeId: member(r.fromMemberId)?.homeStoreId ?? '', fromMemberId: r.fromMemberId, fromMemberName: member(r.fromMemberId)?.name ?? '',
+        claimerId: r.claimedByMemberId, claimerName: r.claimedByMemberId ? (member(r.claimedByMemberId)?.name ?? '') : null, quantity: null,
+        createdOn: r.createdOn, expiresOn: r.expiresOn, state, usedOn: state === 'used' ? r.usedOn : null,
+      });
+    });
+  }
+  const items = rows
+    .filter(r => r.createdOn <= db.today && scope.includes(r.storeId))
+    .sort((a, b) => b.createdOn.localeCompare(a.createdOn) || b.order - a.order)
+    .map(({ order: _o, ...r }) => r);
+  const res: ShareList = { storeId, items };
+  return ok(res);
 }
 
 /** 入场记录：口径见 @climb/api 的 CheckInList */
@@ -993,6 +1037,12 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
     path: /^\/admin\/orders\/([^/]+)\/refund$/,
     auth: true,
     handle: ({ db, params, body, staff }) => refundOrder(db, staff!, decodeURIComponent(params[0]!), body),
+  },
+  {
+    method: 'GET',
+    path: /^\/admin\/shares$/,
+    auth: true,
+    handle: ({ db, query, staff }) => shareList(db, staff!, query.get('store'), query.get('kind')),
   },
   {
     method: 'GET',

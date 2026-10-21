@@ -1,4 +1,4 @@
-import { MEMBER_SOURCES, type Card, type CardAdjustInput, type FreezeOverridable, type PeriodCard, type RuleErrorCode, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type OrderStatus, type RefundBasis, type RefundMethod, type RefundStatus, type LedgerEntry, type MemberSource, type PayChannel, type Product, type ProductInput, type ProductPatch, type RevenueBucket, type RevenueCategory, type RevenueChannel } from '@climb/core';
+import { MEMBER_SOURCES, type Card, type CardAdjustInput, type FreezeOverridable, type PeriodCard, type RuleErrorCode, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type OrderStatus, type RefundBasis, type RefundMethod, type RefundStatus, type LedgerEntry, type MemberSource, type PayChannel, type Product, type ProductInput, type ProductPatch, type RevenueBucket, type RevenueCategory, type RevenueChannel, type Share, type ShareRecordState } from '@climb/core';
 import type { Cents, DateKey } from '@climb/utils';
 import { createHttp, type ClientOptions } from './client';
 
@@ -297,6 +297,38 @@ export interface CheckInList {
 export interface CheckInListRow extends MemberEntryRow {
   memberId: string;
   memberName: string;
+}
+
+/**
+ * 分享记录 GET /admin/shares?store=&kind=（任务 21）：次卡转赠和老带新邀请，最近发的在前（同一天后发的在前）。
+ * - 状态由数据推导，规则和文字见 @climb/core 的 shareRecord.ts（跟小程序「已发记录」同名同义）：过期看 expiresOn，用没用看领取人那张卡。
+ * - 门店按发起人的归属门店算（同看板老带新漏斗），口径同财务页：没有这家店 404；只管部分门店的员工必须带自己的店，否则 403。
+ * - kind 不带是两种都要；不是 count / referral 的 400（data.field = kind）。先不分页。
+ * 不返回分享 token（拿到就能领）。
+ */
+export interface ShareList {
+  storeId: string | null;
+  items: ShareRow[];
+}
+
+export interface ShareRow {
+  id: string;
+  kind: Share['kind'];
+  /** 发起人的归属门店 */
+  storeId: string;
+  fromMemberId: string;
+  fromMemberName: string;
+  /** 没人领为 null */
+  claimerId: string | null;
+  claimerName: string | null;
+  /** 次卡转赠送了几次；老带新为 null */
+  quantity: number | null;
+  createdOn: DateKey;
+  /** 领取截止，也是领到的卡、体验券的到期日（含） */
+  expiresOn: DateKey;
+  state: ShareRecordState;
+  /** used 的才有：朋友第一次用它入场的日期（撤销的不算） */
+  usedOn: DateKey | null;
 }
 
 /**
@@ -632,6 +664,13 @@ export function createAdminApi(opts: ClientOptions) {
       preview: (body: CheckInPreviewBody) => http<CheckInPreview>('POST', '/admin/check-ins/preview', body),
       create: (body: CreateDeskCheckInBody) => http<DeskCheckInResult>('POST', '/admin/check-ins', body),
       void: (id: string, body: VoidCheckInBody) => http<VoidCheckInResult>('POST', `/admin/check-ins/${encodeURIComponent(id)}/void`, body),
+    },
+    shares: (q: { store?: string; kind?: Share['kind'] } = {}) => {
+      const qs = new URLSearchParams();
+      if (q.store) qs.set('store', q.store);
+      if (q.kind) qs.set('kind', q.kind);
+      const s = qs.toString();
+      return http<ShareList>('GET', s ? `/admin/shares?${s}` : '/admin/shares');
     },
     settings: {
       freezeRules: () => http<FreezeRules>('GET', '/admin/settings/freeze-rules'),

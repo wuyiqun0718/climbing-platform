@@ -1,14 +1,16 @@
 <script setup lang="ts">
 /**
  * 入场记录（任务 20）：按日期、门店（跟顶部门店切换联动）看入场，扫码和前台登记的都有，撤销的有标记。
- * 撤销走任务 16 的接口（前台也能），文字和会员详情共用 components/checkInVoid.ts。分享记录见任务 21。
+ * 撤销走任务 16 的接口（前台也能），文字和会员详情共用 components/checkInVoid.ts。
+ * 「分享」tab 是分享记录（任务 21，components/ShareRecords.vue）；选的 tab 放在地址的 ?tab=shares 里。
  */
 import { ENTRY_METHOD_TEXT, type CheckInList, type CheckInListRow, type VoidCheckInResult } from '@climb/api';
 import { ConfirmButton, DataTable, errorText, useToast, type Column } from '@climb/ui-web';
 import { formatDot, isDateKey, toDateKey } from '@climb/utils';
 import { computed, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { api } from '../api';
+import ShareRecords from '../components/ShareRecords.vue';
 import { entryInsuranceText, voidMessage, voidResultText, voidText } from '../components/checkInVoid';
 import { canDo } from '../permissions';
 import { session } from '../session';
@@ -21,6 +23,9 @@ const loading = ref(false);
 const error = ref('');
 const latest = createLatest();
 const router = useRouter();
+const route = useRoute();
+const tab = computed(() => (route.query.tab === 'shares' ? 'shares' : 'entries'));
+const setTab = (t: 'entries' | 'shares') => router.replace({ query: t === 'shares' ? { tab: t } : {} });
 const toast = useToast();
 
 const storeNameOf = (id: string) => session.state.stores.find(s => s.id === id)?.name ?? id;
@@ -39,7 +44,7 @@ async function load() {
   else error.value = errorText(res.error, '入场记录加载失败');
 }
 
-watch(() => [session.state.staff?.id, session.state.storeId, date.value], () => session.state.staff && load(), { immediate: true });
+watch(() => [session.state.staff?.id, session.state.storeId, date.value, tab.value], () => session.state.staff && tab.value === 'entries' && load(), { immediate: true });
 
 const live = computed(() => data.value?.items.filter(r => !r.voided).length ?? 0);
 const voidedCount = computed(() => (data.value?.items.length ?? 0) - live.value);
@@ -69,41 +74,48 @@ function onVoided() {
 <template>
   <header class="page-h">
     <div>
-      <h1>入场记录</h1>
-      <p>扫码和前台登记的都在这里；点一行看会员</p>
+      <h1>入场与分享</h1>
+      <p>{{ tab === 'entries' ? '扫码和前台登记的都在这里；点一行看会员' : '次卡转赠和老带新邀请，按发起人的归属门店；点一行看发起人' }}</p>
     </div>
-    <label class="date">日期 <input v-model="date" type="date" :max="toDateKey(new Date())" /></label>
+    <label v-if="tab === 'entries'" class="date">日期 <input v-model="date" type="date" :max="toDateKey(new Date())" /></label>
   </header>
-  <p v-if="error" class="state error" role="alert">
-    {{ error }}<button type="button" class="retry" @click="load">重试</button>
-  </p>
-  <p v-else-if="data" class="state">{{ formatDot(data.date) }} 入场 {{ live }} 人次{{ voidedCount ? `，撤销 ${voidedCount} 条` : '' }}</p>
-  <section class="panel">
-    <DataTable
-      :columns="columns"
-      :rows="data?.items ?? []"
-      row-key="id"
-      :loading="loading"
-      empty="这天没有入场"
-      clickable
-      @row-click="(r: CheckInListRow) => router.push({ name: 'member', params: { id: r.memberId } })"
-    >
-      <template #cell-voided="{ row }">
-        <span v-if="row.voided" class="voided">{{ voidText(row) }}</span>
-        <span v-else-if="canVoid" @click.stop @keydown.enter.stop>
-          <ConfirmButton
-            label="撤销"
-            title="撤销这次入场"
-            variant="link"
-            danger
-            :message="voidMessage(row)"
-            :action="voidAction(row)"
-            @done="onVoided"
-          />
-        </span>
-      </template>
-    </DataTable>
-  </section>
+  <nav class="tabs" role="tablist">
+    <button type="button" role="tab" :aria-selected="tab === 'entries'" :class="{ on: tab === 'entries' }" @click="setTab('entries')">入场</button>
+    <button type="button" role="tab" :aria-selected="tab === 'shares'" :class="{ on: tab === 'shares' }" @click="setTab('shares')">分享</button>
+  </nav>
+  <ShareRecords v-if="tab === 'shares'" />
+  <template v-else>
+    <p v-if="error" class="state error" role="alert">
+      {{ error }}<button type="button" class="retry" @click="load">重试</button>
+    </p>
+    <p v-else-if="data" class="state">{{ formatDot(data.date) }} 入场 {{ live }} 人次{{ voidedCount ? `，撤销 ${voidedCount} 条` : '' }}</p>
+    <section class="panel">
+      <DataTable
+        :columns="columns"
+        :rows="data?.items ?? []"
+        row-key="id"
+        :loading="loading"
+        empty="这天没有入场"
+        clickable
+        @row-click="(r: CheckInListRow) => router.push({ name: 'member', params: { id: r.memberId } })"
+      >
+        <template #cell-voided="{ row }">
+          <span v-if="row.voided" class="voided">{{ voidText(row) }}</span>
+          <span v-else-if="canVoid" @click.stop @keydown.enter.stop>
+            <ConfirmButton
+              label="撤销"
+              title="撤销这次入场"
+              variant="link"
+              danger
+              :message="voidMessage(row)"
+              :action="voidAction(row)"
+              @done="onVoided"
+            />
+          </span>
+        </template>
+      </DataTable>
+    </section>
+  </template>
 </template>
 
 <style scoped>
@@ -115,5 +127,8 @@ function onVoided() {
 .state { margin: 0 0 16px; font-size: 13px; color: var(--ink-muted); }
 .state.error { display: flex; align-items: center; gap: 12px; padding: 10px 14px; color: var(--ink); background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }
 .retry { padding: 2px 10px; font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
+.tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+.tabs button { padding: 5px 14px; font: inherit; font-size: 13.5px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); cursor: pointer; }
+.tabs button.on { font-weight: 700; border-color: var(--ink); }
 .voided { font-size: 12px; color: var(--ink-muted); }
 </style>

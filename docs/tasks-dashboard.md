@@ -161,11 +161,12 @@
 - 完成标准：跟门店切换联动；撤销的记录有标记。
 - 补（2026-10-21）：入场记录加 `policyId`（跟小程序分支的 `insuranceHistory.ts` 一样，按入场记录上的保单挂，不按日期猜），core 的 `insurance.ts` 加 `entryPolicy`；入场行（会员详情、入场记录、登记和撤销结果）都多了 `insurance: { policyId, status } | null`，没有保单记录的（上线前、导入的）为 null。示例入场按 `insuranceForEntry` 配了保单（以前的已投保，撤销的那条已退保）。门店口径同财务页（`storeScope`：只管部分门店的必须带自己的店）；`date` 不带是今天，用 utils 新加的 `isDateKey` 校验。撤销直接调 16 的接口，页面文字抽到 `components/checkInVoid.ts`，会员详情和入场记录页共用。先不分页；记录里没有入场时间，同一天按写入先后倒序（真后端按 `created_at`）。
 
-**21. 分享记录**
+**21. 分享记录** ✅
 - 依赖：4
 - 涉及文件：`EntriesPage.vue` 的分享 tab、契约 `GET /admin/shares`、mock
 - 内容：次卡转赠、老带新：发起人、领取人、次数、状态（待领取/已领取/已使用/已退回）、到期。
 - 完成标准：状态文字和小程序一致。
+- 补（2026-10-21）：状态跟小程序分支 `referral.ts` 的 `ReferralRecordState` 同值同义：`pending | expired | claimed | used`，文字照小程序已发记录（等朋友领取 / 过期了，没人领 / 朋友领了，还没来 / 朋友来过了），放在 core 的 `shareRecord.ts`（`SHARE_RECORD_STATE_TEXT`、`shareRecordState`），次卡转赠和老带新共用；合并时小程序的 `referralRecords` 和页面里的 `STATE_TEXT` 改用这一份。全部由数据推导：没人领的过了 `expiresOn` 算过期（当天还有效）；领了的看领取人那张卡（体验券 `usedOn`、好友送的次卡 `remaining < total`），撤销入场退回后变回「领了还没来」。「已退回」没做成单独状态：次卡转赠过期没人领退不退回原卡还在等馆方（要问馆方 4），先显示「过期了，没人领」。门店按发起人的归属门店，口径同财务页（`storeScope`）；可按 `kind` 筛；不返回 token。mock 加了 `db.shares`（次卡转赠，领了的有好友送的次卡，送出、领取、入场流水对得上），老带新邀请补了 `expiresOn`（当月底）。页面是入场记录页的「分享」tab（`?tab=shares`），先不分页。
 
 **22. 员工账号**
 - 依赖：3、5
