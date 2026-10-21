@@ -81,6 +81,12 @@
       }
     },
     {
+      "path": "pages/classes/index",
+      "style": {
+        "navigationBarTitleText": "团课"
+      }
+    },
+    {
       "path": "pages/login/index",
       "style": {
         "navigationBarTitleText": "登录"

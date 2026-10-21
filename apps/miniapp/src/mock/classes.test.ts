@@ -58,6 +58,22 @@ describe('mock 团课课表', () => {
     const cancelled = all.filter(s => s.status === 'cancelled');
     expect(cancelled).toHaveLength(1);
     expect(cancelled[0].cancelReason).toBeTruthy();
+    expect(cancelled[0].bookBlockedBy).toBe('class-cancelled');
+    // 没登录只看课本身，正常的课不拦
+    expect(all.find(s => s.status === 'scheduled' && s.on > TODAY)!.bookBlockedBy).toBeNull();
+  });
+
+  it('门店列表；登录后课表里带我能不能约（没课包 class-no-card）、已约的能不能取消', async () => {
+    const { guest, ajie, xiaolu, tomorrowClass, key, setNow } = setup();
+    expect((await guest.stores.list()).map(s => s.name)).toEqual(['滨港店', '汇聚店', '环球港店']);
+    const s = tomorrowClass(8);
+    const find = async (api: typeof ajie) => (await api.classes.list()).find(x => x.id === s.id)!;
+    expect((await find(xiaolu)).bookBlockedBy).toBe('class-no-card');
+    expect((await find(ajie)).bookBlockedBy).toBeNull();
+    await ajie.classes.book(s.id, { idempotencyKey: key() });
+    expect(await find(ajie)).toMatchObject({ bookBlockedBy: 'class-already-booked', myBooking: { status: 'booked', cancelBlockedBy: null } });
+    setNow(new Date(new Date(`${s.on}T${s.startTime}:00`).getTime() - 30 * 60_000));
+    expect((await find(ajie)).myBooking!.cancelBlockedBy).toBe('class-cancel-too-late');
   });
 });
 

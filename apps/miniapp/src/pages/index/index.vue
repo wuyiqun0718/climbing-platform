@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { summarizeCards } from '@climb/core';
+import type { ClassSessionView } from '@climb/api';
+import { sessionStartsAt, summarizeCards } from '@climb/core';
 import { formatMonthDay, toDateKey } from '@climb/utils';
 import { onLoad, onShow } from '@dcloudio/uni-app';
 import gym from '@gym';
@@ -7,7 +8,9 @@ import { computed, ref } from 'vue';
 import { goLogin } from '../../lib/use-login';
 import DevPanel from '../../mock/dev-panel.vue';
 import { startScan } from '../checkin/start-scan';
+import { api } from '../../api';
 import { member } from '../../stores';
+import { currentStoreName, ensureStores, storePick } from '../../stores/store-pick';
 
 // 跨天后回到首页要按新的一天算
 const today = ref(toDateKey(new Date()));
@@ -62,13 +65,13 @@ const firstTime = computed(() => member.state.cards.length === 0);
 
 // 下面这些页面还没做，做好后把对应的 case 换成跳转
 const SOON: Record<string, string> = {
-  classes: '团课（任务 30）',
   pt: '私教（任务 33）',
   events: '活动（任务 36）',
 };
 function open(key: string) {
   if (key === 'wallet') return uni.switchTab({ url: '/pages/cards/index' });
   if (key === 'referral') return uni.navigateTo({ url: '/pages/share/referral' });
+  if (key === 'classes') return uni.navigateTo({ url: '/pages/classes/index' });
   if (key === 'shop' || key === 'shop:single') {
     return uni.navigateTo({ url: key === 'shop' ? '/pages/shop/index' : '/pages/shop/index?seg=single' });
   }
@@ -81,9 +84,24 @@ function scan() {
 }
 
 onLoad(() => uni.setNavigationBarTitle({ title: gym.shortName }));
+/** 今日团课：当前门店今天还没开始的课 */
+const todayClasses = ref<ClassSessionView[] | null>(null);
+async function loadTodayClasses() {
+  if (!gym.features.groupClasses) return;
+  try {
+    await ensureStores();
+    const list = await api.classes.list({ store: storePick.currentId, from: today.value, days: 1 });
+    const now = Date.now();
+    todayClasses.value = list.filter(c => sessionStartsAt(c).getTime() > now).slice(0, 3);
+  } catch {
+    todayClasses.value = todayClasses.value ?? [];
+  }
+}
+
 onShow(() => {
   today.value = toDateKey(new Date());
   member.ensureLoaded().catch(() => {});
+  loadTodayClasses();
 });
 </script>
 
@@ -141,13 +159,20 @@ onShow(() => {
       </view>
     </view>
 
-    <!-- 课表接口在任务 29，接上后显示今天还没开始的课 -->
     <template v-if="gym.features.groupClasses">
       <view class="sec-h">
-        <text class="h">今日团课</text>
+        <text class="h">今日团课<text class="sec-sub">{{ currentStoreName() }}</text></text>
         <text class="link" @tap="open('classes')">课表</text>
       </view>
-      <view class="panel placeholder"><text>课表还在做，先去前台问问今天的课。</text></view>
+      <view v-if="todayClasses && !todayClasses.length" class="panel placeholder"><text>今天这家店没有还没开始的团课了，看看明天的。</text></view>
+      <view v-for="c in todayClasses ?? []" :key="c.id" class="panel class-row" @tap="open('classes')">
+        <text class="class-time">{{ c.startTime }}</text>
+        <view class="class-main">
+          <text class="class-name">{{ c.name }}</text>
+          <text class="class-meta">{{ c.status === 'cancelled' ? `取消了：${c.cancelReason ?? ''}` : `${c.coachName ?? ''} 已约 ${c.booked}/${c.capacity}` }}</text>
+        </view>
+        <text class="class-tag">{{ c.myBooking ? (c.myBooking.status === 'waitlisted' ? `候补第 ${c.myBooking.position} 位` : '已预约') : c.left > 0 ? `剩 ${c.left} 位` : '约满' }}</text>
+      </view>
     </template>
 
     <!-- 活动接口在任务 35 -->
@@ -164,6 +189,14 @@ onShow(() => {
 </template>
 
 <style scoped>
+.sec-sub { margin-left: 6px; font-size: 12px; font-family: inherit; color: var(--ink-muted); }
+.class-row { display: flex; align-items: center; gap: 12px; }
+.class-row + .class-row { margin-top: 8px; }
+.class-time { font-family: var(--font-number); font-size: 18px; font-weight: 700; }
+.class-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.class-name { font-size: 15px; font-weight: 600; }
+.class-meta { font-size: 12px; color: var(--ink-muted); }
+.class-tag { font-size: 12px; font-weight: 600; }
 .page { padding-bottom: 32px; }
 
 .hero { position: relative; display: flex; flex-direction: column; padding: 10px 16px 22px; background: var(--brand); border-bottom: var(--stroke) solid var(--ink); overflow: hidden; }

@@ -54,6 +54,7 @@ export function createRoutes(db: MockDb, env: { rules: GymRules; today: () => Da
     ...createClassRoutes(db, { ...env, nextId, requireMember, replaceCard, record }),
 
     'GET /products': () => db.products.filter(p => p.onSale),
+    'GET /stores': () => db.stores,
   };
 
   // 冻满了的期限卡次日自动解冻：后端是每天的定时任务，mock 在每次请求前顺手做

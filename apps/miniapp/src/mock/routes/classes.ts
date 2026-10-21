@@ -1,6 +1,6 @@
 import type { ClassSessionView, MyClassBooking } from '@climb/api';
 import {
-  bookClass, cancelBlockedBy, cancelBooking, cancelDeadline, isActiveBooking, sessionSeats, sessionStartsAt, waitlistPosition,
+  bookBlockedBy, bookClass, cancelBlockedBy, cancelBooking, cancelDeadline, isActiveBooking, sessionSeats, sessionStartsAt, waitlistPosition,
   type Card, type CardChange, type ClassBooking, type ClassSession, type GymRules, type LedgerEntry,
 } from '@climb/core';
 import { addDays, type DateKey } from '@climb/utils';
@@ -47,12 +47,24 @@ export function createClassRoutes(
 
   const view = (s: ClassSession, viewer: string | null): ClassSessionView => {
     const mine = viewer ? db.classBookings.find(b => b.sessionId === s.id && b.memberId === viewer && isActiveBooking(b)) : undefined;
+    const now = h.now();
+    const rules = h.rules.classRules;
+    // 没登录：只看课本身，课包和名额等登录后再判断
+    const blocked = viewer
+      ? bookBlockedBy({ session: s, bookings: db.classBookings, cards: db.cards, memberId: viewer, now, rules })
+      : bookBlockedBy({ session: s, bookings: [], cards: [], memberId: '', now, rules });
     return {
       ...s,
       storeName: storeName(s.storeId),
       coachName: coachName(s.coachId),
       ...sessionSeats(s, db.classBookings),
-      myBooking: mine ? { id: mine.id, status: mine.status as 'booked' | 'waitlisted', position: waitlistPosition(mine, db.classBookings) } : null,
+      myBooking: mine
+        ? {
+          id: mine.id, status: mine.status as 'booked' | 'waitlisted', position: waitlistPosition(mine, db.classBookings),
+          cancelBlockedBy: cancelBlockedBy({ booking: mine, session: s, now, rules }),
+        }
+        : null,
+      bookBlockedBy: viewer || blocked !== 'class-no-card' ? blocked : null,
     };
   };
 

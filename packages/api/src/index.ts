@@ -165,8 +165,22 @@ export interface ClassSessionView extends ClassSession {
   waitlisted: number;
   /** 还剩几个名额 */
   left: number;
-  /** 我在这节课上占着的预约（已约或候补）；没登录或没约为 null */
-  myBooking: { id: string; status: Extract<ClassBookingStatus, 'booked' | 'waitlisted'>; position: number | null } | null;
+  /**
+   * 我在这节课上占着的预约（已约或候补）；没登录或没约为 null。
+   * position 是候补排第几；cancelBlockedBy 是现在能不能自己取消（@climb/core cancelBlockedBy），能为 null
+   */
+  myBooking: { id: string; status: Extract<ClassBookingStatus, 'booked' | 'waitlisted'>; position: number | null; cancelBlockedBy: RuleErrorCode | null } | null;
+  /**
+   * 我现在能不能约（@climb/core bookBlockedBy）；能为 null，这时 left 为 0 表示约了会排候补。
+   * 没登录时只看课本身（取消了、开始了），课包和名额等登录后再看
+   */
+  bookBlockedBy: RuleErrorCode | null;
+}
+
+/** `GET /stores`：岩馆的门店 */
+export interface Store {
+  id: string;
+  name: string;
 }
 
 /** 我的一条团课预约：预约本身，加上那节课、用的课包、候补排第几、能不能自己取消 */
@@ -199,6 +213,10 @@ export function createApi(opts: ClientOptions) {
     },
     products: {
       list: () => http<Product[]>('GET', '/products'),
+    },
+    stores: {
+      /** 门店列表，课表按门店看、首页「今日团课」用；不用登录 */
+      list: () => http<Store[]>('GET', '/stores'),
     },
     me: {
       get: () => http<Me>('GET', '/me'),
