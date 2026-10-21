@@ -2,6 +2,7 @@
 import { ApiError, type CreateOrderResult, type EntryQrBody } from '@climb/api';
 import { entryBlockedText, entrySheet, pickEntryCard, type EntryOption, type EntrySheet, type WaiverVersion } from '@climb/core';
 import { formatDot, formatYuan } from '@climb/utils';
+import Button from '@climb/ui-mp/Button.vue';
 import { onLoad } from '@dcloudio/uni-app';
 import gym from '@gym';
 import { computed, ref } from 'vue';
@@ -167,7 +168,7 @@ const goShop = () => uni.navigateTo({ url: '/pages/shop/index' });
     <view v-if="status === 'bad'" class="panel">
       <text class="h">没法入场</text>
       <text class="p">{{ message }}</text>
-      <button class="btn primary" @tap="rescan">重新扫码</button>
+      <view class="act"><Button variant="primary" block @tap="rescan">重新扫码</Button></view>
     </view>
 
     <template v-else-if="status === 'ready' && sheet">
@@ -188,7 +189,7 @@ const goShop = () => uni.navigateTo({ url: '/pages/shop/index' });
       </view>
       <view v-if="sheet.mustBuy && !single" class="panel">
         <text class="p first">现在没在卖单次票，去看看其他卡，或者找前台。</text>
-        <button class="btn" @tap="goShop">看看其他卡</button>
+        <view class="act"><Button block @tap="goShop">看看其他卡</Button></view>
       </view>
 
       <text class="label">当日保险</text>
@@ -204,8 +205,8 @@ const goShop = () => uni.navigateTo({ url: '/pages/shop/index' });
         <text class="fine">只在第一次入场时签，告知书更新了会请你再看一次。签了以后不用到前台签纸质单。</text>
       </template>
 
-      <button class="btn primary block" :disabled="!canSubmit || submitting" @tap="submit">{{ confirmText }}</button>
-      <button v-if="sheet.mustBuy && sheet.waitingInviter" class="btn block" @tap="waitInviter">我等等再扫</button>
+      <view class="act block"><Button variant="primary" block :disabled="!canSubmit || submitting" @tap="submit">{{ confirmText }}</Button></view>
+      <view v-if="sheet.mustBuy && sheet.waitingInviter" class="act block"><Button block @tap="waitInviter">我等等再扫</Button></view>
     </template>
   </view>
 </template>
@@ -225,10 +226,11 @@ const goShop = () => uni.navigateTo({ url: '/pages/shop/index' });
 .opt-t { display: flex; flex-direction: column; gap: 2px; }
 .b { font-size: 15px; font-weight: 600; }
 .small { font-size: 12px; color: var(--ink-muted); }
+/* 品牌底上的说明用正文色压淡，灰字对比度不够 */
+.opt.on .small { color: var(--on-brand); opacity: 0.75; }
 .ins { flex-direction: row; align-items: center; justify-content: space-between; }
 .tag { padding: 2px 8px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; }
 .fine { display: block; margin-bottom: 16px; font-size: 12px; line-height: 1.6; color: var(--ink-muted); }
-.btn { margin: 14px 0 0; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font-size: 15px; font-weight: 600; }
-.btn.block { width: 100%; margin-top: 10px; }
-.btn.primary { background: var(--brand); }
+.act { margin-top: 14px; }
+.act.block { margin-top: 10px; }
 </style>

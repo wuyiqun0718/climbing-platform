@@ -3,6 +3,7 @@ import type { ShareView } from '@climb/api';
 import { SHARE_STATUS_TEXT } from '@climb/core';
 import { formatDot } from '@climb/utils';
 import gym from '@gym';
+import Button from '@climb/ui-mp/Button.vue';
 import { onLoad, onShow } from '@dcloudio/uni-app';
 import { computed, ref } from 'vue';
 import { api, auth, run } from '../../api';
@@ -64,7 +65,7 @@ const goHome = () => uni.switchTab({ url: '/pages/index/index' });
   <view class="page">
     <view v-if="failed" class="box">
       <text class="p">这个分享打不开，可能链接不完整，让朋友重新发一次。</text>
-      <button class="btn" @click="goHome">去首页</button>
+      <Button block @click="goHome">去首页</Button>
     </view>
 
     <view v-else-if="share" class="box">
@@ -76,17 +77,17 @@ const goHome = () => uni.switchTab({ url: '/pages/index/index' });
 
       <template v-if="share.claimedByMe">
         <text class="p strong">{{ justClaimed ? '领到了，已经放进你的卡包' : '你已经领过了，在卡包里' }}</text>
-        <button class="btn dark" @click="goWallet">去卡包看看</button>
+        <Button variant="dark" block @click="goWallet">去卡包看看</Button>
       </template>
       <template v-else-if="share.mine">
         <text class="p strong">这是你自己发出的，发给朋友让 TA 来领</text>
-        <button class="btn" @click="goHome">去首页</button>
+        <Button block @click="goHome">去首页</Button>
       </template>
       <template v-else-if="share.blockedBy">
         <text class="p strong">{{ codeMessage(share.blockedBy) }}</text>
-        <button class="btn" @click="goHome">去首页</button>
+        <Button block @click="goHome">去首页</Button>
       </template>
-      <button v-else class="btn dark" @click="claim">{{ auth.loggedIn() ? '领取' : '登录后领取' }}</button>
+      <Button v-else variant="dark" block @click="claim">{{ auth.loggedIn() ? '领取' : '登录后领取' }}</Button>
     </view>
   </view>
 </template>
@@ -100,6 +101,4 @@ const goHome = () => uni.switchTab({ url: '/pages/index/index' });
 .chip.expired, .chip.returned, .chip.used { background: var(--surface); color: var(--ink-muted); }
 .p { font-size: 14px; line-height: 1.6; }
 .strong { font-weight: 600; }
-.btn { margin: 0; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font-size: 14px; font-weight: 600; }
-.btn.dark { background: var(--ink); color: var(--surface); }
 </style>

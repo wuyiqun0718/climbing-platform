@@ -2,6 +2,7 @@
 import { groupProducts, isSingleTicket, productPerks, SHOP_SECTION_LABELS, type Product, type ShopSection } from '@climb/core';
 import { formatYuan } from '@climb/utils';
 import gym from '@gym';
+import Button from '@climb/ui-mp/Button.vue';
 import { onLoad } from '@dcloudio/uni-app';
 import { computed, ref } from 'vue';
 import { api, run } from '../../api';
@@ -68,7 +69,7 @@ function buy(productId: string) {
           </view>
           <view class="foot">
             <text class="price">{{ p.price }}</text>
-            <button class="btn primary" size="mini" @tap="buy(p.id)">购买</button>
+            <Button variant="primary" mini @tap="buy(p.id)">购买</Button>
           </view>
         </view>
       </view>
@@ -101,6 +102,4 @@ function buy(productId: string) {
 .empty-h { font-family: var(--font-display); font-size: 22px; }
 .empty-p { margin: 6px 0 16px; font-size: 13px; color: var(--ink-muted); text-align: center; }
 
-.btn { margin: 0; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 600; }
-.btn.primary { background: var(--brand); }
 </style>

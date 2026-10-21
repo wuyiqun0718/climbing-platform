@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ApiError } from '@climb/api';
 import { isPayable, ORDER_CHANNEL_LABELS, ORDER_STATUS_LABELS, type Order } from '@climb/core';
+import Button from '@climb/ui-mp/Button.vue';
 import { formatMonthDay, formatYuan, toDateKey } from '@climb/utils';
 import { computed, ref } from 'vue';
 import { api, pay, run } from '../../api';
@@ -94,7 +95,7 @@ async function resume(orderId: string) {
         <text class="status" :class="r.tone">{{ r.status }}</text>
       </view>
       <text v-if="r.hint" class="meta">{{ r.hint }}</text>
-      <button v-if="r.payable" class="btn primary" :disabled="paying" @tap.stop="resume(r.id)">去付款</button>
+      <view v-if="r.payable" class="pay"><Button variant="primary" mini :disabled="paying" @tap.stop="resume(r.id)">去付款</Button></view>
     </view>
     <view v-if="loaded && !rows.length" class="empty">还没有订单</view>
     <text v-if="rows.length" class="fine">退款请找前台办理。前台买的卡也会记在这里。</text>
@@ -112,8 +113,7 @@ async function resume(orderId: string) {
 .status.todo { color: var(--ink); text-decoration: underline; }
 .status.ok { color: var(--ink); }
 .status.off { color: var(--ink-muted); }
-.btn { align-self: flex-end; margin: 4px 0 0; padding: 0 16px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font-size: 14px; font-weight: 600; line-height: 32px; }
-.btn.primary { background: var(--brand); }
+.pay { display: flex; justify-content: flex-end; margin-top: 4px; }
 .fine { display: block; margin-top: 4px; font-size: 12px; line-height: 1.6; color: var(--ink-muted); }
 .empty { padding: 80px 0; text-align: center; color: var(--ink-muted); }
 </style>

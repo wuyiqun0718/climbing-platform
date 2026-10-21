@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { shareBlockedBy, type Share } from '@climb/core';
+import Button from '@climb/ui-mp/Button.vue';
 import MemberCard from '@climb/ui-mp/MemberCard.vue';
 import { formatDot, toDateKey } from '@climb/utils';
 import { onLoad, onShareAppMessage } from '@dcloudio/uni-app';
@@ -70,11 +71,11 @@ const copyPath = () => share.value && uni.setClipboardData({ data: claimPath(sha
         <text class="h">分享已生成</text>
         <text class="p">已经从卡里扣了 {{ share.quantity }} 次，发给朋友，TA 点开就能领。</text>
         <!-- #ifdef MP-WEIXIN -->
-        <button class="btn dark" open-type="share">发给微信好友</button>
+        <Button variant="dark" block open-type="share">发给微信好友</Button>
         <!-- #endif -->
         <!-- #ifndef MP-WEIXIN -->
         <text class="fine">{{ message?.title }} · {{ claimPath(share.token) }}</text>
-        <button class="btn dark" @click="copyPath">复制领取路径</button>
+        <Button variant="dark" block @click="copyPath">复制领取路径</Button>
         <!-- #endif -->
       </view>
 
@@ -88,7 +89,7 @@ const copyPath = () => share.value && uni.setClipboardData({ data: claimPath(sha
           <button class="sbtn" :disabled="qty >= remaining" @click="step(1)">+</button>
         </view>
         <text class="fine center">送出后你的卡还剩 {{ remaining - qty }} 次</text>
-        <button class="btn dark" @click="create">生成分享</button>
+        <Button variant="dark" block @click="create">生成分享</Button>
       </view>
     </template>
   </view>
@@ -105,7 +106,5 @@ const copyPath = () => share.value && uni.setClipboardData({ data: claimPath(sha
 .sbtn { margin: 0; width: 44px; height: 44px; line-height: 40px; padding: 0; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font-size: 22px; }
 .num { font-family: var(--font-number); font-size: 40px; font-weight: 700; }
 .unit { font-size: 14px; margin-left: 2px; }
-.btn { margin: 0; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font-size: 14px; font-weight: 600; }
-.btn.dark { background: var(--ink); color: var(--surface); }
 .empty { padding: 80px 0; text-align: center; color: var(--ink-muted); }
 </style>

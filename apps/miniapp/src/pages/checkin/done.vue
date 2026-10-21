@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { CheckInResult, ReferralWaitInfo } from '@climb/api';
 import { checkInDoneView } from '@climb/core';
+import Button from '@climb/ui-mp/Button.vue';
 import { onLoad, onShow } from '@dcloudio/uni-app';
 import { computed, ref } from 'vue';
 import { api, run } from '../../api';
@@ -63,7 +64,7 @@ const goHome = () => uni.switchTab({ url: '/pages/index/index' });
   <view class="page">
     <view v-if="status === 'bad'" class="panel">
       <text class="h">{{ message }}</text>
-      <button class="btn primary" @tap="goHome">回首页</button>
+      <view class="act"><Button variant="primary" block @tap="goHome">回首页</Button></view>
     </view>
 
     <template v-else-if="status === 'done' && result && view">
@@ -78,25 +79,25 @@ const goHome = () => uni.switchTab({ url: '/pages/index/index' });
         <view class="row"><text class="k">当日保险</text><text class="tag">{{ view.policyText }}</text></view>
       </view>
       <text class="fine">{{ view.policyNote }}</text>
-      <button class="btn primary block" @tap="goHome">好的</button>
+      <Button variant="primary" block @tap="goHome">好的</Button>
     </template>
 
     <template v-else-if="status === 'wait'">
       <view v-if="!wait" class="panel">
         <text class="h">不用等了</text>
         <text class="p">今天已经入过场，或者体验券已经用掉、过期了。</text>
-        <button class="btn primary" @tap="goHome">回首页</button>
+        <view class="act"><Button variant="primary" block @tap="goHome">回首页</Button></view>
       </view>
       <view v-else-if="wait.inviterCheckedIn" class="panel hero">
         <text class="h">{{ wait.inviterName }} 到了</text>
         <text class="p">再扫一次前台平板上的码，就能用{{ wait.cardName }}进。</text>
-        <button class="btn primary" @tap="rescan">扫码入场</button>
+        <view class="act"><Button variant="primary" block @tap="rescan">扫码入场</Button></view>
       </view>
       <view v-else class="panel">
         <text class="h">等邀请人入场</text>
         <text class="p">{{ wait.cardName }}要在 {{ wait.inviterName }} 到馆的当天用。TA 入场后会提醒你，再扫一次码就能进。</text>
-        <button class="btn primary" @tap="loadWait">刷新看看</button>
-        <button class="btn" @tap="goHome">回首页</button>
+        <view class="act"><Button variant="primary" block @tap="loadWait">刷新看看</Button></view>
+        <view class="act"><Button block @tap="goHome">回首页</Button></view>
       </view>
     </template>
   </view>
@@ -108,12 +109,12 @@ const goHome = () => uni.switchTab({ url: '/pages/index/index' });
 .hero { background: var(--brand); }
 .h { display: block; font-family: var(--font-display); font-size: 24px; }
 .p { display: block; margin-top: 6px; font-size: 14px; color: var(--ink-muted); }
+/* 品牌底上的说明用正文色压淡，白底面板上的 .p 不变 */
+.hero .p { color: var(--on-brand); opacity: 0.75; }
 .row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; }
 .k { font-size: 14px; color: var(--ink-muted); }
 .v { font-size: 15px; font-weight: 600; }
 .tag { padding: 2px 8px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; }
 .fine { display: block; margin-bottom: 16px; font-size: 12px; line-height: 1.6; color: var(--ink-muted); }
-.btn { margin: 14px 0 0; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font-size: 15px; font-weight: 600; }
-.btn.block { width: 100%; }
-.btn.primary { background: var(--brand); }
+.act { margin-top: 14px; }
 </style>

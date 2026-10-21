@@ -3,6 +3,7 @@ import type { ClassSessionView, MyClassBooking } from '@climb/api';
 import { isCardValid, type Card, type LessonCard, type RuleErrorCode } from '@climb/core';
 import gym from '@gym';
 import { addDays, formatMonthDay, toDateKey, weekdayOf } from '@climb/utils';
+import Button from '@climb/ui-mp/Button.vue';
 import { onLoad, onShow } from '@dcloudio/uni-app';
 import { computed, ref } from 'vue';
 import { api, auth, run } from '../../api';
@@ -62,13 +63,13 @@ const endTime = (s: { startTime: string; minutes: number }) => {
 };
 
 /** 课表右侧按钮：全部按接口返回的 myBooking / bookBlockedBy 定 */
-function action(s: ClassSessionView): { label: string; kind: 'book' | 'buy' | 'cancel' | 'none'; tone: string } {
+function action(s: ClassSessionView): { label: string; kind: 'book' | 'buy' | 'cancel' | 'none'; tone: 'default' | 'ghost' | 'dark' | 'off' } {
   if (s.myBooking) {
     const label = s.myBooking.status === 'waitlisted' ? `候补第 ${s.myBooking.position} 位` : '已预约';
     return { label, kind: 'cancel', tone: 'ghost' };
   }
   const b = s.bookBlockedBy;
-  if (b === 'class-no-card') return { label: '买团课包', kind: 'buy', tone: '' };
+  if (b === 'class-no-card') return { label: '买团课包', kind: 'buy', tone: 'default' };
   if (b === 'class-cancelled') return { label: '已取消', kind: 'none', tone: 'off' };
   if (b === 'class-started') return { label: '已开始', kind: 'none', tone: 'off' };
   if (b === 'class-full' || b === 'class-waitlist-full') return { label: '约满了', kind: 'none', tone: 'off' };
@@ -196,7 +197,7 @@ const history = computed(() => mine.value.filter(b => b.status !== 'booked' && b
           <text v-if="s.status === 'cancelled'" class="meta warn">这节取消了：{{ s.cancelReason || '馆里临时调整' }}</text>
           <text v-else class="meta">已约 {{ s.booked }}/{{ s.capacity }}{{ s.waitlisted ? `，候补 ${s.waitlisted} 人` : '' }}</text>
         </view>
-        <button class="btn" :class="action(s).tone" size="mini" :disabled="action(s).kind === 'none' || busy === s.id" @tap="tap(s)">{{ action(s).label }}</button>
+        <Button :variant="action(s).tone" mini :disabled="action(s).kind === 'none' || busy === s.id" @tap="tap(s)">{{ action(s).label }}</Button>
       </view>
     </template>
 
@@ -215,10 +216,10 @@ const history = computed(() => mine.value.filter(b => b.status !== 'booked' && b
           <text v-if="b.status === 'booked' && b.cancelBlockedBy === 'class-cancel-too-late'" class="meta warn">已过取消时间，要取消找前台</text>
           <text v-if="b.session.status === 'cancelled'" class="meta warn">课程取消：{{ b.session.cancelReason || '馆里临时调整' }}</text>
         </view>
-        <button
-          v-if="active.includes(b)" class="btn ghost" size="mini" :disabled="busy === b.id"
+        <Button
+          v-if="active.includes(b)" variant="ghost" mini :disabled="busy === b.id"
           @tap="cancel(b.id, b.cancelBlockedBy, b.session.name)"
-        >{{ b.status === 'waitlisted' ? '不排了' : '取消' }}</button>
+        >{{ b.status === 'waitlisted' ? '不排了' : '取消' }}</Button>
       </view>
     </template>
   </view>
@@ -249,9 +250,5 @@ const history = computed(() => mine.value.filter(b => b.status !== 'booked' && b
 .name { font-size: 15px; font-weight: 600; }
 .meta { font-size: 12px; color: var(--ink-muted); }
 .warn { color: var(--ink); }
-.btn { margin: 0; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 600; }
-.btn.dark { background: var(--ink); color: var(--surface); }
-.btn.ghost { background: var(--brand-soft); }
-.btn.off { color: var(--ink-muted); }
 .empty { padding: 60px 0; text-align: center; color: var(--ink-muted); }
 </style>

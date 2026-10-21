@@ -2,6 +2,7 @@
 import { ApiError, type CreateOrderResult } from '@climb/api';
 import { cardFromProduct, isSingleTicket, productPerks, SHOP_SECTION_LABELS, shopSectionOf, snapshotOf, type Product } from '@climb/core';
 import { formatDot, formatYuan, toDateKey } from '@climb/utils';
+import Button from '@climb/ui-mp/Button.vue';
 import { onLoad } from '@dcloudio/uni-app';
 import { computed, ref } from 'vue';
 import { api, pay, run } from '../../api';
@@ -107,7 +108,7 @@ async function submit() {
 
       <view class="foot">
         <view class="sum-l"><text class="small">合计</text><text class="price">{{ view.price }}</text></view>
-        <button class="btn primary" :disabled="paying" @tap="submit">微信支付</button>
+        <Button variant="primary" :disabled="paying" @tap="submit">微信支付</Button>
       </view>
     </template>
     <view v-else-if="loaded" class="empty">这个已经不卖了，回去换一个看看</view>
@@ -129,7 +130,5 @@ async function submit() {
 .sum-l { display: flex; align-items: baseline; gap: 6px; }
 .small { font-size: 12px; color: var(--ink-muted); }
 .price { font-family: var(--font-number); font-size: 24px; font-weight: 700; }
-.btn { margin: 0; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font-size: 15px; font-weight: 600; }
-.btn.primary { background: var(--brand); }
 .empty { padding: 80px 0; text-align: center; color: var(--ink-muted); }
 </style>

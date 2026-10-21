@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { groupWallet } from '@climb/core';
+import Button from '@climb/ui-mp/Button.vue';
 import MemberCard from '@climb/ui-mp/MemberCard.vue';
 import { toDateKey } from '@climb/utils';
 import { onShow } from '@dcloudio/uni-app';
@@ -7,6 +8,7 @@ import { computed, ref } from 'vue';
 import { cardView } from '../../lib/card-view';
 import { useRequireLogin } from '../../lib/use-login';
 import { member } from '../../stores';
+import { startScan } from '../checkin/start-scan';
 
 // 要登录：没登录先去登录页，登录完回到这里
 useRequireLogin(() => member.ensureLoaded().catch(() => {}));
@@ -23,12 +25,6 @@ const entry = computed(() => groups.value.entry.map(c => ({ id: c.id, ...cardVie
 const lessons = computed(() => groups.value.lessons.map(c => ({ id: c.id, ...cardView(c, today.value, false) })));
 const done = computed(() => groups.value.done.map(c => ({ id: c.id, ...cardView(c, today.value, true) })));
 
-// 下面这些页面还没做，做好后换成跳转
-const SOON: Record<string, string> = {
-  scan: '扫码入场（任务 18）',
-  classes: '团课（任务 30）',
-  pt: '私教（任务 33）',
-};
 function open(key: string, cardId?: string) {
   if (key === 'ledger' && cardId) {
     uni.navigateTo({ url: `/pages/cards/detail?id=${encodeURIComponent(cardId)}` });
@@ -42,7 +38,15 @@ function open(key: string, cardId?: string) {
     uni.navigateTo({ url: '/pages/shop/index' });
     return;
   }
-  uni.showToast({ title: `${SOON[key] ?? key}还在做`, icon: 'none' });
+  if (key === 'scan') {
+    startScan();
+    return;
+  }
+  if (key === 'classes') {
+    uni.navigateTo({ url: '/pages/classes/index' });
+    return;
+  }
+  uni.showToast({ title: key === 'pt' ? '私教预约还没开放' : '这个入口还没开放', icon: 'none' });
 }
 </script>
 
@@ -51,7 +55,7 @@ function open(key: string, cardId?: string) {
     <view v-if="member.state.loaded && !member.state.cards.length" class="empty">
       <text class="empty-h">卡包还是空的</text>
       <text class="empty-p">买一张卡，或者请有卡的朋友把次数送给你。</text>
-      <button class="btn primary" size="mini" @tap="open('shop')">去购卡</button>
+      <Button variant="primary" mini @tap="open('shop')">去购卡</Button>
     </view>
 
     <template v-else>
@@ -60,7 +64,7 @@ function open(key: string, cardId?: string) {
         <view class="cards">
           <MemberCard v-for="c in entry" :key="c.id" :kind="c.kind" :name="c.name" :value="c.value" :unit="c.unit" :meta="c.meta" :tone="c.tone">
             <view v-if="c.acts.length" class="acts">
-              <button v-for="a in c.acts" :key="a.key" class="btn" :class="{ dark: a.dark }" size="mini" @tap="open(a.key, c.id)">{{ a.label }}</button>
+              <Button v-for="a in c.acts" :key="a.key" :variant="a.dark ? 'dark' : 'default'" mini @tap="open(a.key, c.id)">{{ a.label }}</Button>
             </view>
           </MemberCard>
         </view>
@@ -71,7 +75,7 @@ function open(key: string, cardId?: string) {
         <view class="cards">
           <MemberCard v-for="c in lessons" :key="c.id" :kind="c.kind" :name="c.name" :value="c.value" :unit="c.unit" :meta="c.meta" :tone="c.tone">
             <view class="acts">
-              <button v-for="a in c.acts" :key="a.key" class="btn" :class="{ dark: a.dark }" size="mini" @tap="open(a.key, c.id)">{{ a.label }}</button>
+              <Button v-for="a in c.acts" :key="a.key" :variant="a.dark ? 'dark' : 'default'" mini @tap="open(a.key, c.id)">{{ a.label }}</Button>
             </view>
           </MemberCard>
         </view>
@@ -85,13 +89,13 @@ function open(key: string, cardId?: string) {
         <view v-if="showDone" class="cards done">
           <MemberCard v-for="c in done" :key="c.id" :kind="c.kind" :name="c.name" :value="c.value" :unit="c.unit" :meta="c.meta" tone="surface">
             <view v-if="c.acts.length" class="acts">
-              <button v-for="a in c.acts" :key="a.key" class="btn" size="mini" @tap="open(a.key, c.id)">{{ a.label }}</button>
+              <Button v-for="a in c.acts" :key="a.key" mini @tap="open(a.key, c.id)">{{ a.label }}</Button>
             </view>
           </MemberCard>
         </view>
       </template>
 
-      <button v-if="member.state.loaded" class="btn block" @tap="open('shop')">+ 购买新卡</button>
+      <view v-if="member.state.loaded" class="buy-more"><Button block @tap="open('shop')">+ 购买新卡</Button></view>
     </template>
   </view>
 </template>
@@ -110,8 +114,5 @@ function open(key: string, cardId?: string) {
 .empty-h { font-family: var(--font-display); font-size: 22px; }
 .empty-p { margin: 6px 0 16px; font-size: 13px; color: var(--ink-muted); text-align: center; }
 
-.btn { margin: 0; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 600; }
-.btn.primary { background: var(--brand); }
-.btn.dark { background: var(--ink); color: var(--surface); }
-.btn.block { margin-top: 22px; }
+.buy-more { margin-top: 22px; }
 </style>

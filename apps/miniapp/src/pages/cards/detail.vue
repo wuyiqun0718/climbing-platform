@@ -2,6 +2,7 @@
 import type { CardLedgerItem, FreezeOptions } from '@climb/api';
 import { isCardLive, LEDGER_REASON_LABELS } from '@climb/core';
 import MemberCard from '@climb/ui-mp/MemberCard.vue';
+import Button from '@climb/ui-mp/Button.vue';
 import { formatDot, formatMonthDay, toDateKey } from '@climb/utils';
 import { onLoad } from '@dcloudio/uni-app';
 import { computed, ref } from 'vue';
@@ -111,7 +112,7 @@ const rows = computed(() => ledger.value.map(l => ({
 
       <view v-if="card?.kind === 'period' && card.status === 'frozen'" class="freeze">
         <text class="freeze-t">冻结到 {{ formatDot(card.frozenUntil!) }}（含），到那天以后自动解冻</text>
-        <button class="btn" @click="doUnfreeze">提前解冻</button>
+        <Button variant="dark" block @click="doUnfreeze">提前解冻</Button>
       </view>
       <view v-else-if="freeze" class="freeze">
         <template v-if="!freeze.blockedBy">
@@ -119,7 +120,7 @@ const rows = computed(() => ledger.value.map(l => ({
             <view class="freeze-t">冻结 <text class="num">{{ pickedDays }}</text> 天（{{ freeze.minDays }}–{{ freeze.maxDays }} 天），点这里改</view>
           </picker>
           <text v-if="quotaText" class="fine">{{ quotaText }}</text>
-          <button class="btn" @click="doFreeze">冻结</button>
+          <Button variant="dark" block @click="doFreeze">冻结</Button>
         </template>
         <text v-else-if="freeze.blockedBy !== 'freeze-card-not-active'" class="freeze-t">暂时不能冻结：{{ codeMessage(freeze.blockedBy) }}</text>
       </view>
@@ -152,6 +153,5 @@ const rows = computed(() => ledger.value.map(l => ({
 .freeze { margin-top: 16px; padding: 12px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); background: var(--surface); display: flex; flex-direction: column; gap: 8px; }
 .freeze-t { font-size: 14px; }
 .num { font-family: var(--font-number); font-weight: 700; }
-.btn { margin: 0; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); background: var(--ink); color: var(--surface); font-size: 14px; font-weight: 600; }
 .empty { padding: 80px 0; text-align: center; color: var(--ink-muted); }
 </style>

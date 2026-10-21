@@ -3,6 +3,7 @@ import type { MyReferrals, ReferralRecordView } from '@climb/api';
 import { SHARE_STATUS_TEXT } from '@climb/core';
 import { formatDot } from '@climb/utils';
 import gym from '@gym';
+import Button from '@climb/ui-mp/Button.vue';
 import { onShareAppMessage } from '@dcloudio/uni-app';
 import { computed, ref } from 'vue';
 import { api, run } from '../../api';
@@ -69,15 +70,15 @@ const sameDay = gym.rules.referralRequiresInviterSameDay;
       <template v-if="sendToken">
         <text class="p">邀请已生成，发给朋友，TA 点开就能领。</text>
         <!-- #ifdef MP-WEIXIN -->
-        <button class="btn dark" open-type="share">发给微信好友</button>
+        <Button variant="dark" block open-type="share">发给微信好友</Button>
         <!-- #endif -->
         <!-- #ifndef MP-WEIXIN -->
         <text class="fine">{{ message && message.title }} · {{ claimPath(sendToken) }}</text>
-        <button class="btn dark" @click="copyPath">复制领取路径</button>
+        <Button variant="dark" block @click="copyPath">复制领取路径</Button>
         <!-- #endif -->
       </template>
       <text v-else-if="status.blockedBy" class="p warn">{{ codeMessage(status.blockedBy) }}</text>
-      <button v-if="!status.blockedBy" class="btn" :class="{ dark: !sendToken }" @click="create">发一个新邀请</button>
+      <Button v-if="!status.blockedBy" :variant="sendToken ? 'default' : 'dark'" block @click="create">发一个新邀请</Button>
     </view>
 
     <view v-if="data" class="box">
@@ -105,6 +106,4 @@ const sameDay = gym.rules.referralRequiresInviterSameDay;
 .row { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; padding: 6px 0; border-top: 1px solid var(--line); }
 .date { font-family: var(--font-number); }
 .state.expired { color: var(--ink-muted); }
-.btn { margin: 0; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font-size: 14px; font-weight: 600; }
-.btn.dark { background: var(--ink); color: var(--surface); }
 </style>

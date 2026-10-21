@@ -35,6 +35,7 @@
   - `classes`：`uni.navigateTo({ url: '/pages/classes/index' })`。
   - `pt`：`uni.showToast({ title: '私教预约还没开放', icon: 'none' })`。不要出现任务编号。
   - 其余未知 key 用「这个入口还没开放」，同样不要任务编号。
+- **已修**：after 图：`after/cards-toast-scan.png`（次卡「入场」弹出模拟扫码）、`after/cards-toast-class.png`（私教卡「去约课」toast「私教预约还没开放」）。团课卡「去约课」直接进团课页。
 
 ### H2. 首页把未做功能写成开发备注
 
@@ -43,6 +44,7 @@
 - 问题：点「私教」toast「私教（任务 33）还在做」，点「活动」toast「活动（任务 36）还在做」，toast 压在老带新横条上。「近期活动」盒子里写着「活动报名还在做。」会员能看到任务号和「还在做」。
 - 文件：`apps/miniapp/src/pages/index/index.vue` 的 `SOON`、`open()`，以及模板里 `gym.features.events` 那段占位（约第 178–185 行）。
 - 改法：删掉 `SOON`。`pt` 和 `events` 的 toast 改成「私教预约还没开放」「活动报名还没开放」。占位盒子的文案改成「最近没有活动。」，样式跟下面空状态组件一致（见 M7）：13px、`color: var(--ink-muted)`、放在现有 `.panel` 里。快捷入口在页面没做之前加 `opacity: 0.45`，仍可点出这句短 toast。不要删 `gym.features.events` 的判断。
+- **已修**：after 图：`after/home-toast-pt.png`、`after/home-toast-events.png`、`after/home-ajie.png`
 
 ### H3. 品牌绿上的次要文字发灰
 
@@ -56,6 +58,7 @@
   - confirm：加 `.opt.on .small { color: var(--on-brand); opacity: 0.75; }`。未选中的 `.small` 继续 `--ink-muted`。
   - done：加 `.hero .p { color: var(--on-brand); opacity: 0.75; }`。白底面板上的 `.p` 保持 `--ink-muted`。
   - 以后凡是 `background: var(--brand)` 或 `var(--accent)` 或 `var(--neutral)` 上的说明文字，用 `color: var(--on-brand)` 加 `opacity: 0.75`，不要用 `--ink-muted`。
+- **已修**：after 图：`after/checkin-confirm-ajie.png`、`after/checkin-confirm-xiaolu.png`、`after/checkin-confirm-reentry.png`、`after/checkin-done-ajie.png`、`after/checkin-done-reentry.png`
 
 ### H4. 告知书没勾选时，主按钮仍是实心品牌绿
 
@@ -91,6 +94,7 @@
 ```
 
 确认页主按钮：`<Button variant="primary" block :disabled="!canSubmit || submitting">`。
+- **已修**：after 图：`after/checkin-confirm-xiaolu.png`、`after/checkin-waiver-expanded.png`。`packages/ui-mp/src/Button.vue` 已替换列表里所有页面的本地 `.btn`；没照抄 `line-height: 1.2`，保留 uni 按钮默认行高，否则按钮会变矮。另加了 `openType` 和 `getphonenumber` 透传给登录、分享按钮用。
 
 ### H5. 扫码图标是「井」，快捷入口是单字
 
@@ -99,6 +103,7 @@
 - 问题：`.scan-ic` 里是字符 `⌗`（U+2317），PingFang 里没有这个字，画成「井」。四个快捷入口用 `q.label.slice(0, 1)`，变成「购 / 团 / 私 / 活」。原型是扫描框图标和四个图形图标，底色分别是米色、灰、品牌绿、白。
 - 文件：`apps/miniapp/src/pages/index/index.vue` 模板约第 115–131 行。现有 class：`.scan-ic`、`.q-ic`、`.tone-*`。
 - 改法：去掉字符。`.scan-ic` 里放一个 22×22 的内联 SVG 扫描框（四角框加中间一横），`fill: none`，`stroke: currentColor`，`stroke-width: 2`。颜色继承按钮上的 `--on-brand` / `--ink`，不要写死 hex。四个入口同样用 SVG（卡、日历、人、旗），放进现有 `.q-ic`，保留 `tone-brand` / `tone-accent` / `tone-neutral` / `tone-surface` 的背景变量。图标 22×22，圆底直径保持现在的尺寸。标签「购卡 / 团课 / 私教 / 活动」留在圆下面，不要再塞进圆里。
+- **已修**：after 图：`after/home-ajie.png`、`after/home-xiaolu.png`。图标是 `lib/icons.ts` 里的 SVG，用 CSS mask + `currentColor` 画（小程序不支持内联 `<svg>`）。
 
 ### H6. 入场成功后首页仍是「扫码入场」
 
@@ -107,6 +112,7 @@
 - 问题：模板注释写着今天入没入过场先不做，按钮写死「扫码入场」。入场记录接口已经有了：`api.me.checkIns(month)` 返回 `ClimbCalendar`，`days[].on` 是 `YYYY-MM-DD`。日历页 `pages/me/calendar.vue` 已在用。
 - 文件：`apps/miniapp/src/pages/index/index.vue` 的 `onShow` 和 `.scan` 模板。
 - 改法：`onShow` 里登录后调用 `api.me.checkIns(monthOf(toDateKey(new Date())))`（`monthOf` 从 `@climb/core` 引入，和日历页一样）。`days` 里有今天的 `on` 时，标题改成「今天已入场」，hint 改成「再扫一次不会重复扣次」。点击仍走 `scan()`，确认页已经会说明这次不扣次（`before/checkin-confirm-reentry.png`）。没登录或请求失败时保持「扫码入场」。不要在首页重算扣次。
+- **已修**：after 图：`after/home-ajie-after-checkin.png`
 
 ### H7. 「我的」是四行导航
 
@@ -120,6 +126,7 @@
   - 日历预览：本月，表头周一到周日（和 M6 同一套算法），有入场的日期底色 `var(--brand)`。整块 `@tap` 进 `/pages/me/calendar`。
   - 菜单行：左图标或 16px 标签、右箭头 `›`，行高约 52px，分隔线 `1px solid var(--line)`。入口仍是现在这四个 URL。`member.state.me?.coach` 为真才显示「我的排班」。
   - 页面 padding `16px`，底部留出 tab 的高度，和现在卡包页一样 `padding-bottom: 32px` 即可，tab 是页面外的。
+- **已修**：after 图：`after/me-ajie.png`、`after/me-max.png`、`after/me-xiaolu.png`。预览日历按周一开头；完整日历页（M6）还没改。
 
 ## 中
 

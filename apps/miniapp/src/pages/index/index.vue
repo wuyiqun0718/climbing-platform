@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import type { ClassSessionView } from '@climb/api';
 import { sessionStartsAt, summarizeCards } from '@climb/core';
-import { formatMonthDay, toDateKey } from '@climb/utils';
+import Button from '@climb/ui-mp/Button.vue';
+import { formatMonthDay, monthOf, toDateKey } from '@climb/utils';
 import { onLoad, onShow } from '@dcloudio/uni-app';
 import gym from '@gym';
 import { computed, ref } from 'vue';
+import { iconStyle } from '../../lib/icons';
 import { goLogin } from '../../lib/use-login';
 import DevPanel from '../../mock/dev-panel.vue';
 import { startScan } from '../checkin/start-scan';
@@ -16,6 +18,7 @@ import { currentStoreName, ensureStores, storePick } from '../../stores/store-pi
 const today = ref(toDateKey(new Date()));
 // 每个岩馆都有 logo；mark 不一定有
 const mark = `/static/gym/${gym.logo}`;
+const scanIcon = iconStyle('scan');
 
 const me = computed(() => member.state.me);
 // 哪些卡算能入场、还剩多少，规则在 @climb/core
@@ -40,10 +43,11 @@ const sub = computed(() => {
 
 const quick = computed(() =>
   [
-    { key: 'shop', label: '购卡', tone: 'accent', show: true },
-    { key: 'classes', label: '团课', tone: 'neutral', show: gym.features.groupClasses },
-    { key: 'pt', label: '私教', tone: 'brand', show: gym.features.personalTraining },
-    { key: 'events', label: '活动', tone: 'surface', show: gym.features.events },
+    { key: 'shop', label: '购卡', tone: 'accent', icon: iconStyle('card'), show: true },
+    { key: 'classes', label: '团课', tone: 'neutral', icon: iconStyle('calendar'), show: gym.features.groupClasses },
+    // 私教、活动页面还没开放：淡一点，点了只提示一句
+    { key: 'pt', label: '私教', tone: 'brand', icon: iconStyle('person'), soon: true, show: gym.features.personalTraining },
+    { key: 'events', label: '活动', tone: 'surface', icon: iconStyle('flag'), soon: true, show: gym.features.events },
   ].filter(q => q.show),
 );
 
@@ -63,11 +67,6 @@ const board = computed(() => {
 });
 const firstTime = computed(() => member.state.cards.length === 0);
 
-// 下面这些页面还没做，做好后把对应的 case 换成跳转
-const SOON: Record<string, string> = {
-  pt: '私教（任务 33）',
-  events: '活动（任务 36）',
-};
 function open(key: string) {
   if (key === 'wallet') return uni.switchTab({ url: '/pages/cards/index' });
   if (key === 'referral') return uni.navigateTo({ url: '/pages/share/referral' });
@@ -75,7 +74,8 @@ function open(key: string) {
   if (key === 'shop' || key === 'shop:single') {
     return uni.navigateTo({ url: key === 'shop' ? '/pages/shop/index' : '/pages/shop/index?seg=single' });
   }
-  uni.showToast({ title: `${SOON[key] ?? key}还在做`, icon: 'none' });
+  const title = key === 'pt' ? '私教预约还没开放' : key === 'events' ? '活动报名还没开放' : '这个入口还没开放';
+  uni.showToast({ title, icon: 'none' });
 }
 
 function scan() {
@@ -98,10 +98,28 @@ async function loadTodayClasses() {
   }
 }
 
+/** 今天入过场没有：看本月入场记录里有没有今天。没登录或拉不到就当没入过 */
+const enteredToday = ref(false);
+async function loadEnteredToday() {
+  const day = today.value;
+  try {
+    await member.ensureLoaded();
+    if (!member.state.me) {
+      enteredToday.value = false;
+      return;
+    }
+    const cal = await api.me.checkIns(monthOf(day));
+    enteredToday.value = cal.days.some(d => d.on === day);
+  } catch {
+    enteredToday.value = false;
+  }
+}
+
 onShow(() => {
   today.value = toDateKey(new Date());
   member.ensureLoaded().catch(() => {});
   loadTodayClasses();
+  loadEnteredToday();
 });
 </script>
 
@@ -111,13 +129,13 @@ onShow(() => {
       <image class="hero-mark" :src="mark" mode="widthFix" />
       <text class="hello">{{ hello }}</text>
       <text class="hello-sub">{{ sub }}</text>
-      <!-- 今天入没入过场要等「我的入场记录」接口（任务 22/37），现在一直显示扫码 -->
+      <!-- 今天已经入过场也能再扫，扣不扣次由确认页说明 -->
       <view class="scan" hover-class="scan-down" @tap="scan">
         <view class="scan-in">
-          <text class="scan-ic">⌗</text>
+          <view class="scan-ic"><view class="ic" :style="scanIcon" /></view>
           <view class="scan-t">
-            <text class="scan-title">扫码入场</text>
-            <text class="scan-hint">对准前台的二维码扫一下</text>
+            <text class="scan-title">{{ enteredToday ? '今天已入场' : '扫码入场' }}</text>
+            <text class="scan-hint">{{ enteredToday ? '再扫一次不会重复扣次' : '对准前台的二维码扫一下' }}</text>
           </view>
           <text class="arrow">›</text>
         </view>
@@ -125,8 +143,8 @@ onShow(() => {
     </view>
 
     <view class="quick">
-      <view v-for="q in quick" :key="q.key" class="q" @tap="open(q.key)">
-        <view class="q-ic" :class="`tone-${q.tone}`"><text>{{ q.label.slice(0, 1) }}</text></view>
+      <view v-for="q in quick" :key="q.key" class="q" :class="{ soon: q.soon }" @tap="open(q.key)">
+        <view class="q-ic" :class="`tone-${q.tone}`"><view class="ic" :style="q.icon" /></view>
         <text class="q-label">{{ q.label }}</text>
       </view>
     </view>
@@ -134,7 +152,7 @@ onShow(() => {
     <view v-if="!me && member.state.loaded" class="panel first-time">
       <text class="panel-h">还没登录</text>
       <text class="panel-p">登录后能看卡包、扫码入场、约课。</text>
-      <view class="row"><button class="btn primary" size="mini" @tap="goLogin()">去登录</button></view>
+      <view class="row"><Button variant="primary" mini @tap="goLogin()">去登录</Button></view>
     </view>
 
     <view v-if="board && board.kind !== 'buy'" class="board" @tap="open(board.kind === 'voucher' ? 'wallet' : 'referral')">
@@ -143,7 +161,7 @@ onShow(() => {
         <text class="board-title">{{ board.title }}</text>
         <text class="board-text">{{ board.text }}</text>
       </view>
-      <text class="btn dark">{{ board.btn }}</text>
+      <Button class="board-btn" variant="dark" mini>{{ board.btn }}</Button>
     </view>
 
     <view v-else-if="board" class="panel first-time">
@@ -154,8 +172,8 @@ onShow(() => {
           : '续一张卡就能接着来爬。'
       }}</text>
       <view class="row">
-        <button class="btn primary" size="mini" @tap="open(firstTime ? 'shop:single' : 'shop')">{{ firstTime ? '买单次票' : '去续卡' }}</button>
-        <button class="btn" size="mini" @tap="open('shop')">看看其他卡</button>
+        <Button variant="primary" mini @tap="open(firstTime ? 'shop:single' : 'shop')">{{ firstTime ? '买单次票' : '去续卡' }}</Button>
+        <Button mini @tap="open('shop')">看看其他卡</Button>
       </view>
     </view>
 
@@ -175,13 +193,13 @@ onShow(() => {
       </view>
     </template>
 
-    <!-- 活动接口在任务 35 -->
+    <!-- 活动报名还没开放，先放空状态 -->
     <template v-if="gym.features.events">
       <view class="sec-h">
         <text class="h">近期活动</text>
         <text class="link" @tap="open('events')">全部</text>
       </view>
-      <view class="panel placeholder"><text>活动报名还在做。</text></view>
+      <view class="panel placeholder"><text>最近没有活动。</text></view>
     </template>
 
     <DevPanel />
@@ -207,7 +225,8 @@ onShow(() => {
 .scan { position: relative; margin: 16px 6px 0 4px; background: var(--ink); color: var(--surface); border-radius: var(--radius-lg); transform: skewX(-8deg); box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.28); }
 .scan-down { transform: skewX(-8deg) translate(3px, 3px); box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.28); }
 .scan-in { display: flex; align-items: center; padding: 16px 18px; transform: skewX(8deg); }
-.scan-ic { flex: none; width: 52px; height: 52px; line-height: 52px; text-align: center; border-radius: var(--radius-md); background: var(--brand); color: var(--ink); font-size: 28px; }
+.scan-ic { flex: none; width: 52px; height: 52px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-md); background: var(--brand); color: var(--on-brand); }
+.ic { width: 22px; height: 22px; background: currentColor; mask-size: 100% 100%; -webkit-mask-size: 100% 100%; mask-repeat: no-repeat; -webkit-mask-repeat: no-repeat; }
 .scan-t { flex: 1; display: flex; flex-direction: column; margin-left: 14px; }
 .scan-title { font-family: var(--font-display); font-size: 30px; line-height: 1.1; }
 .scan-hint { margin-top: 2px; font-size: 12px; opacity: 0.75; }
@@ -215,9 +234,10 @@ onShow(() => {
 
 .quick { display: flex; padding: 18px 10px 4px; }
 .q { flex: 1; display: flex; flex-direction: column; align-items: center; }
-.q-ic { width: 52px; height: 52px; display: flex; align-items: center; justify-content: center; border: var(--stroke) solid var(--ink); border-radius: 46% 54% 40% 60% / 55% 45% 55% 45%; font-family: var(--font-display); font-size: 22px; }
+.q-ic { width: 52px; height: 52px; display: flex; align-items: center; justify-content: center; border: var(--stroke) solid var(--ink); border-radius: 46% 54% 40% 60% / 55% 45% 55% 45%; color: var(--ink); }
+.q.soon { opacity: 0.45; }
 .q-label { margin-top: 6px; font-size: 13px; font-weight: 600; }
-.tone-brand { background: var(--brand); }
+.tone-brand { background: var(--brand); color: var(--on-brand); }
 .tone-accent { background: var(--accent); }
 .tone-neutral { background: var(--neutral); }
 .tone-surface { background: var(--surface); }
@@ -235,9 +255,7 @@ onShow(() => {
 .row { display: flex; gap: 8px; margin-top: 12px; }
 .placeholder { font-size: 13px; color: var(--ink-muted); }
 
-.btn { margin: 0; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 600; }
-.btn.primary { background: var(--brand); }
-.btn.dark { flex: none; padding: 6px 12px; background: var(--ink); color: var(--surface); }
+.board-btn { flex: none; }
 
 .sec-h { display: flex; align-items: baseline; justify-content: space-between; margin: 22px 16px 10px; }
 .h { font-family: var(--font-display); font-size: 20px; }
