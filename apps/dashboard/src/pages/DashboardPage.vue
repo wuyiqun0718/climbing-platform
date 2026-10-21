@@ -2,8 +2,13 @@
 import { StatTile } from '@climb/ui-web';
 import { formatDot, formatYuan, toDateKey, weekdayOf } from '@climb/utils';
 import gym from '@gym';
+import { computed } from 'vue';
+import { session } from '../session';
 
 const today = toDateKey(new Date());
+const storeName = computed(() =>
+  session.state.storeId === null ? gym.name : (session.state.stores.find(s => s.id === session.state.storeId)?.name ?? ''),
+);
 
 // 示例数字：接上后端前先占位，展示共享组件和工具函数怎么用
 const stats = {
@@ -17,7 +22,7 @@ const stats = {
 <template>
   <header class="page-h">
     <h1>数据看板</h1>
-    <p>{{ formatDot(today) }} {{ weekdayOf(today) }}，{{ gym.name }}</p>
+    <p>{{ formatDot(today) }} {{ weekdayOf(today) }}，{{ storeName }}</p>
   </header>
   <section class="grid">
     <StatTile hero label="本月营收" :value="formatYuan(stats.revenueCents)" note="示例数据，接入后端后替换" />

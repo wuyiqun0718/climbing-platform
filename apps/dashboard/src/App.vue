@@ -1,14 +1,24 @@
 <script setup lang="ts">
 import type { StaffRole } from '@climb/api';
 import gym from '@gym';
+import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { NAV } from './router';
+import { storeOptions } from './permissions';
+import { navFor } from './router';
 import { session } from './session';
 
 const logo = `/gym/${gym.logo}`;
 const route = useRoute();
 const router = useRouter();
 const ROLE_LABEL: Record<StaffRole, string> = { owner: '馆长', manager: '店长', desk: '前台' };
+
+const nav = computed(() => (session.state.staff ? navFor(session.state.staff.role) : []));
+const stores = computed(() => (session.state.staff ? storeOptions(session.state.staff, session.state.stores) : []));
+// <select> 的值只能是字符串，「全部门店」用空字符串
+const storeValue = computed({
+  get: () => session.state.storeId ?? '',
+  set: v => session.setStore(v || null),
+});
 
 function logout() {
   session.logout();
@@ -25,7 +35,7 @@ function logout() {
         <span>{{ gym.shortName }}</span>
       </div>
       <nav>
-        <RouterLink v-for="n in NAV" :key="n.path" :to="n.path" class="nav-item">{{ n.label }}</RouterLink>
+        <RouterLink v-for="n in nav" :key="n.path" :to="n.path" class="nav-item">{{ n.label }}</RouterLink>
       </nav>
       <div v-if="session.state.staff" class="me">
         <div class="me-name">{{ session.state.staff.name }}</div>
@@ -34,6 +44,14 @@ function logout() {
       </div>
     </aside>
     <main class="main">
+      <div v-if="stores.length" class="topbar">
+        <label class="store">
+          <span>门店</span>
+          <select v-model="storeValue" :disabled="stores.length < 2">
+            <option v-for="s in stores" :key="s.id ?? ''" :value="s.id ?? ''">{{ s.name }}</option>
+          </select>
+        </label>
+      </div>
       <RouterView />
     </main>
   </div>
@@ -54,6 +72,9 @@ nav { display: grid; gap: 4px; }
 .logout { grid-row: 1 / span 2; grid-column: 2; padding: 6px 10px; font: inherit; font-size: 13px; color: #d6d6d0; background: transparent; border: 1px solid #3a3a37; border-radius: var(--radius-sm); cursor: pointer; }
 .logout:hover { color: #fff; border-color: #6e6e66; }
 .main { min-width: 0; padding: 24px 28px 56px; }
+.topbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+.store { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-muted); }
+.store select { padding: 7px 10px; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); }
 @media (max-width: 900px) {
   .shell { grid-template-columns: 1fr; }
   .side { position: static; height: auto; flex-direction: row; align-items: center; overflow-x: auto; }

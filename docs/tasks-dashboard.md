@@ -33,7 +33,7 @@
 - 内容：手机号 + 密码登录；token 存 localStorage（读写包 try/catch）；路由守卫，没登录跳登录页；401 时清 token 回登录页；侧栏底部显示员工名和退出。
 - 完成标准：mock 账号能登录、刷新后还在、退出后回登录页；错误密码有提示。
 
-**3. 角色权限和门店切换**
+**3. 角色权限和门店切换** ✅
 - 依赖：2
 - 涉及文件：`src/session.ts`、`src/router.ts`、`src/App.vue`、`src/permissions.ts`（+ 单测）
 - 内容：`owner | manager | desk` 三种角色能看哪些页、能做哪些操作集中写在 `permissions.ts`；导航按角色过滤；顶部门店切换（「全部门店」只给能看多店的人），选中的门店存在会话里，各页面读它。

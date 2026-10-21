@@ -1,4 +1,5 @@
 import type { ApiRequest, ApiResponse, DashboardSummary, LoginResult, RequestAdapter, Staff } from '@climb/api';
+import { canSeeStore } from '../../permissions';
 import type { MockDb } from './db';
 
 /**
@@ -26,7 +27,6 @@ function toStaff({ password: _p, active: _a, ...s }: MockDb['staff'][number]): S
   return s;
 }
 
-const canSeeStore = (staff: Staff, storeId: string) => staff.storeIds.length === 0 || staff.storeIds.includes(storeId);
 
 const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handle: Handler }[] = [
   {

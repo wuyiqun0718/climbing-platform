@@ -1,8 +1,11 @@
+import type { StaffRole } from '@climb/api';
+import { watch } from 'vue';
 import { createRouter, createWebHashHistory, type RouteLocationNormalized } from 'vue-router';
 import { onUnauthorized } from './api';
+import { canSeePage, type PageKey } from './permissions';
 import { session } from './session';
 
-export const NAV = [
+export const NAV: readonly { path: string; name: PageKey; label: string }[] = [
   { path: '/', name: 'dashboard', label: '数据看板' },
   { path: '/finance', name: 'finance', label: '财务' },
   { path: '/members', name: 'members', label: '会员' },
@@ -10,13 +13,19 @@ export const NAV = [
   { path: '/events', name: 'events', label: '活动' },
   { path: '/entries', name: 'entries', label: '入场与分享' },
   { path: '/products', name: 'products', label: '卡种与价格' },
-] as const;
+  { path: '/staff', name: 'staff', label: '员工' },
+];
+
+/** 这个角色能看到的导航 */
+export const navFor = (role: StaffRole) => NAV.filter(n => canSeePage(role, n.name));
 
 declare module 'vue-router' {
   interface RouteMeta {
     label?: string;
     /** 不用登录就能看（登录页） */
     public?: boolean;
+    /** 权限表里的页面，见 permissions.ts */
+    page?: PageKey;
   }
 }
 
@@ -27,7 +36,7 @@ export const router = createRouter({
     ...NAV.map(n => ({
       path: n.path,
       name: n.name,
-      meta: { label: n.label },
+      meta: { label: n.label, page: n.name },
       component: n.name === 'dashboard' ? () => import('./pages/DashboardPage.vue') : () => import('./pages/TodoPage.vue'),
     })),
     { path: '/:rest(.*)*', redirect: '/' },
@@ -43,8 +52,19 @@ export function redirectTarget(q: RouteLocationNormalized['query']['redirect']):
 router.beforeEach(to => {
   if (to.meta.public) return to.name === 'login' && session.loggedIn ? redirectTarget(to.query.redirect) : true;
   if (!session.loggedIn) return { name: 'login', query: to.fullPath === '/' ? {} : { redirect: to.fullPath } };
+  // 没权限的页面（直接输地址进来的）回看板；看板所有角色都能看
+  if (to.meta.page && session.state.staff && !canSeePage(session.state.staff.role, to.meta.page)) return to.name === 'dashboard' ? true : '/';
   return true;
 });
+
+// 后台校验后角色变了（比如被降成前台），当前页没权限就回看板
+watch(
+  () => session.state.staff?.role,
+  role => {
+    const page = router.currentRoute.value.meta.page;
+    if (role && page && !canSeePage(role, page)) router.replace('/');
+  },
+);
 
 // 登录过期或账号被停用：清掉会话，回登录页，登录后回到当前页
 onUnauthorized(() => {
