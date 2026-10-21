@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { ApiError, ENTRY_METHOD_TEXT, MEMBER_SOURCE_TEXT, PAY_CHANNEL_TEXT, REVENUE_CATEGORY_TEXT, type MemberDetail, type MemberEntryRow, type MemberOrderRow } from '@climb/api';
+import { ApiError, ENTRY_METHOD_TEXT, type DeskOrderResult, MEMBER_SOURCE_TEXT, PAY_CHANNEL_TEXT, REVENUE_CATEGORY_TEXT, type MemberDetail, type MemberEntryRow, type MemberOrderRow } from '@climb/api';
 import { CARD_STATE_TEXT, cardState, cardText, type Card } from '@climb/core';
-import { DataTable, errorText, type Column } from '@climb/ui-web';
+import { DataTable, errorText, useToast, type Column } from '@climb/ui-web';
 import { formatDot, formatYuan, toDateKey } from '@climb/utils';
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from '../api';
 import CardLedgerDrawer from '../components/CardLedgerDrawer.vue';
+import DeskOrderModal from '../components/DeskOrderModal.vue';
+import { canDo } from '../permissions';
 import { session } from '../session';
 import { createLatest } from './dashboard';
 
@@ -68,14 +70,27 @@ const entryColumns: Column<MemberEntryRow>[] = [
   { key: 'voided', label: '', format: r => (r.voided ? '已撤销' : '') },
 ];
 
+// 收款开卡：开好重新拉详情，新卡和订单马上出现
+const toast = useToast();
+const orderOpen = ref(false);
+const canOrder = computed(() => !!session.state.staff && canDo(session.state.staff.role, 'order.create'));
+function onOrdered(r: DeskOrderResult) {
+  toast.success(`已开卡：${r.card.name}`);
+  load();
+}
+
 const back = () => (window.history.state?.back ? router.back() : router.push({ name: 'members' }));
 </script>
 
 <template>
   <header class="page-h">
     <button type="button" class="back" @click="back">← 返回</button>
-    <h1>{{ data?.name ?? '会员详情' }}</h1>
+    <div class="title">
+      <h1>{{ data?.name ?? '会员详情' }}</h1>
+      <button v-if="data && canOrder" type="button" class="primary" @click="orderOpen = true">收款开卡</button>
+    </div>
   </header>
+  <DeskOrderModal v-if="data" v-model:open="orderOpen" :member="{ id: data.id, name: data.name }" @created="onOrdered" />
 
   <p v-if="notFound" class="state" role="alert">没有这个会员，可能已经被合并或删除了。</p>
   <p v-else-if="error" class="state error" role="alert">
@@ -135,6 +150,8 @@ const back = () => (window.history.state?.back ? router.back() : router.push({ n
 
 <style scoped>
 .page-h h1 { margin: 4px 0 16px; font-family: var(--font-display); font-size: 34px; font-weight: 400; }
+.title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.primary { padding: 6px 14px; font: inherit; font-weight: 600; color: var(--on-brand); background: var(--brand); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
 .back { padding: 0; font: inherit; font-size: 13px; color: var(--ink-muted); background: none; border: 0; cursor: pointer; }
 h2 { margin: 22px 0 10px; font-family: var(--font-display); font-size: 22px; font-weight: 400; }
 .state { margin: 0 0 16px; font-size: 13px; color: var(--ink-muted); }

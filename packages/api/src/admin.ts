@@ -1,4 +1,4 @@
-import { MEMBER_SOURCES, type Card, type LedgerEntry, type MemberSource, type PayChannel, type RevenueBucket, type RevenueCategory, type RevenueChannel } from '@climb/core';
+import { MEMBER_SOURCES, type Card, type DeskPayChannel, type LedgerEntry, type MemberSource, type PayChannel, type Product, type RevenueBucket, type RevenueCategory, type RevenueChannel } from '@climb/core';
 import type { Cents, DateKey } from '@climb/utils';
 import { createHttp, type ClientOptions } from './client';
 
@@ -269,6 +269,29 @@ export interface CardLedgerRow extends LedgerEntry {
   operatorName: string;
 }
 
+/**
+ * 线下收款开卡 POST /admin/orders。校验和开卡规则用 @climb/core 的 deskOrderErrors / issueCard（等馆方的规则都集中在 core 的 order.ts）：
+ * - channel 只能是 DESK_PAY_CHANNELS（现金、POS、转账）；amountCents 是实收，默认标价，跟标价不同必须带 priceReason。
+ * - 卡种必须在售，否则 422（code: product-off-sale）；会员、卡种、门店没有 404；没权限或门店不是员工能操作的 403；填得不对 400（data.field 指出哪一项）。
+ * - requestId 由弹窗每次打开时生成，同一个 requestId 重复提交只开一次卡，返回第一次的结果。
+ * 成功后：订单记为已付（paidOn = 今天，商品名、品类、标价存快照），发卡，记一笔 purchase 流水（操作人是员工，改价原因写在备注）；
+ * 会员第一次办期限卡或次卡时记下办卡日，归属门店改成这家店（归属按办卡门店，等馆方）。
+ */
+export interface CreateDeskOrderBody {
+  requestId: string;
+  memberId: string;
+  productId: string;
+  storeId: string;
+  channel: DeskPayChannel;
+  amountCents: Cents;
+  priceReason: string;
+}
+
+export interface DeskOrderResult {
+  order: MemberOrderRow;
+  card: Card;
+}
+
 export const PAY_CHANNEL_TEXT: Record<PayChannel, string> = {
   wechat: '微信支付',
   desk_cash: '现金',
@@ -315,6 +338,13 @@ export function createAdminApi(opts: ClientOptions) {
       },
       get: (id: string) => http<MemberDetail>('GET', `/admin/members/${encodeURIComponent(id)}`),
       create: (body: CreateMemberBody) => http<MemberDetail>('POST', '/admin/members', body),
+    },
+    /** 卡种列表（含下架的），按品类、排序。开卡弹窗只列在售的；新建、改价、上下架见任务 19 */
+    products: {
+      list: () => http<Product[]>('GET', '/admin/products'),
+    },
+    orders: {
+      create: (body: CreateDeskOrderBody) => http<DeskOrderResult>('POST', '/admin/orders', body),
     },
     cards: {
       ledger: (id: string) => http<CardLedger>('GET', `/admin/cards/${encodeURIComponent(id)}/ledger`),

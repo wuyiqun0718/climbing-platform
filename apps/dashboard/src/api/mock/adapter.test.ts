@@ -1,5 +1,6 @@
 import { ApiError, createAdminApi } from '@climb/api';
 import { ledgerMismatch } from '@climb/core';
+import { addDays } from '@climb/utils';
 import { describe, expect, it } from 'vitest';
 import { createMockAdapter } from './adapter';
 import { createMockDb, type MockDb } from './db';
@@ -441,5 +442,76 @@ describe('后台 mock：会员详情', () => {
     expect(await status(api.members.create({ ...body, source: 'legacy_import' }))).toBe(400);
     expect(await status(api.members.create({ ...body, storeId: 'huiju' }))).toBe(403);
     expect(await status(api.members.create({ ...body, storeId: 'nope' }))).toBe(404);
+  });
+});
+
+describe('后台 mock：线下收款开卡', () => {
+  const body = (over: Record<string, unknown> = {}) => ({
+    requestId: 'req-1', memberId: 'm-old-5', productId: 'p-10x', storeId: 'bingang', channel: 'desk_cash' as const, amountCents: 128_000, priceReason: '', ...over,
+  });
+
+  it('生成订单、卡和一笔 purchase 流水，会员详情马上能看到', async () => {
+    const { api, login, db } = setup();
+    await login('13800000003');
+    const { order, card } = await api.orders.create(body());
+    expect(order).toMatchObject({ productName: '10 次卡', category: 'count', channel: 'desk_cash', amountCents: 128_000, paidOn: '2026-10-21', refundedCents: 0, storeId: 'bingang' });
+    expect(card).toMatchObject({ kind: 'count', memberId: 'm-old-5', total: 10, remaining: 10, expiresOn: '2027-04-21' });
+    const detail = await api.members.get('m-old-5');
+    expect(detail.recentOrders[0]!.id).toBe(order.id);
+    expect(detail.cards.map(c => c.id)).toContain(card.id);
+    const ledger = await api.cards.ledger(card.id);
+    expect(ledger.entries).toHaveLength(1);
+    expect(ledger.entries[0]).toMatchObject({ reason: 'purchase', delta: 10, remainingAfter: 10, ref: { type: 'order', id: order.id }, operatorType: 'staff', operatorName: '前台小葵' });
+    expect(ledgerMismatch(ledger.card, ledger.entries)).toBeNull();
+    expect(db.orders.find(o => o.id === order.id)).toMatchObject({ createdByStaffId: 's-desk', listPriceCents: 128_000, productId: 'p-10x' });
+  });
+
+  it('同一个 requestId 重复提交只开一次卡', async () => {
+    const { api, login, db } = setup();
+    await login('13800000003');
+    const before = { orders: db.orders.length, cards: db.cards.length, ledger: db.ledger.length };
+    const a = await api.orders.create(body());
+    const b = await api.orders.create(body());
+    expect(b).toEqual(a);
+    expect({ orders: db.orders.length, cards: db.cards.length, ledger: db.ledger.length }).toEqual({ orders: before.orders + 1, cards: before.cards + 1, ledger: before.ledger + 1 });
+  });
+
+  it('改价要写原因，原因记在流水备注；不能高于标价', async () => {
+    const { api, login } = setup();
+    await login('13800000003');
+    const bad = await api.orders.create(body({ amountCents: 100_000 })).catch((e: ApiError) => e);
+    expect(bad).toMatchObject({ status: 400, data: { field: 'priceReason' } });
+    expect(await status(api.orders.create(body({ requestId: 'r2', amountCents: 200_000, priceReason: 'x' })))).toBe(400);
+    const { order, card } = await api.orders.create(body({ requestId: 'r3', amountCents: 100_000, priceReason: '老会员续卡' }));
+    expect(order.amountCents).toBe(100_000);
+    const ledger = await api.cards.ledger(card.id);
+    expect(ledger.entries[0]!.note).toContain('老会员续卡');
+  });
+
+  it('期限卡接在没到期的期限卡后面；新建的会员第一次办卡记下办卡日和归属门店', async () => {
+    const { api, login, db } = setup();
+    await login('13800000001');
+    const old = db.cards.find(c => c.id === 'c-old-20')!;
+    const { card } = await api.orders.create(body({ memberId: 'm-old-20', productId: 'p-30', amountCents: 59_900 }));
+    expect(card).toMatchObject({ kind: 'period', startsOn: addDays(old.expiresOn, 1) });
+
+    const m = await api.members.create({ phone: '13912345678', name: '新人', source: 'walkin', storeId: 'bingang' });
+    await api.orders.create(body({ requestId: 'r2', memberId: m.id, productId: 'p-90', storeId: 'huiju', channel: 'desk_pos', amountCents: 159_900 }));
+    const after = await api.members.get(m.id);
+    expect(after.homeStoreId).toBe('huiju');
+    expect(db.members.find(x => x.id === m.id)!.firstCardOn).toBe('2026-10-21');
+    expect(after.cards[0]).toMatchObject({ kind: 'period', startsOn: '2026-10-21', expiresOn: '2027-01-18' });
+  });
+
+  it('下架的卡种 422；微信不是线下方式 400；别的店 403；没这个会员、卡种 404；列出卡种含下架的', async () => {
+    const { api, login } = setup();
+    await login('13800000003');
+    expect((await api.products.list()).some(p => !p.onSale)).toBe(true);
+    expect(await status(api.orders.create(body({ productId: 'p-summer', amountCents: 49_900 })))).toBe(422);
+    expect(await status(api.orders.create(body({ channel: 'wechat' })))).toBe(400);
+    expect(await status(api.orders.create(body({ storeId: 'huiju' })))).toBe(403);
+    expect(await status(api.orders.create(body({ memberId: 'nobody' })))).toBe(404);
+    expect(await status(api.orders.create(body({ productId: 'nothing' })))).toBe(404);
+    expect(await status(api.orders.create(body({ requestId: '' })))).toBe(400);
   });
 });

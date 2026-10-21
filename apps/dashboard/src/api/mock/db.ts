@@ -1,5 +1,5 @@
-import { MEMBER_SOURCES, type EntryMethod, type MemberSource, type Staff, type Store } from '@climb/api';
-import { defaultRules, type Card, type CountCard, type GymRules, type LedgerEntry, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
+import { MEMBER_SOURCES, type DeskOrderResult, type EntryMethod, type MemberSource, type Staff, type Store } from '@climb/api';
+import { defaultRules, type Card, type CountCard, type GymRules, type LedgerEntry, type Product, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
 import { addDays, addMonths, daysBetween, monthOf, type DateKey } from '@climb/utils';
 
 /** 会员（对应 members 表），目前放了看板「新客从哪来」和会员列表用到的字段 */
@@ -49,6 +49,12 @@ export interface MockReferral {
 export interface MockOrder extends RevenueOrder {
   memberId: string;
   productName: string;
+  /** 前台开的单才有：卡种、下单时的标价、改价原因、开单员工、发的卡（示例订单没有） */
+  productId?: string;
+  listPriceCents?: number;
+  priceReason?: string;
+  createdByStaffId?: string;
+  cardId?: string;
 }
 
 /** 退款（对应 refunds 表） */
@@ -69,6 +75,10 @@ export interface MockDb {
   referrals: MockReferral[];
   /** 会员的卡：老会员的期限卡（给「7 天内到期」用）和本月新客办的次卡 */
   cards: Card[];
+  /** 卡种（对应 products 表），示例卡和示例订单的价格照这里 */
+  products: Product[];
+  /** 前台开单的幂等记录：requestId → 第一次的结果 */
+  deskOrderRequests: Record<string, DeskOrderResult>;
   /** 订单和退款（财务页用；看板的营收目前还是 storeStats 里的示例数字） */
   orders: MockOrder[];
   refunds: MockRefund[];
@@ -101,6 +111,8 @@ export function createMockDb(today: DateKey, rules: GymRules = defaultRules): Mo
     staff,
     ...withLedger(withCheckIns(sampleMembers(today), today), staff, today),
     ...sampleOrders(today),
+    products: sampleProducts(),
+    deskOrderRequests: {},
     waiverVersion: '2026-01',
     storeStats: {
       bingang: { monthRevenueCents: 6_194_200, todayEntries: 45, lastWeekSameTimeEntries: 41, todayBookings: 9, activeMembers: 138 },
@@ -361,6 +373,20 @@ function sampleOrders(today: DateKey): Pick<MockDb, 'orders' | 'refunds'> {
     });
   }
   return { orders, refunds };
+}
+
+/** 示例卡种：ID 跟示例卡上的 productId 对得上，价格跟示例订单一致；有一个下架的 */
+function sampleProducts(): Product[] {
+  return [
+    { id: 'p-30', category: 'period', name: '月卡', priceCents: 59_900, days: 30, perks: ['每月 1 次老带新'], onSale: true },
+    { id: 'p-90', category: 'period', name: '季卡', priceCents: 159_900, days: 90, perks: ['每月 1 次老带新'], onSale: true },
+    { id: 'p-365', category: 'period', name: '年卡', priceCents: 499_900, days: 365, perks: ['每月 1 次老带新'], onSale: true },
+    { id: 'p-10x', category: 'count', name: '10 次卡', priceCents: 128_000, quantity: 10, validMonths: 6, perks: ['可以分次送给朋友'], onSale: true },
+    { id: 'p-20x', category: 'count', name: '20 次卡', priceCents: 229_900, quantity: 20, validMonths: 12, perks: ['可以分次送给朋友'], onSale: true },
+    { id: 'p-pt5', category: 'pt', name: '私教 5 节', priceCents: 199_900, quantity: 5, validMonths: 3, perks: ['可约任意教练'], onSale: true },
+    { id: 'p-class10', category: 'class', name: '团课 10 次', priceCents: 98_000, quantity: 10, validMonths: 4, perks: ['满员时优先候补'], onSale: true },
+    { id: 'p-summer', category: 'count', name: '暑期 5 次卡', priceCents: 49_900, quantity: 5, validMonths: 2, perks: [], onSale: false },
+  ];
 }
 
 const SURNAMES = ['林', '陈', '王', '赵', '周', '吴', '郑', '孙', '李', '何', '许', '高', '宋', '唐', '韩', '曹', '彭', '苏'];

@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { MEMBER_SOURCE_TEXT, type MemberDetail, type MemberListRow, type PageOf } from '@climb/api';
+import { MEMBER_SOURCE_TEXT, type DeskOrderResult, type MemberDetail, type MemberListRow, type PageOf } from '@climb/api';
 import { DataTable, Pager, errorText, useToast, type Column } from '@climb/ui-web';
 import { formatDot } from '@climb/utils';
 import { onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from '../api';
+import DeskOrderModal from '../components/DeskOrderModal.vue';
 import MemberForm from '../components/MemberForm.vue';
 import { canDo } from '../permissions';
 import { session } from '../session';
@@ -73,6 +74,14 @@ function onCreated(m: MemberDetail) {
   openMember(m.id);
 }
 
+// 收款开卡：开好跳到会员详情，新卡和订单在那里
+const orderOpen = ref(false);
+const canOrder = () => !!session.state.staff && canDo(session.state.staff.role, 'order.create');
+function onOrdered(r: DeskOrderResult, memberId: string) {
+  toast.success(`已开卡：${r.card.name}`);
+  openMember(memberId);
+}
+
 const emptyText = () => (qFromRoute() ? `没找到「${qFromRoute()}」，换个手机号或名字试试` : '还没有会员');
 </script>
 
@@ -82,8 +91,12 @@ const emptyText = () => (qFromRoute() ? `没找到「${qFromRoute()}」，换个
       <h1>会员</h1>
       <p>所有门店的会员；点一行看详情</p>
     </div>
-    <button v-if="canCreate()" type="button" class="create" @click="formOpen = true">新建会员</button>
+    <div class="actions">
+      <button v-if="canOrder()" type="button" class="create" @click="orderOpen = true">收款开卡</button>
+      <button v-if="canCreate()" type="button" class="create" @click="formOpen = true">新建会员</button>
+    </div>
   </header>
+  <DeskOrderModal v-model:open="orderOpen" @created="onOrdered" />
   <MemberForm v-model:open="formOpen" :phone="prefillPhone()" @created="onCreated" @open-existing="openMember" />
   <form class="search" role="search" @submit.prevent="search()">
     <input v-model="input" type="search" placeholder="手机号（后四位也行）或名字" aria-label="搜索会员" maxlength="30" />
@@ -116,6 +129,7 @@ const emptyText = () => (qFromRoute() ? `没找到「${qFromRoute()}」，换个
 
 <style scoped>
 .page-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.actions { display: flex; gap: 8px; }
 .create { padding: 6px 14px; font: inherit; font-weight: 600; color: var(--on-brand); background: var(--brand); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
 .page-h h1 { margin: 0; font-family: var(--font-display); font-size: 34px; font-weight: 400; }
 .page-h p { margin: 4px 0 16px; font-size: 13px; color: var(--ink-muted); }

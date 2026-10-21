@@ -6,8 +6,10 @@ import {
   type ApiResponse,
   type CardLedger,
   type CardLedgerRow,
+  type CreateDeskOrderBody,
   type CreateMemberBody,
   type DashboardSummary,
+  type DeskOrderResult,
   type ExpiringCardRow,
   type FinanceRefundRow,
   type FinanceSummary,
@@ -25,20 +27,25 @@ import {
   type StoreCompareRow,
 } from '@climb/api';
 import {
+  PRODUCT_REVENUE_CATEGORY,
+  countsAsCardPurchase,
+  deskOrderErrors,
   expiringPeriodCards,
   financeRangeError,
   findMemberByPhone,
   isCardValid,
+  issueCard,
   newMemberErrors,
   normalizePhone,
+  purchaseLedgerEntry,
   summarizeRevenue,
   type Card,
   type MemberSource,
   type RevenueChannel,
 } from '@climb/core';
-import { maskPhone, monthOf } from '@climb/utils';
+import { formatYuan, maskPhone, monthOf } from '@climb/utils';
 import { MEMBERS_VISIBLE_ACROSS_STORES, canDo, canSeePage, canSeeStore } from '../../permissions';
-import type { MockDb, MockMember } from './db';
+import type { MockDb, MockMember, MockOrder } from './db';
 
 /**
  * 后端没好之前用的假后端：实现 @climb/api 里后台接口的契约，数据放在内存里。
@@ -160,23 +167,13 @@ function memberDetail(db: MockDb, staff: Staff, id: string): ApiResponse {
   const cards = db.cards
     .filter(c => c.memberId === id)
     .sort((a, b) => valid(a) - valid(b) || b.expiresOn.localeCompare(a.expiresOn) || a.id.localeCompare(b.id));
-  const refunded = (orderId: string) =>
-    db.refunds.filter(r => r.orderId === orderId && r.refundedOn).reduce((n, r) => n + r.amountCents, 0);
-  // 没付款的排最前（刚下的单），其余按付款日倒序
+  // 没付款的排最前（刚下的单），其余按付款日倒序，同一天后下的在前
   const recentOrders = db.orders
-    .filter(o => o.memberId === id)
-    .sort((a, b) => (b.paidOn ?? '9999').localeCompare(a.paidOn ?? '9999') || b.id.localeCompare(a.id, undefined, { numeric: true }))
+    .map((o, i) => ({ o, i }))
+    .filter(({ o }) => o.memberId === id)
+    .sort((a, b) => (b.o.paidOn ?? '9999').localeCompare(a.o.paidOn ?? '9999') || b.i - a.i)
     .slice(0, MEMBER_RECENT_LIMIT)
-    .map((o): MemberOrderRow => ({
-      id: o.id,
-      storeId: o.storeId,
-      productName: o.productName,
-      category: o.category,
-      channel: o.channel,
-      amountCents: o.amountCents,
-      paidOn: o.paidOn,
-      refundedCents: refunded(o.id),
-    }));
+    .map(({ o }) => orderRow(db, o));
   const recentEntries = db.checkIns
     .filter(c => c.memberId === id)
     .sort((a, b) => b.on.localeCompare(a.on) || b.id.localeCompare(a.id, undefined, { numeric: true }))
@@ -232,6 +229,87 @@ function createMember(db: MockDb, staff: Staff, body: Partial<CreateMemberBody> 
   };
   db.members.push(m);
   return memberDetail(db, staff, m.id);
+}
+
+/** 会员详情、开卡结果里的订单行；已退只算退成功的 */
+function orderRow(db: MockDb, o: MockOrder): MemberOrderRow {
+  const refundedCents = db.refunds.filter(r => r.orderId === o.id && r.refundedOn).reduce((n, r) => n + r.amountCents, 0);
+  return { id: o.id, storeId: o.storeId, productName: o.productName, category: o.category, channel: o.channel, amountCents: o.amountCents, paidOn: o.paidOn, refundedCents };
+}
+
+/** 新记录的 ID：前缀 + 序号，跳过已经有的 */
+function nextId(prefix: string, taken: { id: string }[]): string {
+  const ids = new Set(taken.map(x => x.id));
+  let n = taken.length + 1;
+  while (ids.has(`${prefix}${n}`)) n++;
+  return `${prefix}${n}`;
+}
+
+/** 现在的时间，日期用 mock 的 today（测试里固定），时分秒用本机时间 */
+function nowAt(db: MockDb): string {
+  const t = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${db.today}T${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}+08:00`;
+}
+
+const badInput = (field: string, message: string): ApiResponse => ({ status: 400, data: { code: 'bad-input', field, message } });
+
+/** 线下收款开卡：口径见 @climb/api 的 CreateDeskOrderBody，规则都在 @climb/core 的 order.ts */
+function createDeskOrder(db: MockDb, staff: Staff, body: Partial<CreateDeskOrderBody> | null): ApiResponse {
+  if (!canDo(staff.role, 'order.create')) return fail(403, 'forbidden', '没有开卡权限');
+  const requestId = String(body?.requestId ?? '');
+  if (!requestId) return badInput('requestId', '缺少 requestId');
+  const done = db.deskOrderRequests[requestId];
+  if (done) return ok(done);
+
+  const m = db.members.find(x => x.id === body?.memberId);
+  if (!m) return fail(404, 'member-not-found', '没有这个会员');
+  if (!MEMBERS_VISIBLE_ACROSS_STORES && !canSeeStore(staff, m.homeStoreId)) return fail(403, 'forbidden', '没有这家店的权限');
+  const product = db.products.find(p => p.id === body?.productId);
+  if (!product) return fail(404, 'product-not-found', '没有这个卡种');
+  const storeId = String(body?.storeId ?? '');
+  if (!db.stores.some(st => st.id === storeId)) return fail(404, 'store-not-found', '没有这家店');
+  if (!canSeeStore(staff, storeId)) return fail(403, 'forbidden', '没有这家店的权限');
+  if (!product.onSale) return fail(422, 'product-off-sale', `${product.name}已经下架了`);
+
+  const input = { channel: String(body?.channel ?? ''), amountCents: Number(body?.amountCents), priceReason: String(body?.priceReason ?? '') };
+  const errs = deskOrderErrors(product, input);
+  if (errs) {
+    const field = Object.keys(errs)[0] as keyof typeof errs;
+    return badInput(field, errs[field]!);
+  }
+
+  const reason = input.priceReason.trim();
+  const repriced = input.amountCents !== product.priceCents;
+  const order: MockOrder = {
+    id: nextId('o-desk-', db.orders),
+    storeId,
+    memberId: m.id,
+    productName: product.name,
+    category: PRODUCT_REVENUE_CATEGORY[product.category],
+    channel: input.channel as CreateDeskOrderBody['channel'],
+    amountCents: input.amountCents,
+    paidOn: db.today,
+    productId: product.id,
+    listPriceCents: product.priceCents,
+    priceReason: repriced ? reason : '',
+    createdByStaffId: staff.id,
+  };
+  const card = issueCard({ id: nextId('c-desk-', db.cards), product, memberId: m.id, cards: db.cards.filter(c => c.memberId === m.id), today: db.today });
+  order.cardId = card.id;
+  const note = repriced ? `标价 ${formatYuan(product.priceCents)}，实收 ${formatYuan(input.amountCents)}：${reason}` : '';
+  const entry = purchaseLedgerEntry({ id: nextId('l-', db.ledger), card, at: nowAt(db), orderId: order.id, operator: { operatorType: 'staff', operatorId: staff.id }, note });
+
+  db.orders.push(order);
+  db.cards.push(card);
+  db.ledger.push(entry);
+  if (countsAsCardPurchase(product.category) && !m.firstCardOn) {
+    m.firstCardOn = db.today;
+    m.homeStoreId = storeId;
+  }
+  const res: DeskOrderResult = { order: orderRow(db, order), card };
+  db.deskOrderRequests[requestId] = res;
+  return ok(res);
 }
 
 /** 卡流水：口径见 @climb/api 的 CardLedger */
@@ -358,6 +436,18 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
     path: /^\/admin\/members\/([^/]+)$/,
     auth: true,
     handle: ({ db, params, staff }) => memberDetail(db, staff!, decodeURIComponent(params[0]!)),
+  },
+  {
+    method: 'GET',
+    path: /^\/admin\/products$/,
+    auth: true,
+    handle: ({ db }) => ok(db.products),
+  },
+  {
+    method: 'POST',
+    path: /^\/admin\/orders$/,
+    auth: true,
+    handle: ({ db, body, staff }) => createDeskOrder(db, staff!, body),
   },
   {
     method: 'GET',
