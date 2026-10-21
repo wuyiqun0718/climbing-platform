@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { InsurancePolicy } from './insurance';
-import { ledgerMismatch, type LedgerEntry } from './ledger';
+import { ledgerMismatch } from './ledgerCheck';
+import type { LedgerEntry } from './types';
 import { RuleError } from './rules';
 import type { Card, CountCard, GiftCard, PeriodCard, ReferralVoucher } from './types';
 import { checkInVoidLedgerEntry, voidCheckIn as voidWith, type VoidableCheckIn, type VoidCheckInArgs } from './voidCheckIn';
@@ -22,10 +23,10 @@ describe('撤销入场：次数', () => {
     const r = voidCheckIn({ checkIn: ci, card: tenTimes, past: [ci], policies: [], reason: '扫错了卡' });
     expect(r).toMatchObject({ restored: 1, card: { remaining: 6 }, voucherRestored: false });
     const ledger: LedgerEntry[] = [
-      { id: 'l1', cardId: 'c1', at: `${today}T10:00:00+08:00`, delta: 5, remainingAfter: 5, expiresOnAfter: tenTimes.expiresOn, reason: 'purchase', ref: null, operatorType: 'member', operatorId: 'jie', note: '' },
+      { id: 'l1', cardId: 'c1', at: `${today}T10:00:00+08:00`, on: today, delta: 5, remainingAfter: 5, expiresOnAfter: tenTimes.expiresOn, reason: 'purchase', operatorType: 'member', operatorId: 'jie', note: '' },
     ];
     const e = checkInVoidLedgerEntry({ id: 'l2', card: r.card!, restored: r.restored, at: `${today}T12:00:00+08:00`, checkInId: 'ci1', operator: { operatorType: 'staff', operatorId: 's1' }, note: '扫错了卡' });
-    expect(e).toMatchObject({ delta: 1, remainingAfter: 6, reason: 'check_in_void', ref: { type: 'check_in', id: 'ci1' }, note: '扫错了卡' });
+    expect(e).toMatchObject({ delta: 1, remainingAfter: 6, reason: 'check_in_void', refType: 'check_in', refId: 'ci1', note: '扫错了卡' });
     expect(ledgerMismatch(r.card!, [...ledger, e!])).toBeNull();
   });
 

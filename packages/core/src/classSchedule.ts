@@ -1,9 +1,9 @@
 import { addDays, fromDateKey, isDateKey, type DateKey } from '@climb/utils';
 import { cancelSession, fillFromWaitlist, sessionSeats, sessionStartsAt, type CardChange, type ClassBooking, type ClassSession, type ClassType } from './classes';
 import { CLASS_CAPACITY_MAX, sessionFromType } from './classTypes';
-import type { LedgerEntry } from './ledger';
+import { ledgerOnOf } from './ledgerCheck';
 import { RuleError, type RuleErrorCode } from './rules';
-import type { Card } from './types';
+import type { Card, LedgerEntry } from './types';
 
 /**
  * 后台团课排期（任务 26）：加一节课、改时间人数教练、复制上周课表、取消一节课。课表就是小程序约课看的同一份 ClassSession。
@@ -199,11 +199,13 @@ export function classLedgerEntry(args: { id: string; change: CardChange; at: str
     id: args.id,
     cardId: change.card.id,
     at: args.at,
+    on: ledgerOnOf(args.at),
     delta: change.delta,
     remainingAfter: change.card.remaining,
     expiresOnAfter: change.card.expiresOn,
     reason: change.reason,
-    ref: { type: 'class_booking', id: change.bookingId },
+    refType: 'class_booking',
+    refId: change.bookingId,
     ...args.operator,
     note: args.note ?? '',
   };

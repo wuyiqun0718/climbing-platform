@@ -1,61 +1,33 @@
 import { describe, expect, it } from 'vitest';
-import { ledgerAfterText, ledgerDeltaText, ledgerMismatch, type LedgerEntry } from './ledger';
-import type { CountCard, PeriodCard } from './types';
+import { entryLedgerDelta, ledgerEntry } from './ledger';
+import type { CountCard, PeriodCard, ReferralVoucher } from './types';
 
-const tenTimes: CountCard = { id: 'c1', kind: 'count', memberId: 'jie', productId: 'c10', name: '10 次卡', total: 10, remaining: 8, expiresOn: '2027-02-06' };
+const on = '2026-10-21';
+const at = '2026-10-21T10:00:00.000Z';
+const c10: CountCard = { id: 'c1', kind: 'count', memberId: 'jie', productId: 'c10', name: '10 次卡', total: 10, remaining: 5, expiresOn: '2027-02-06' };
 const year: PeriodCard = { id: 'p1', kind: 'period', memberId: 'jie', productId: 'y1', name: '年卡', startsOn: '2026-03-15', expiresOn: '2027-03-14' };
+const voucher: ReferralVoucher = { id: 'r1', kind: 'referral', memberId: 'lu', fromMemberId: 'jie', shareId: 's1', name: '老带新体验券', expiresOn: '2026-10-31' };
 
-let n = 0;
-const entry = (cardId: string, delta: number, remainingAfter: number | null, expiresOnAfter: string, reason: LedgerEntry['reason'] = 'check_in'): LedgerEntry => ({
-  id: `l${++n}`, cardId, at: '2026-10-01T10:00:00+08:00', delta, remainingAfter, expiresOnAfter, reason, ref: null, operatorType: 'member', operatorId: 'jie', note: '',
-});
-
-describe('卡流水对账', () => {
-  const count = [
-    entry('c1', 10, 10, '2027-02-06', 'purchase'),
-    entry('c1', -1, 9, '2027-02-06'),
-    entry('c1', -1, 8, '2027-02-06'),
-    entry('c1', -1, 7, '2027-02-06'),
-    entry('c1', 1, 8, '2027-02-06', 'check_in_void'),
-  ];
-
-  it('每笔接得上、最后一笔等于卡上的就一致', () => {
-    expect(ledgerMismatch(tenTimes, count)).toBeNull();
-    expect(ledgerMismatch(year, [entry('p1', 0, null, '2027-03-14', 'purchase')])).toBeNull();
+describe('流水', () => {
+  it('记下变化后的剩余次数、有效期和关联记录', () => {
+    expect(ledgerEntry({ id: 'l1', card: c10, delta: -1, reason: 'check_in', on, at, ref: { type: 'check_in', id: 'ci-1' } })).toEqual({
+      id: 'l1', cardId: 'c1', delta: -1, remainingAfter: 5, expiresOnAfter: '2027-02-06', reason: 'check_in', refType: 'check_in', refId: 'ci-1', on, at,
+    });
   });
 
-  it('只看这张卡的流水', () => {
-    expect(ledgerMismatch(tenTimes, [entry('x', 5, 5, '2027-01-01', 'purchase'), ...count])).toBeNull();
+  it('期限卡没有剩余次数', () => {
+    expect(ledgerEntry({ id: 'l2', card: year, delta: 0, reason: 'purchase', on, at })).not.toHaveProperty('remainingAfter');
   });
 
-  it('最后一笔跟卡上的剩余、到期日对不上', () => {
-    expect(ledgerMismatch({ ...tenTimes, remaining: 7 }, count)).toMatch('卡上剩 7');
-    expect(ledgerMismatch({ ...tenTimes, expiresOn: '2027-03-01' }, count)).toMatch('到期');
+  it('体验券用掉后剩 0', () => {
+    expect(ledgerEntry({ id: 'l3', card: { ...voucher, usedOn: on }, delta: -1, reason: 'check_in', on, at }).remainingAfter).toBe(0);
   });
 
-  it('中间某一笔算错了', () => {
-    const bad = [...count.slice(0, 2), entry('c1', -1, 7, '2027-02-06')];
-    expect(ledgerMismatch({ ...tenTimes, remaining: 7 }, bad)).toMatch('9 -1 ≠ 7');
-  });
-
-  it('没有流水、期限卡记了次数都不行', () => {
-    expect(ledgerMismatch(tenTimes, [])).toBe('没有流水');
-    expect(ledgerMismatch(year, [entry('p1', 1, 1, '2027-03-14', 'purchase')])).toMatch('不记次数');
+  it('入场扣次、用掉体验券才记；期限卡和同日再次入场不记', () => {
+    expect(entryLedgerDelta(c10, { ...c10, remaining: 4 }, 1)).toBe(-1);
+    expect(entryLedgerDelta(c10, c10, 0)).toBeNull();
+    expect(entryLedgerDelta(year, year, 0)).toBeNull();
+    expect(entryLedgerDelta(voucher, { ...voucher, usedOn: on }, 0)).toBe(-1);
+    expect(entryLedgerDelta({ ...voucher, usedOn: on }, { ...voucher, usedOn: on }, 0)).toBeNull();
   });
 });
-
-describe('卡流水的展示文字', () => {
-  it('变化量：有正负号；次数没变的看有效期变没变', () => {
-    expect(ledgerDeltaText(tenTimes, entry('c1', 10, 10, '2027-02-06', 'purchase'), undefined)).toBe('+10 次');
-    expect(ledgerDeltaText(tenTimes, entry('c1', -1, 9, '2027-02-06'), undefined)).toBe('−1 次');
-    const before = entry('p1', 0, null, '2027-03-14', 'purchase');
-    expect(ledgerDeltaText(year, entry('p1', 0, null, '2027-04-14', 'unfreeze'), before)).toBe('改有效期');
-    expect(ledgerDeltaText(year, entry('p1', 0, null, '2027-03-14', 'freeze'), before)).toBe('—');
-  });
-
-  it('变化后：次卡写剩几次和到期日，期限卡只写到期日', () => {
-    expect(ledgerAfterText(tenTimes, entry('c1', -1, 9, '2027-02-06'))).toBe('剩 9 次，2027.02.06 到期');
-    expect(ledgerAfterText(year, entry('p1', 0, null, '2027-03-14', 'purchase'))).toBe('2027.03.14 到期');
-  });
-});
-

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /** 一张卡的流水，从会员详情点卡打开。最新的在上面 */
 import type { CardLedger, CardLedgerRow } from '@climb/api';
-import { LEDGER_REASON_TEXT, ledgerAfterText, ledgerDeltaText } from '@climb/core';
+import { LEDGER_REASON_LABELS, ledgerAfterText, ledgerDeltaText } from '@climb/core';
 import { DataTable, Modal, errorText, type Column } from '@climb/ui-web';
 import { formatDotTime } from '@climb/utils';
 import { computed, ref, watch } from 'vue';
@@ -41,7 +41,7 @@ const rows = computed<Row[]>(() => {
 
 const columns: Column<Row>[] = [
   { key: 'at', label: '时间', format: r => formatDotTime(r.at) },
-  { key: 'reason', label: '原因', format: r => LEDGER_REASON_TEXT[r.reason] },
+  { key: 'reason', label: '原因', format: r => LEDGER_REASON_LABELS[r.reason] },
   { key: 'deltaText', label: '变化', num: true },
   { key: 'afterText', label: '变化后' },
   { key: 'operatorName', label: '操作人', format: r => r.operatorName || '—' },

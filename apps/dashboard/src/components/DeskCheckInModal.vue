@@ -3,7 +3,7 @@
  * 手动登记入场弹窗（会员手机没电时前台代登记），用 v-model:open。
  * 能用哪些卡、扣几次、同日再次入场不扣都由接口按 @climb/core 的 checkIn.ts 算好返回，这里只负责显示和提交。登记好 emit created。
  */
-import type { CheckInPreview, DeskCheckInResult } from '@climb/api';
+import type { DeskCheckInPreview, DeskCheckInResult } from '@climb/api';
 import { ENTRY_BLOCKED_TEXT, POLICY_STATUS_TEXT, cardText, type Card } from '@climb/core';
 import { Field, Modal, errorText } from '@climb/ui-web';
 import { toDateKey } from '@climb/utils';
@@ -17,7 +17,7 @@ const emit = defineEmits<{ 'update:open': [open: boolean]; created: [result: Des
 
 const formId = useId();
 const storeId = ref('');
-const preview = ref<CheckInPreview | null>(null);
+const preview = ref<DeskCheckInPreview | null>(null);
 const loading = ref(false);
 const loadErr = ref('');
 const cardId = ref('');

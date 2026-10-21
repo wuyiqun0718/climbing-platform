@@ -1,10 +1,11 @@
 <script setup lang="ts">
 /**
  * 分享记录（任务 21）：次卡转赠和老带新，挂在入场记录页的「分享」tab，跟顶部门店切换联动（按发起人的归属门店）。
- * 状态由接口按 @climb/core 的 shareRecordState 推导，文字用 core 的 SHARE_RECORD_STATE_TEXT，跟小程序一致。
+ * 状态由接口按 @climb/core share.ts 的 shareDisplayStatus 推导，文字用同一个文件的 SHARE_STATUS_TEXT，跟小程序同一份。
  */
 import type { ShareList, ShareRow } from '@climb/api';
-import { SHARE_KIND_TEXT, SHARE_RECORD_STATE_TEXT, type Share } from '@climb/core';
+import { SHARE_KIND_TEXT } from '@climb/api';
+import { SHARE_STATUS_TEXT, type Share } from '@climb/core';
 import { DataTable, errorText, type Column } from '@climb/ui-web';
 import { formatDot } from '@climb/utils';
 import { computed, ref, watch } from 'vue';
@@ -36,7 +37,7 @@ async function load() {
 
 watch(() => [session.state.staff?.id, session.state.storeId, kind.value], () => session.state.staff && load(), { immediate: true });
 
-const stateText = (r: ShareRow) => (r.state === 'used' && r.usedOn ? `${SHARE_RECORD_STATE_TEXT.used}（${formatDot(r.usedOn)}）` : SHARE_RECORD_STATE_TEXT[r.state]);
+const statusText = (r: ShareRow) => (r.status === 'used' && r.usedOn ? `${SHARE_STATUS_TEXT.used}（${formatDot(r.usedOn)}）` : SHARE_STATUS_TEXT[r.status]);
 
 const columns = computed<Column<ShareRow>[]>(() => [
   { key: 'createdOn', label: '发出', format: r => formatDot(r.createdOn) },
@@ -45,7 +46,7 @@ const columns = computed<Column<ShareRow>[]>(() => [
   ...(session.state.storeId === null ? [{ key: 'storeId', label: '门店', format: (r: ShareRow) => storeNameOf(r.storeId) }] : []),
   { key: 'claimerName', label: '领取人', format: r => (r.claimerId ? r.claimerName || '（没填名字）' : '—') },
   { key: 'quantity', label: '次数', num: true, format: r => (r.quantity === null ? '—' : `${r.quantity} 次`) },
-  { key: 'state', label: '状态', format: stateText },
+  { key: 'status', label: '状态', format: statusText },
   { key: 'expiresOn', label: '到期', format: r => formatDot(r.expiresOn) },
 ]);
 </script>

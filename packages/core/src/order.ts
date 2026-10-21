@@ -1,7 +1,7 @@
 import { addDays, addMonths, type Cents, type DateKey } from '@climb/utils';
-import type { LedgerEntry } from './ledger';
+import { ledgerOnOf } from './ledgerCheck';
 import type { PayChannel, RevenueCategory } from './finance';
-import type { Card, PeriodCard, Product, ProductCategory } from './types';
+import type { Card, PeriodCard, Product, ProductCategory, LedgerEntry } from './types';
 
 /**
  * 前台线下收款开卡的规则：能收哪些方式、实收金额怎么校验、开出来的卡从哪天算到哪天。
@@ -72,7 +72,11 @@ export function parseYuanInput(raw: string): Cents {
 }
 
 /** 期限卡从哪天开始：今天；手上还有没到期的期限卡就接在最晚那张后面 */
-export function periodStartsOn(cards: readonly Card[], memberId: string, today: DateKey): DateKey {
+/**
+ * 注意：小程序分支 orders.ts 也有 periodStartsOn，算法不一样（那边把冻结中的卡也算上，并按 periodEndOn 接续），
+ * 这边沿用原来的做法，改名免得重名；要不要统一等拍板，见 docs/core-unify.md。
+ */
+export function deskPeriodStartsOn(cards: readonly Card[], memberId: string, today: DateKey): DateKey {
   const latest = cards
     .filter((c): c is PeriodCard => c.kind === 'period' && c.memberId === memberId && c.expiresOn >= today && (c.status ?? 'normal') === 'normal')
     .reduce<DateKey | null>((max, c) => (max === null || c.expiresOn > max ? c.expiresOn : max), null);
@@ -84,7 +88,7 @@ export function issueCard(args: { id: string; product: Product; memberId: string
   const { id, product: p, memberId, today } = args;
   const base = { id, memberId, productId: p.id, name: p.name };
   if (p.category === 'period') {
-    const startsOn = periodStartsOn(args.cards, memberId, today);
+    const startsOn = deskPeriodStartsOn(args.cards, memberId, today);
     return { ...base, kind: 'period', startsOn, expiresOn: addDays(startsOn, (p.days ?? 1) - 1) };
   }
   const total = p.quantity ?? 1;
@@ -108,11 +112,13 @@ export function purchaseLedgerEntry(args: {
     id: args.id,
     cardId: card.id,
     at: args.at,
+    on: ledgerOnOf(args.at),
     delta: counted ? card.total : 0,
-    remainingAfter: counted ? card.remaining : null,
+    ...(counted ? { remainingAfter: card.remaining } : {}),
     expiresOnAfter: card.expiresOn,
     reason: 'purchase',
-    ref: { type: 'order', id: args.orderId },
+    refType: 'order',
+    refId: args.orderId,
     ...args.operator,
     note: args.note ?? '',
   };

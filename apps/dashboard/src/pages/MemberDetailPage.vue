@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ApiError, ENTRY_METHOD_TEXT, ORDER_STATUS_TEXT, type RefundResult, type DeskCheckInResult, type DeskOrderResult, type VoidCheckInResult, MEMBER_SOURCE_TEXT, PAY_CHANNEL_TEXT, REVENUE_CATEGORY_TEXT, type MemberDetail, type MemberEntryRow, type MemberOrderRow } from '@climb/api';
-import { CARD_STATE_TEXT, cardState, cardText, type Card } from '@climb/core';
+import { ApiError, ENTRY_METHOD_TEXT, type RefundResult, type DeskCheckInResult, type DeskOrderResult, type VoidCheckInResult, MEMBER_SOURCE_TEXT, PAY_CHANNEL_TEXT, REVENUE_CATEGORY_TEXT, type MemberDetail, type MemberEntryRow, type MemberOrderRow } from '@climb/api';
+import { CARD_STATE_TEXT, cardState, cardText, type Card, ORDER_STATUS_LABELS } from '@climb/core';
 import { ConfirmButton, DataTable, errorText, useToast, type Column } from '@climb/ui-web';
 import { formatDot, formatYuan, toDateKey } from '@climb/utils';
 import { computed, ref, watch } from 'vue';
@@ -63,7 +63,7 @@ const orderColumns: Column<MemberOrderRow>[] = [
   { key: 'channel', label: '支付方式', format: r => PAY_CHANNEL_TEXT[r.channel] },
   { key: 'amountCents', label: '金额', num: true, format: r => formatYuan(r.amountCents) },
   { key: 'refundedCents', label: '已退', num: true, format: r => (r.refundedCents ? formatYuan(r.refundedCents) : '—') },
-  { key: 'status', label: '状态', format: r => ORDER_STATUS_TEXT[r.status] },
+  { key: 'status', label: '状态', format: r => ORDER_STATUS_LABELS[r.status] },
 ];
 
 const entryColumns: Column<MemberEntryRow>[] = [
@@ -209,7 +209,7 @@ const back = () => (window.history.state?.back ? router.back() : router.push({ n
     <section class="panel">
       <DataTable :columns="orderColumns" :rows="data.recentOrders" row-key="id" empty="还没有订单">
         <template #cell-status="{ row }">
-          {{ ORDER_STATUS_TEXT[row.status] }}
+          {{ ORDER_STATUS_LABELS[row.status] }}
           <button v-if="canRefund && refundable(row)" type="button" class="link" @click="openRefund(row)">退款</button>
         </template>
       </DataTable>

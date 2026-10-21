@@ -58,9 +58,6 @@ function chainFollowers(card: PeriodCard, cards: readonly Card[]): PeriodCard[] 
   return followers.map(c => ({ ...c, startsOn: addDays(c.startsOn, shift), expiresOn: addDays(c.expiresOn, shift) }));
 }
 
-/** 期限卡的有效期改了（后台调整）以后，后面接着的期限卡跟着挪，规则同冻结、解冻 */
-export const followersAfter = (card: PeriodCard, cards: readonly Card[]): PeriodCard[] => chainFollowers(card, cards);
-
 /**
  * 会员自助冻结，从今天起冻 days 天。cards 是这个会员所有的卡（挪后面的期限卡用），
  * history 见 freezeQuotaLeft。返回冻结后的卡和跟着挪了日期的期限卡。

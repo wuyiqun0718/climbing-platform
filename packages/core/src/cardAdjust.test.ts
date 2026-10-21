@@ -3,7 +3,8 @@ import { adjustCard, cardChangeLedgerEntry, deskFreezeCheck, deskFreezePeriodCar
 import { freezeBlockedBy, freezeQuotaLeft, unfreezePeriodCard } from './freeze';
 import { FREEZE_DAYS_LIMIT } from './freezeRules';
 import { defaultFreezeRules, defaultRules, type FreezeRules } from './gym';
-import { ledgerMismatch, type LedgerEntry } from './ledger';
+import { ledgerMismatch } from './ledgerCheck';
+import type { LedgerEntry } from './types';
 import { entryOptions, RuleError } from './rules';
 import type { CountCard, PeriodCard, ReferralVoucher } from './types';
 
@@ -58,13 +59,15 @@ describe('调整次数、到期日', () => {
     expect(code(() => adjustCard({ card: old, cards: [old, running], input: { expiresOn: '2026-10-07', reason: 'x' }, today }))).toBe('follower-started');
   });
 
-  it('流水接得上：次数变化记 delta，期限卡记 null', () => {
-    const buy: LedgerEntry = { id: 'l1', cardId: 'c1', at: '2026-08-06T10:00:00+08:00', delta: 5, remainingAfter: 5, expiresOnAfter: tenTimes.expiresOn, reason: 'purchase', ref: null, operatorType: 'staff', operatorId: 's1', note: '' };
+  it('流水接得上：次数变化记 delta，期限卡不记剩余', () => {
+    const buy: LedgerEntry = { id: 'l1', cardId: 'c1', at: '2026-08-06T10:00:00+08:00', on: '2026-08-06', delta: 5, remainingAfter: 5, expiresOnAfter: tenTimes.expiresOn, reason: 'purchase', operatorType: 'staff', operatorId: 's1', note: '' };
     const r = adjustCard({ card: tenTimes, cards: [], input: { remaining: 8, expiresOn: '2027-03-01', reason: '补送' }, today });
     const e = cardChangeLedgerEntry({ id: 'l2', card: r.card, reason: 'adjust', delta: r.delta, at: `${today}T12:00:00+08:00`, operator: { operatorType: 'staff', operatorId: 's2' }, note: '补送' });
-    expect(e).toMatchObject({ delta: 3, remainingAfter: 8, expiresOnAfter: '2027-03-01', reason: 'adjust', ref: null });
+    expect(e).toMatchObject({ delta: 3, remainingAfter: 8, expiresOnAfter: '2027-03-01', reason: 'adjust', on: today });
+    expect(e).not.toHaveProperty('refType');
     expect(ledgerMismatch(r.card, [buy, e])).toBeNull();
-    expect(cardChangeLedgerEntry({ id: 'l3', card: year, reason: 'freeze', at: '', operator: { operatorType: 'staff', operatorId: 's2' }, note: '' })).toMatchObject({ delta: 0, remainingAfter: null });
+    expect(cardChangeLedgerEntry({ id: 'l3', card: year, reason: 'freeze', at: '', operator: { operatorType: 'staff', operatorId: 's2' }, note: '' })).toMatchObject({ delta: 0 });
+    expect(cardChangeLedgerEntry({ id: 'l4', card: year, reason: 'freeze', at: '', operator: { operatorType: 'staff', operatorId: 's2' }, note: '' })).not.toHaveProperty('remainingAfter');
   });
 });
 
@@ -87,7 +90,7 @@ describe('后台帮会员冻结', () => {
 
   it('后台代办的也计入每月、每年次数：本月冻过一次再冻要破例', () => {
     const history = freezeHistory(
-      [{ id: 'l1', cardId: 'p1', at: '2026-10-02T15:00:00+08:00', delta: 0, remainingAfter: null, expiresOnAfter: year.expiresOn, reason: 'freeze', ref: null, operatorType: 'staff', operatorId: 's1', note: '' }],
+      [{ id: 'l1', cardId: 'p1', at: '2026-10-02T15:00:00+08:00', on: '2026-10-02', delta: 0, expiresOnAfter: year.expiresOn, reason: 'freeze', operatorType: 'staff', operatorId: 's1', note: '' }],
       ['p1', 'p2'],
     );
     expect(history).toEqual(['2026-10-02']);

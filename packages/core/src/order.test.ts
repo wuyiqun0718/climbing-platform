@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { addDays, addMonths } from '@climb/utils';
-import { ledgerMismatch } from './ledger';
-import { DEFAULT_VALID_MONTHS, DESK_PRICE_REASON_MAX, countsAsCardPurchase, deskOrderErrors, issueCard, parseYuanInput, periodStartsOn, productRevenueCategory, purchaseLedgerEntry } from './order';
+import { ledgerMismatch } from './ledgerCheck';
+import { DEFAULT_VALID_MONTHS, DESK_PRICE_REASON_MAX, countsAsCardPurchase, deskOrderErrors, issueCard, parseYuanInput, deskPeriodStartsOn, productRevenueCategory, purchaseLedgerEntry } from './order';
 import type { Card, Product } from './types';
 
 const product = (p: Partial<Product> & Pick<Product, 'category'>): Product => ({ id: 'p', name: '卡', priceCents: 59_900, perks: [], onSale: true, ...p });
@@ -42,8 +42,8 @@ describe('线下收款开卡', () => {
       { id: 'b', kind: 'period', memberId: 'other', productId: 'p-30', name: '月卡', startsOn: '2026-10-01', expiresOn: '2026-12-30' },
       { id: 'c', kind: 'period', memberId: 'm', productId: 'p-30', name: '月卡', startsOn: '2026-09-01', expiresOn: '2026-12-01', status: 'refunded' },
     ];
-    expect(periodStartsOn(cards, 'm', today)).toBe('2026-10-31');
-    expect(periodStartsOn(cards, 'm', '2026-11-01')).toBe('2026-11-01');
+    expect(deskPeriodStartsOn(cards, 'm', today)).toBe('2026-10-31');
+    expect(deskPeriodStartsOn(cards, 'm', '2026-11-01')).toBe('2026-11-01');
   });
 
   it('次卡、课包按次数和有效月数开卡，purchase 流水跟卡对得上', () => {
@@ -53,7 +53,7 @@ describe('线下收款开卡', () => {
     expect(pt).toMatchObject({ kind: 'pt', total: 5, remaining: 5, expiresOn: '2027-01-20' });
     for (const c of [card, pt, issueCard({ id: 'c4', product: month, memberId: 'm', cards: [], today: '2026-10-21' })]) {
       const e = purchaseLedgerEntry({ id: 'l', card: c, at: '2026-10-21T10:00:00+08:00', orderId: 'o', operator: { operatorType: 'staff', operatorId: 's' } });
-      expect(e).toMatchObject({ reason: 'purchase', ref: { type: 'order', id: 'o' } });
+      expect(e).toMatchObject({ reason: 'purchase', refType: 'order', refId: 'o' });
       expect(ledgerMismatch(c, [e])).toBeNull();
     }
   });

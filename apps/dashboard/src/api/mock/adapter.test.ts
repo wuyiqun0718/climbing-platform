@@ -1,5 +1,5 @@
 import { ApiError, createAdminApi, createApi, createDeskApi, type AdminClassRow, type CreateClassBody, type CreateStaffBody, type MarkPtSlotBody, type PtTimelineView } from '@climb/api';
-import { defaultFreezeRules, freezeBlockedBy, ledgerMismatch, mergeDeskFeed, parseEntryQrLink, parseEntryQrParams } from '@climb/core';
+import { defaultFreezeRules, freezeBlockedBy, ledgerMismatch, remainingOf, mergeDeskFeed, parseEntryQrLink, parseEntryQrParams } from '@climb/core';
 import { addDays, endOfMonth } from '@climb/utils';
 import { describe, expect, it } from 'vitest';
 import { createMockAdapter } from './adapter';
@@ -355,7 +355,7 @@ describe('后台 mock：会员详情', () => {
     expect(rows.map(r => r.id)).toEqual(['o99', 'o11', 'o10', 'o9', 'o8', 'o7', 'o6', 'o5', 'o4', 'o3']);
     expect(rows[1]).toMatchObject({ refundedCents: 20_000, status: 'partially_refunded' });
     expect(rows[2]).toMatchObject({ refundedCents: 0, status: 'paid' });
-    expect(rows[0].status).toBe('unpaid');
+    expect(rows[0].status).toBe('pending');
   });
 
   it('最近入场：倒序，撤销的也列出；示例数据里最晚一次 = 会员列表的最近入场', async () => {
@@ -383,7 +383,8 @@ describe('后台 mock：会员详情', () => {
     for (const card of db.cards) {
       const res = await api.cards.ledger(card.id);
       const last = res.entries[res.entries.length - 1]!;
-      expect(last.remainingAfter).toBe('remaining' in card ? card.remaining : null);
+      // 期限卡不记剩余（不带 remainingAfter），体验券按 core ledger.ts 的 remainingOf 记 1 / 0
+      expect(last.remainingAfter).toBe(remainingOf(card));
       expect(last.expiresOnAfter).toBe(card.expiresOn);
       expect(ledgerMismatch(res.card, res.entries)).toBeNull();
       expect(res.entries.map(e => e.at)).toEqual([...res.entries.map(e => e.at)].sort());
@@ -398,7 +399,7 @@ describe('后台 mock：会员详情', () => {
     await login('13800000001');
     const ci = db.checkIns.find(c => c.deducted > 0 && c.method === 'desk')!;
     const res = await api.cards.ledger(ci.cardId!);
-    const row = res.entries.find(e => e.ref?.id === ci.id)!;
+    const row = res.entries.find(e => e.refId === ci.id)!;
     expect(row).toMatchObject({ reason: 'check_in', delta: -1, operatorType: 'staff' });
     expect(row.operatorName).not.toBe('');
     expect(res.entries.filter(e => e.reason === 'check_in')).toHaveLength(db.checkIns.filter(c => c.cardId === ci.cardId && c.deducted > 0).length);
@@ -465,7 +466,7 @@ describe('后台 mock：线下收款开卡', () => {
     expect(detail.cards.map(c => c.id)).toContain(card.id);
     const ledger = await api.cards.ledger(card.id);
     expect(ledger.entries).toHaveLength(1);
-    expect(ledger.entries[0]).toMatchObject({ reason: 'purchase', delta: 10, remainingAfter: 10, ref: { type: 'order', id: order.id }, operatorType: 'staff', operatorName: '前台小葵' });
+    expect(ledger.entries[0]).toMatchObject({ reason: 'purchase', delta: 10, remainingAfter: 10, refType: 'order', refId: order.id, operatorType: 'staff', operatorName: '前台小葵' });
     expect(ledgerMismatch(ledger.card, ledger.entries)).toBeNull();
     expect(db.orders.find(o => o.id === order.id)).toMatchObject({ createdByStaffId: 's-desk', listPriceCents: 128_000, productId: 'p-10x' });
   });
@@ -543,7 +544,7 @@ describe('后台 mock：手动登记入场', () => {
     const first = await api.checkIns.create(body());
     expect(first).toMatchObject({ deducted: 1, reentry: false, waiverSigned: false, card: { remaining: 9 }, checkIn: { method: 'desk', on: '2026-10-21', storeId: 'bingang', deducted: 1, voided: false } });
     const ledger = await api.cards.ledger(card.id);
-    expect(ledger.entries.at(-1)).toMatchObject({ reason: 'check_in', delta: -1, remainingAfter: 9, ref: { type: 'check_in', id: first.checkIn.id }, operatorName: '前台小葵' });
+    expect(ledger.entries.at(-1)).toMatchObject({ reason: 'check_in', delta: -1, remainingAfter: 9, refType: 'check_in', refId: first.checkIn.id, operatorName: '前台小葵' });
     expect(ledgerMismatch(ledger.card, ledger.entries)).toBeNull();
     const detail = await api.members.get(m.id);
     expect(detail.recentEntries[0]!.id).toBe(first.checkIn.id);
@@ -642,7 +643,7 @@ describe('后台 mock：撤销入场', () => {
     expect(r).toMatchObject({ restored: 1, card: { remaining: 10 }, insurance: { policyId: first.insurance.policyId, status: 'refund_pending' } });
     expect(r.checkIn).toMatchObject({ voided: true, voidInfo: { byName: '前台小葵', reason: '扫错了卡' } });
     const ledger = await api.cards.ledger(card.id);
-    expect(ledger.entries.at(-1)).toMatchObject({ reason: 'check_in_void', delta: 1, remainingAfter: 10, note: '扫错了卡', ref: { id: first.checkIn.id }, operatorName: '前台小葵' });
+    expect(ledger.entries.at(-1)).toMatchObject({ reason: 'check_in_void', delta: 1, remainingAfter: 10, note: '扫错了卡', refType: 'check_in', refId: first.checkIn.id, operatorName: '前台小葵' });
     expect(ledgerMismatch(ledger.card, ledger.entries)).toBeNull();
     const detail = await api.members.get(m.id);
     expect(detail.cards.find(c => c.id === card.id)).toMatchObject({ remaining: 10 });
@@ -757,7 +758,7 @@ describe('后台 mock：调整卡、冻结和解冻', () => {
     s.db.cards.push(year, next, count);
     for (const c of [year, next, count]) {
       const counted = c.kind === 'count';
-      s.db.ledger.push({ id: `l-buy-${c.id}`, cardId: c.id, at: '2026-03-15T10:00:00+08:00', delta: counted ? 5 : 0, remainingAfter: counted ? 5 : null, expiresOnAfter: c.expiresOn, reason: 'purchase', ref: null, operatorType: 'staff', operatorId: 's-owner', note: '' });
+      s.db.ledger.push({ id: `l-buy-${c.id}`, cardId: c.id, at: '2026-03-15T10:00:00+08:00', on: '2026-03-15', delta: counted ? 5 : 0, ...(counted ? { remainingAfter: 5 } : {}), expiresOnAfter: c.expiresOn, reason: 'purchase', operatorType: 'staff', operatorId: 's-owner', note: '' });
     }
     await s.login('13800000002');
     return { ...s, m };
@@ -840,7 +841,7 @@ describe('后台 mock：退款', () => {
     await s.api.checkIns.create({ requestId: 'in-1', memberId: 'm-old-5', storeId: 'bingang', cardId: desk.card.id });
     const season = { id: 'c-wx', kind: 'period' as const, memberId: 'm-old-5', productId: 'p-90', name: '季卡', startsOn: '2026-09-22', expiresOn: '2026-12-20' };
     s.db.cards.push(season);
-    s.db.ledger.push({ id: 'l-wx', cardId: 'c-wx', at: '2026-09-22T10:00:00+08:00', delta: 0, remainingAfter: null, expiresOnAfter: season.expiresOn, reason: 'purchase', ref: { type: 'order', id: 'o-wx' }, operatorType: 'member', operatorId: 'm-old-5', note: '' });
+    s.db.ledger.push({ id: 'l-wx', cardId: 'c-wx', at: '2026-09-22T10:00:00+08:00', on: '2026-09-22', delta: 0, expiresOnAfter: season.expiresOn, reason: 'purchase', refType: 'order', refId: 'o-wx', operatorType: 'member', operatorId: 'm-old-5', note: '' });
     s.db.orders.push({ id: 'o-wx', storeId: 'bingang', memberId: 'm-old-5', productName: '季卡', channel: 'wechat', category: 'period', amountCents: 159_900, paidOn: '2026-09-22', productId: 'p-90', cardId: 'c-wx' });
     return { ...s, desk };
   }
@@ -862,7 +863,7 @@ describe('后台 mock：退款', () => {
     expect(r.order).toMatchObject({ refundedCents: 100_000, status: 'partially_refunded' });
     expect(r.card).toMatchObject({ status: 'refunded', remaining: 0 });
     const ledger = await api.cards.ledger(desk.card.id);
-    expect(ledger.entries.at(-1)).toMatchObject({ reason: 'refund', delta: -9, remainingAfter: 0, ref: { type: 'order', id: desk.order.id }, note: '搬家了', operatorName: '店长阿凯' });
+    expect(ledger.entries.at(-1)).toMatchObject({ reason: 'refund', delta: -9, remainingAfter: 0, refType: 'order', refId: desk.order.id, note: '搬家了', operatorName: '店长阿凯' });
     expect(ledgerMismatch(ledger.card, ledger.entries)).toBeNull();
     const preview = await api.checkIns.preview({ memberId: 'm-old-5', storeId: 'bingang' });
     expect(preview.options.some(o => o.card.id === desk.card.id)).toBe(false);
@@ -1061,10 +1062,10 @@ describe('后台 mock：分享记录', () => {
     expect(items).toHaveLength(db.shares.length + db.referrals.length);
     expect(items.map(r => r.createdOn)).toEqual([...items.map(r => r.createdOn)].sort().reverse());
     const counts = items.filter(r => r.kind === 'count');
-    expect(counts.map(r => r.state).sort()).toEqual(['claimed', 'pending', 'used']);
-    expect(counts.find(r => r.state === 'pending')).toMatchObject({ createdOn: '2026-10-21', claimerId: null, claimerName: null, quantity: 2 });
-    expect(counts.find(r => r.state === 'used')!.usedOn).toBeTruthy();
-    expect(items.some(r => r.kind === 'referral' && r.state === 'used' && r.usedOn)).toBe(true);
+    expect(counts.map(r => r.status).sort()).toEqual(['claimed', 'pending', 'used']);
+    expect(counts.find(r => r.status === 'pending')).toMatchObject({ createdOn: '2026-10-21', claimerId: null, claimerName: null, quantity: 2 });
+    expect(counts.find(r => r.status === 'used')!.usedOn).toBeTruthy();
+    expect(items.some(r => r.kind === 'referral' && r.status === 'used' && r.usedOn)).toBe(true);
     expect(items[0]).not.toHaveProperty('token');
     for (const sh of db.shares) {
       expect(ledgerMismatch(db.cards.find(c => c.memberId === sh.fromMemberId && c.kind === 'count')!, db.ledger)).toBeNull();
@@ -1083,7 +1084,7 @@ describe('后台 mock：分享记录', () => {
       { id: 'r-c', fromMemberId: from, createdOn: '2026-09-12', expiresOn: '2026-09-30', claimedByMemberId: 'm-walkin-0', usedOn: null },
     ];
     const rows = (await api.shares({ kind: 'referral' })).items;
-    expect(rows.map(r => [r.id, r.state])).toEqual([['r-b', 'pending'], ['r-c', 'claimed'], ['r-a', 'expired']]);
+    expect(rows.map(r => [r.id, r.status])).toEqual([['r-b', 'pending'], ['r-c', 'claimed'], ['r-a', 'expired']]);
     expect(rows.every(r => r.kind === 'referral')).toBe(true);
     expect((await api.shares({ kind: 'count' })).items.every(r => r.kind === 'count')).toBe(true);
     expect(await status(api.shares({ kind: 'gift' as never }))).toBe(400);
@@ -1092,16 +1093,16 @@ describe('后台 mock：分享记录', () => {
   it('朋友用送的次卡入场变 used，撤销那次入场变回领了还没来', async () => {
     const { api, login, db } = setup();
     await login('13800000001');
-    const used = (await api.shares({ kind: 'count' })).items.find(r => r.state === 'used')!;
+    const used = (await api.shares({ kind: 'count' })).items.find(r => r.status === 'used')!;
     const gift = db.cards.find(c => c.kind === 'gift' && c.shareId === used.id)!;
     const ci = db.checkIns.find(c => c.cardId === gift.id)!;
     await api.checkIns.void(ci.id, { reason: '登记错了' });
-    expect((await api.shares({ kind: 'count' })).items.find(r => r.id === used.id)).toMatchObject({ state: 'claimed', usedOn: null });
+    expect((await api.shares({ kind: 'count' })).items.find(r => r.id === used.id)).toMatchObject({ status: 'claimed', usedOn: null });
 
-    const claimed = (await api.shares({ kind: 'count' })).items.find(r => r.state === 'claimed' && r.id !== used.id)!;
+    const claimed = (await api.shares({ kind: 'count' })).items.find(r => r.status === 'claimed' && r.id !== used.id)!;
     const card = db.cards.find(c => c.kind === 'gift' && c.shareId === claimed.id)!;
     await api.checkIns.create({ requestId: 'g1', memberId: card.memberId, storeId: db.members.find(m => m.id === card.memberId)!.homeStoreId, cardId: card.id });
-    expect((await api.shares({ kind: 'count' })).items.find(r => r.id === claimed.id)).toMatchObject({ state: 'used', usedOn: '2026-10-21' });
+    expect((await api.shares({ kind: 'count' })).items.find(r => r.id === claimed.id)).toMatchObject({ status: 'used', usedOn: '2026-10-21' });
   });
 
   it('按发起人的归属门店过滤；只管部分门店的必须带自己的店', async () => {
@@ -1583,7 +1584,7 @@ describe('后台 mock：团课排期', () => {
     const r = await api.classes.update(thu.id, { capacity: 2 });
     expect(r).toMatchObject({ capacity: 2, booked: 2, waitlisted: 0, left: 0 });
     expect(db.cards.find(c => c.id === 'cc-m-old-2')).toMatchObject({ remaining: 9 });
-    expect(db.ledger.at(-1)).toMatchObject({ cardId: 'cc-m-old-2', reason: 'class_book', delta: -1, remainingAfter: 9, ref: { type: 'class_booking' }, operatorType: 'staff', operatorId: 's-owner' });
+    expect(db.ledger.at(-1)).toMatchObject({ cardId: 'cc-m-old-2', reason: 'class_book', delta: -1, remainingAfter: 9, refType: 'class_booking', operatorType: 'staff', operatorId: 's-owner' });
     expect(db.auditLogs.at(-1)).toMatchObject({ action: 'class.update', targetId: thu.id, before: { capacity: 1 }, after: { capacity: 2, promoted: ['cb-2'] } });
   });
 
@@ -1599,7 +1600,7 @@ describe('后台 mock：团课排期', () => {
     expect(db.classBookings.map(b => b.status)).toEqual(['voided', 'voided']);
     expect(db.cards.find(c => c.id === 'cc-m-old-1')).toMatchObject({ remaining: 10 });
     expect(db.cards.find(c => c.id === 'cc-m-old-2')).toMatchObject({ remaining: 10 });
-    expect(db.ledger.at(-1)).toMatchObject({ cardId: 'cc-m-old-1', reason: 'class_void', delta: 1, remainingAfter: 10, ref: { type: 'class_booking', id: 'cb-1' }, operatorId: 's-manager' });
+    expect(db.ledger.at(-1)).toMatchObject({ cardId: 'cc-m-old-1', reason: 'class_void', delta: 1, remainingAfter: 10, refType: 'class_booking', refId: 'cb-1', operatorId: 's-manager' });
     expect(db.auditLogs.at(-1)).toMatchObject({ action: 'class.cancel', targetId: sat.id, storeId: 'bingang', reason: '教练生病', before: { status: 'scheduled' }, after: { status: 'cancelled', refunded: 1 } });
     expect((await mpClasses(db)).find(s => s.id === sat.id)).toMatchObject({ status: 'cancelled', cancelReason: '教练生病' });
     expect(await code(api.classes.cancel(sat.id, { reason: '再取消一次' }))).toEqual([422, 'class-cancelled']);
@@ -1683,7 +1684,7 @@ describe('后台 mock：团课名单和签到', () => {
     const wed = sessionOn(db, '2026-10-21');
     wed.capacity = 3;
     db.cards.push({ id: 'cc-w', kind: 'class', memberId: 'm-old-1', productId: 'p-class10', name: '团课 10 次', total: 10, remaining: 10, expiresOn: '2026-12-31' });
-    db.ledger.push({ id: 'l-cc-w', cardId: 'cc-w', at: '2026-10-01T10:00:00+08:00', delta: 10, remainingAfter: 10, expiresOnAfter: '2026-12-31', reason: 'purchase', ref: null, operatorType: 'member', operatorId: 'm-old-1', note: '' });
+    db.ledger.push({ id: 'l-cc-w', cardId: 'cc-w', at: '2026-10-01T10:00:00+08:00', on: '2026-10-01', delta: 10, remainingAfter: 10, expiresOnAfter: '2026-12-31', reason: 'purchase', operatorType: 'member', operatorId: 'm-old-1', note: '' });
     db.classBookings.push({ id: 'cb-w', sessionId: wed.id, memberId: 'm-old-1', status: 'waitlisted', cardId: 'cc-w', createdAt: '2026-10-20T12:00:00+08:00', deducted: 0 });
     const roster = await api.classes.roster(wed.id);
     expect(roster.waitlist.map(w => [w.id, w.position])).toEqual([['cb-w', 1]]);
@@ -1695,9 +1696,9 @@ describe('后台 mock：团课名单和签到', () => {
     const r = await api.bookings.cancel(target.id, { reason: '会员打电话说不来' });
     expect(r.booking).toMatchObject({ id: target.id, status: 'cancelled', cardRemaining: before + 1 });
     expect(r.promoted).toEqual([expect.objectContaining({ id: 'cb-w', status: 'booked', deducted: 1, cardRemaining: 9 })]);
-    expect(db.ledger.filter(e => e.ref?.type === 'class_booking').slice(-2)).toEqual([
-      expect.objectContaining({ cardId: target.cardId, reason: 'class_cancel', delta: 1, ref: { type: 'class_booking', id: target.id }, operatorType: 'staff', operatorId: 's-owner', note: '前台帮会员取消：会员打电话说不来' }),
-      expect.objectContaining({ cardId: 'cc-w', reason: 'class_book', delta: -1, remainingAfter: 9, ref: { type: 'class_booking', id: 'cb-w' } }),
+    expect(db.ledger.filter(e => e.refType === 'class_booking').slice(-2)).toEqual([
+      expect.objectContaining({ cardId: target.cardId, reason: 'class_cancel', delta: 1, refType: 'class_booking', refId: target.id, operatorType: 'staff', operatorId: 's-owner', note: '前台帮会员取消：会员打电话说不来' }),
+      expect.objectContaining({ cardId: 'cc-w', reason: 'class_book', delta: -1, remainingAfter: 9, refType: 'class_booking', refId: 'cb-w' }),
     ]);
     expect(ledgerMismatch(db.cards.find(c => c.id === target.cardId)!, db.ledger)).toBeNull();
     expect(ledgerMismatch(db.cards.find(c => c.id === 'cc-w')!, db.ledger)).toBeNull();
@@ -1740,11 +1741,11 @@ describe('后台 mock：教练资料', () => {
   it('小程序教练列表：在用、有教练资料的员工，id 是员工 id，字段同小程序的 Coach；按门店筛', async () => {
     const { db } = setup();
     const mp = createApi({ baseURL: '', gymId: 'benchmark', adapter: createMockAdapter(db) });
-    expect(await mp.coaches.list()).toEqual([
+    expect(await mp.pt.coaches()).toEqual([
       { id: 's-manager', name: '店长阿凯', tags: ['顶绳', '保护技术'], bio: '带顶绳进阶课，教你自己做保护。', storeIds: ['bingang'] },
       { id: 's-coach-max', name: 'Max', tags: ['抱石', '力量训练'], bio: '前省队抱石选手，课上会拍视频逐帧拆动作。', storeIds: ['bingang'] },
     ]);
-    expect(await mp.coaches.list({ store: 'huiju' })).toEqual([]);
+    expect(await mp.pt.coaches({ store: 'huiju' })).toEqual([]);
     // 教练本人按员工手机号认（同小程序分支示例里的教练手机号）
     expect(db.staff.find(s => s.id === 's-coach-max')!.phone).toBe('13900000001');
   });
@@ -1754,10 +1755,10 @@ describe('后台 mock：教练资料', () => {
     const mp = createApi({ baseURL: '', gymId: 'benchmark', adapter: createMockAdapter(db) });
     await login('13800000001');
     await api.staff.update('s-coach-max', { active: false });
-    expect((await mp.coaches.list()).map(c => c.id)).toEqual(['s-manager']);
+    expect((await mp.pt.coaches()).map(c => c.id)).toEqual(['s-manager']);
     expect((await api.coaches()).map(c => c.id)).toEqual(['s-manager']);
     await api.staff.update('s-coach-max', { active: true });
-    expect((await mp.coaches.list()).map(c => c.id)).toEqual(['s-manager', 's-coach-max']);
+    expect((await mp.pt.coaches()).map(c => c.id)).toEqual(['s-manager', 's-coach-max']);
   });
 
   it('给员工加、改、去掉教练资料；可约门店要在员工能操作的店里；单节价正整数分；写操作日志', async () => {
@@ -1770,12 +1771,12 @@ describe('后台 mock：教练资料', () => {
     expect((await field(api.staff.update('s-desk', { coach: coach({ priceCents: 299.5 }) })))?.[1]).toBe('coach');
     const row = await api.staff.update('s-desk', { coach: coach({ tags: [' 抱石 ', ''] }) });
     expect(row.coach).toEqual(coach());
-    expect((await mp.coaches.list()).map(c => c.id)).toContain('s-desk');
+    expect((await mp.pt.coaches()).map(c => c.id)).toContain('s-desk');
     expect(db.auditLogs.at(-1)).toMatchObject({ action: 'staff.update', targetId: 's-desk', before: {}, after: { coach: coach() } });
     await api.staff.update('s-desk', { coach: coach({ priceCents: 32_000 }) });
     expect(db.auditLogs.at(-1)).toMatchObject({ before: { coach: { priceCents: 30_000 } }, after: { coach: { priceCents: 32_000 } } });
     await api.staff.update('s-desk', { coach: null });
-    expect((await mp.coaches.list()).map(c => c.id)).not.toContain('s-desk');
+    expect((await mp.pt.coaches()).map(c => c.id)).not.toContain('s-desk');
     expect(db.auditLogs.at(-1)).toMatchObject({ after: {} });
   });
 
@@ -1946,7 +1947,7 @@ describe('后台 mock：私教预约处理', () => {
     expect(await code(api.ptBookings.cancel('pb-2', { kind: 'nope' as never, reason: 'x' }))).toEqual([400, 'kind']);
     expect(await api.ptBookings.cancel('pb-2', { kind: 'member', reason: '会员说生病了' })).toMatchObject({ status: 'cancelled', closeReason: '会员说生病了' });
     expect(card().remaining).toBe(before + 1);
-    expect(db.ledger.at(-1)).toMatchObject({ cardId: 'c-pt-m-old-14', reason: 'pt_cancel', delta: 1, remainingAfter: before + 1, ref: { type: 'pt_booking', id: 'pb-2' }, operatorType: 'staff', operatorId: 's-manager', note: '会员说生病了' });
+    expect(db.ledger.at(-1)).toMatchObject({ cardId: 'c-pt-m-old-14', reason: 'pt_cancel', delta: 1, remainingAfter: before + 1, refType: 'pt_booking', refId: 'pb-2', operatorType: 'staff', operatorId: 's-manager', note: '会员说生病了' });
     expect(ledgerMismatch(db.cards.find(c => c.id === 'c-pt-m-old-14')!, db.ledger)).toBeNull();
     expect(db.auditLogs.at(-1)).toMatchObject({ action: 'pt_booking.cancel', targetId: 'pb-2', storeId: 'bingang', reason: '会员说生病了', before: { status: 'booked' }, after: { status: 'cancelled', kind: 'member', refunded: 1 } });
     expect(await slot(api, 's-coach-max', '2026-10-22', 14)).toMatchObject({ status: 'free' });
@@ -1958,7 +1959,7 @@ describe('后台 mock：私教预约处理', () => {
     const { api, login, db } = ptSetup();
     await login('13900000001');
     expect(await api.ptBookings.cancel('pb-2', { kind: 'coach', reason: '带队比赛' })).toMatchObject({ status: 'voided', closeReason: '带队比赛' });
-    expect(db.ledger.at(-1)).toMatchObject({ reason: 'pt_void', delta: 1, ref: { type: 'pt_booking', id: 'pb-2' }, operatorId: 's-coach-max' });
+    expect(db.ledger.at(-1)).toMatchObject({ reason: 'pt_void', delta: 1, refType: 'pt_booking', refId: 'pb-2', operatorId: 's-coach-max' });
     db.ptBookings.push({ id: 'pb-now', coachId: 's-coach-max', memberId: 'm-old-14', storeId: 'bingang', on: '2026-10-21', hour: 11, status: 'booked', cardId: 'c-pt-m-old-14', deducted: 1, createdAt: 'x' });
     expect(await code(api.ptBookings.cancel('pb-now', { kind: 'member', reason: 'x' }))).toEqual([422, 'pt-started']);
     await login('13800000003');

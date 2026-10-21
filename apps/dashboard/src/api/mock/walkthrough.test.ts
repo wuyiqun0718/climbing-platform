@@ -79,12 +79,15 @@ describe('走查：原型演示路线（后台部分）', () => {
     expect(await scan(memberId, qr.token, cardId)).toMatchObject({ status: 422, data: { code: 'qr-used' } });
   });
 
-  it('3 入场自动投当日保险：前台卖单次票，会员扫码入场扣 1 次、投保；入场记录显示投保中', async () => {
-    const { api, login, tablet, scan } = setup();
+  it('3 入场自动投当日保险：前台卖单次票，会员先同意告知书再扫码入场扣 1 次、投保；入场记录显示投保中', async () => {
+    const { api, login, tablet, scan, db } = setup();
     const desk = await tablet();
     await login(DESK);
     const m = await api.members.create({ phone: '13912345678', name: '小鹿', source: 'walkin', storeId: 'bingang' });
     const { card } = await api.orders.create({ requestId: 'o1', memberId: m.id, productId: 'p-single', storeId: 'bingang', channel: 'desk_cash', amountCents: 9_900, priceReason: '' });
+    // 扫码入场要先在小程序里同意风险告知书（已定，core checkIn.ts 的 CHECK_IN_REQUIRES_WAIVER.scan）
+    expect(await scan(m.id, (await desk.qr()).token, card.id)).toMatchObject({ status: 422, data: { code: 'waiver-required' } });
+    db.members.find(x => x.id === m.id)!.waiverSignedOn = '2026-10-21';
     const r = await scan(m.id, (await desk.qr()).token, card.id);
     expect(r).toMatchObject({ status: 200, data: { deducted: 1 } });
     const detail = await api.members.get(m.id);
@@ -96,12 +99,12 @@ describe('走查：原型演示路线（后台部分）', () => {
     const { api, login, tablet, scan, db } = setup();
     const desk = await tablet();
     await login(OWNER);
-    const claimed = (await api.shares({ kind: 'count' })).items.find(s => s.state === 'claimed')!;
+    const claimed = (await api.shares({ kind: 'count' })).items.find(s => s.status === 'claimed')!;
     const gift = db.cards.find(c => c.kind === 'gift' && c.shareId === claimed.id)!;
     db.members.find(m => m.id === gift.memberId)!.homeStoreId = 'bingang';
     expect((await scan(gift.memberId, (await desk.qr()).token, gift.id)).status).toBe(200);
     await login(OWNER);
-    expect((await api.shares({ kind: 'count' })).items.find(s => s.id === claimed.id)).toMatchObject({ state: 'used', usedOn: '2026-10-21' });
+    expect((await api.shares({ kind: 'count' })).items.find(s => s.id === claimed.id)).toMatchObject({ status: 'used', usedOn: '2026-10-21' });
     expect(ledgerMismatch(db.cards.find(c => c.id === gift.id)!, db.ledger)).toBeNull();
   });
 
@@ -116,7 +119,7 @@ describe('走查：原型演示路线（后台部分）', () => {
     expect((await scan(inviter.memberId, (await desk.qr()).token, inviter.cardId)).status).toBe(200);
     expect(await scan(friend.id, (await desk.qr()).token, 'v-demo')).toMatchObject({ status: 200, data: { deducted: 0 } });
     await login(OWNER);
-    expect((await api.shares({ kind: 'referral' })).items.find(s => s.id === 'r-demo')).toMatchObject({ state: 'used', usedOn: '2026-10-21' });
+    expect((await api.shares({ kind: 'referral' })).items.find(s => s.id === 'r-demo')).toMatchObject({ status: 'used', usedOn: '2026-10-21' });
   });
 
   it('6 约私教、团课：会员约的团课在名单里，约的私教在时间轴上（会员下单在小程序分支，这里直接写进共用的数据）', async () => {

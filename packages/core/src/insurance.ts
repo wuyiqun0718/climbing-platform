@@ -6,7 +6,7 @@ import type { DateKey } from '@climb/utils';
  * 扫码入场、前台登记、mock 和后端都按这里。
  *
  * 状态：pending 投保中（刚入场，等保险公司结果）→ insured 成功 / failed 失败（失败的在原保单上重试，见任务 34，不另投）；
- * 撤销入场后标记 refund_pending 待退保 → refunded 已退保（同一天还有别的入场时改挂过去，见 voidCheckIn.ts；退保收尾见任务 33）。
+ * 撤销入场后标记 refund_pending 待退保 → refunded 已退保（任务 16、33 来做）。
  * 待退保、已退保的保单不再算当天的保单：撤销后同一天又入场，会新投一张。
  * 保费、保险公司接口还是每天交名单等馆方（第 9 节「要问馆方」14），这里不管。
  */
@@ -49,13 +49,4 @@ export function insuranceForEntry<P extends InsurancePolicy>(
 /** 新投的保单，状态是投保中 */
 export function newPolicy(args: Omit<InsurancePolicy, 'status'>): InsurancePolicy {
   return { ...args, status: 'pending' };
-}
-
-/**
- * 一次入场的保单：入场时投的或同日沿用的那张，记在入场记录的 policyId 上（跟小程序 insuranceHistory.ts 一样按这个挂，不按日期猜：
- * 撤销后同一天可能有退掉的和新投的两张）。撤销了的入场还指向原来那张，状态看保单（待退保，或者改挂给同一天别的入场后照常）。
- * 没有 policyId（上线前的、青橙导入的入场）或找不到的为 null。
- */
-export function entryPolicy<P extends InsurancePolicy>(policies: readonly P[], entry: { policyId?: string | null }): P | null {
-  return (entry.policyId && policies.find(p => p.id === entry.policyId)) || null;
 }

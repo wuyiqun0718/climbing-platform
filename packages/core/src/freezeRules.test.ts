@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { freezeBlockedBy, freezePeriodCard, freezeQuotaLeft, settleFreeze, unfreezePeriodCard } from './freeze';
 import { FREEZE_DAYS_LIMIT, freezeRulesErrors, pickFreezeRules } from './freezeRules';
 import { defaultFreezeRules, defaultRules, defineGym, type FreezeRules } from './gym';
-import { createReferral, entryOptions, RuleError } from './rules';
+import { referralStatus } from './referral';
+import { entryOptions, RuleError } from './rules';
 import type { PeriodCard } from './types';
 
 const today = '2026-10-12';
@@ -95,7 +96,8 @@ describe('按配置拦冻结', () => {
     expect(freezeBlockedBy({ card: frozen, history: [], today, rules })).toBe('freeze-card-not-active');
     const ctx = { today, rules: defaultRules, hasCheckedIn: () => false };
     expect(entryOptions([frozen], ctx)).toEqual([]);
-    expect(code(() => createReferral({ id: 'r1', cards: [frozen], sent: [], memberId: 'jie', today, rules: defaultRules }))).toBe('no-period-card');
+    // 老带新的判断用小程序分支的 referral.ts：冻结中的给出更具体的原因 referral-card-frozen
+    expect(referralStatus({ cards: [frozen], sent: [], memberId: 'jie', today, rules: defaultRules }).blockedBy).toBe('referral-card-frozen');
   });
 });
 

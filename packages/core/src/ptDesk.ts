@@ -1,9 +1,9 @@
 import type { CardChange } from './classes';
 import type { PtRules } from './gym';
-import type { LedgerEntry } from './ledger';
+import { ledgerOnOf } from './ledgerCheck';
 import { cancelPtBooking, coachCancelPtBooking, ptSlotStartsAt, type PtBooking, type PtSlotMark } from './pt';
 import { RuleError, type RuleErrorCode } from './rules';
-import type { Card } from './types';
+import type { Card, LedgerEntry } from './types';
 
 /**
  * 后台处理私教（任务 30）：标线下约 / 不接课、去掉标记、确认、取消。占格子、确认、退课时的规则都在 pt.ts（跟小程序分支逐字一致，这里不改），
@@ -50,11 +50,13 @@ export function ptLedgerEntry(a: { id: string; change: CardChange; at: string; o
     id: a.id,
     cardId: change.card.id,
     at: a.at,
+    on: ledgerOnOf(a.at),
     delta: change.delta,
     remainingAfter: change.card.remaining,
     expiresOnAfter: change.card.expiresOn,
     reason: change.reason,
-    ref: { type: 'pt_booking', id: change.bookingId },
+    refType: 'pt_booking',
+    refId: change.bookingId,
     ...a.operator,
     note: a.note ?? '',
   };

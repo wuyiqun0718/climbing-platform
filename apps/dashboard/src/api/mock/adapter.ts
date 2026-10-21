@@ -3,7 +3,6 @@ import {
   MEMBERS_PAGE_SIZE,
   ENTRY_METHOD_TEXT,
   MEMBER_SOURCE_TEXT,
-  ORDER_STATUS_TEXT,
   PAY_CHANNEL_TEXT,
   REVENUE_CATEGORY_TEXT,
   type ExportKind,
@@ -19,7 +18,7 @@ import {
   type CardLedgerRow,
   type CheckInList,
   type CheckInListRow,
-  type CheckInPreview,
+  type DeskCheckInPreview,
   type CreateDeskCheckInBody,
   type CreateDeskOrderBody,
   type CreateMemberBody,
@@ -106,7 +105,8 @@ import {
   voidCheckIn,
   insuranceForEntry,
   entryPolicy,
-  shareRecordState,
+  shareDisplayStatus,
+  ORDER_STATUS_LABELS,
   newDeskToken,
   firstEntryIds,
   deskFeedChanges,
@@ -173,7 +173,8 @@ import {
   staffPatchErrors,
   staffStoreIds,
   type StaffRole,
-  type ClaimedCard,
+  type ReferralVoucher,
+  type Share,
   newPolicy,
   countsAsCardPurchase,
   deskOrderErrors,
@@ -603,7 +604,7 @@ function createExport(db: MockDb, staff: Staff, kind: string, body: Record<strin
       .map(o => {
         const r = orderRow(db, o);
         const m = member(o.memberId);
-        return [o.paidOn, o.id, storeName(o.storeId), m?.name ?? '', m ? phone(m.phone) : '', o.productName, REVENUE_CATEGORY_TEXT[o.category], PAY_CHANNEL_TEXT[o.channel], centsToYuanText(o.amountCents), centsToYuanText(r.refundedCents), ORDER_STATUS_TEXT[r.status]];
+        return [o.paidOn, o.id, storeName(o.storeId), m?.name ?? '', m ? phone(m.phone) : '', o.productName, REVENUE_CATEGORY_TEXT[o.category], PAY_CHANNEL_TEXT[o.channel], centsToYuanText(o.amountCents), centsToYuanText(r.refundedCents), ORDER_STATUS_LABELS[r.status]];
       });
   } else if (kind === 'check-ins') {
     if (!canSeePage(staff.role, 'entries')) return fail(403, 'forbidden', '没有看入场记录的权限');
@@ -649,7 +650,7 @@ function auditLogList(db: MockDb, staff: Staff, storeId: string | null, action: 
   return ok(res);
 }
 
-/** 分享记录：口径见 @climb/api 的 ShareList，状态按 @climb/core 的 shareRecordState */
+/** 分享记录：口径见 @climb/api 的 ShareList，状态按 @climb/core share.ts 的 shareDisplayStatus（跟小程序分支同一份） */
 function shareList(db: MockDb, staff: Staff, storeId: string | null, kind: string | null): ApiResponse {
   if (kind !== null && kind !== 'count' && kind !== 'referral') return badInput('kind', '分享类型不对');
   const scope = storeScope(db, staff, storeId);
@@ -661,23 +662,27 @@ function shareList(db: MockDb, staff: Staff, storeId: string | null, kind: strin
   if (kind !== 'referral') {
     db.shares.forEach((sh, order) => {
       const gift = db.cards.find(c => c.kind === 'gift' && c.shareId === sh.id);
-      const state = shareRecordState(sh, gift && gift.kind === 'gift' ? gift : null, db.today);
+      const status = shareDisplayStatus(sh, db.today, gift);
       rows.push({
         order, id: sh.id, kind: 'count', storeId: member(sh.fromMemberId)?.homeStoreId ?? '', fromMemberId: sh.fromMemberId, fromMemberName: member(sh.fromMemberId)?.name ?? '',
         claimerId: sh.claimedBy ?? null, claimerName: sh.claimedBy ? (member(sh.claimedBy)?.name ?? '') : null, quantity: sh.quantity ?? null,
-        createdOn: sh.createdOn, expiresOn: sh.expiresOn, state, usedOn: state === 'used' && gift ? firstUse(gift.id) : null,
+        createdOn: sh.createdOn, expiresOn: sh.expiresOn, status, usedOn: status === 'used' && gift ? firstUse(gift.id) : null,
       });
     });
   }
   if (kind !== 'count') {
     db.referrals.forEach((r, order) => {
-      // 示例数据里体验券没有建卡，用没用记在邀请上（usedOn，前台登记、撤销时跟着改）
-      const voucher: ClaimedCard | null = r.claimedByMemberId ? { kind: 'referral', usedOn: r.usedOn ?? undefined } : null;
-      const state = shareRecordState({ status: r.claimedByMemberId ? 'claimed' : 'pending', expiresOn: r.expiresOn }, voucher, db.today);
+      // 示例数据里老带新邀请不是完整的 Share（没有 token），体验券也没建卡，用没用记在邀请上（usedOn，前台登记、撤销时跟着改）；
+      // 这里拼成 Share 和体验券给 shareDisplayStatus 算状态，token 用不到
+      const share: Share = { id: r.id, kind: 'referral', token: '', fromMemberId: r.fromMemberId, createdOn: r.createdOn, expiresOn: r.expiresOn, status: r.claimedByMemberId ? 'claimed' : 'pending', ...(r.claimedByMemberId ? { claimedBy: r.claimedByMemberId } : {}) };
+      const voucher: ReferralVoucher | undefined = r.claimedByMemberId
+        ? { id: `v-${r.id}`, kind: 'referral', memberId: r.claimedByMemberId, fromMemberId: r.fromMemberId, shareId: r.id, name: '老带新体验券', expiresOn: r.expiresOn, ...(r.usedOn ? { usedOn: r.usedOn } : {}) }
+        : undefined;
+      const status = shareDisplayStatus(share, db.today, voucher);
       rows.push({
         order, id: r.id, kind: 'referral', storeId: member(r.fromMemberId)?.homeStoreId ?? '', fromMemberId: r.fromMemberId, fromMemberName: member(r.fromMemberId)?.name ?? '',
         claimerId: r.claimedByMemberId, claimerName: r.claimedByMemberId ? (member(r.claimedByMemberId)?.name ?? '') : null, quantity: null,
-        createdOn: r.createdOn, expiresOn: r.expiresOn, state, usedOn: state === 'used' ? r.usedOn : null,
+        createdOn: r.createdOn, expiresOn: r.expiresOn, status, usedOn: status === 'used' ? r.usedOn : null,
       });
     });
   }
@@ -819,14 +824,14 @@ function checkInScope(db: MockDb, staff: Staff, body: { memberId?: unknown; stor
   return { m, args: checkInArgsOf(db, m, storeId) };
 }
 
-/** 登记入场前列出能用的卡：口径见 @climb/api 的 CheckInPreview */
+/** 登记入场前列出能用的卡：口径见 @climb/api 的 DeskCheckInPreview */
 function checkInPreview(db: MockDb, staff: Staff, body: Partial<CreateDeskCheckInBody> | null): ApiResponse {
   const scope = checkInScope(db, staff, body);
   if ('status' in scope) return scope;
   const { m, args } = scope;
   const plan = checkInPlan(args);
   const ins = insuranceForEntry(db.policies, m.id, db.today);
-  const res: CheckInPreview = {
+  const res: DeskCheckInPreview = {
     memberId: m.id,
     memberName: m.name,
     storeId: args.storeId,
@@ -859,7 +864,8 @@ function recordCheckIn(db: MockDb, m: MockMember, args: CheckInArgs, cardId: str
   if (idx < 0) return fail(404, 'card-not-found', '这个会员没有这张卡');
   let used: { card: EntryCard; deducted: number; reentry: boolean };
   try {
-    used = checkInWith({ ...args, cardId, waiverSigned: !!m.waiverSignedOn });
+    // 扫码要先签告知书（已定，跟小程序一致），前台登记先不拦（等馆方），按 core checkIn.ts 的 CHECK_IN_REQUIRES_WAIVER
+    used = checkInWith({ ...args, cardId, via: method, waiverSigned: !!m.waiverSignedOn });
   } catch (e) {
     if (e instanceof RuleError) return fail(422, e.code, e.message);
     throw e;
@@ -1041,7 +1047,7 @@ function cardLedger(db: MockDb, staff: Staff, id: string): ApiResponse {
   const m = db.members.find(x => x.id === card.memberId);
   if (!m) return fail(404, 'member-not-found', '没有这个会员');
   if (!MEMBERS_VISIBLE_ACROSS_STORES && !canSeeStore(staff, m.homeStoreId)) return fail(403, 'forbidden', '没有这家店的权限');
-  const operatorName = (type: CardLedgerRow['operatorType'], opId: string | null) =>
+  const operatorName = (type: CardLedgerRow['operatorType'], opId: string | null | undefined) =>
     type === 'system' ? '系统' : type === 'staff' ? (db.staff.find(s => s.id === opId)?.name ?? '') : (db.members.find(x => x.id === opId)?.name ?? '');
   // 写入顺序就是同一时刻的先后
   const entries = db.ledger

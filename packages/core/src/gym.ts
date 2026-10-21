@@ -8,7 +8,9 @@ export interface GymRules {
   referralRequiresInviterSameDay: boolean;
   /** 同一天再次入场是否免扣次 */
   sameDayReentryFree: boolean;
-  /** 看板「快到期」提醒提前几天（含今天到期的）。等馆方，先按原型 7 天 */
+  /** 下单后多少分钟内没付就关单（占位 15 分钟，等馆方确认） */
+  orderPayMinutes: number;
+  /** 后台（mvp/dashboard）：看板「快到期」提醒提前几天（含今天到期的）。等馆方，先按原型 7 天 */
   expiryReminderDays: number;
   /** 期限卡冻结规则，岩馆在后台配置 */
   freezeRules: FreezeRules;
@@ -116,6 +118,7 @@ export const defaultRules: GymRules = {
   referralsPerMonth: 1,
   referralRequiresInviterSameDay: true,
   sameDayReentryFree: true,
+  orderPayMinutes: 15,
   expiryReminderDays: 7,
   freezeRules: defaultFreezeRules,
   classRules: defaultClassRules,

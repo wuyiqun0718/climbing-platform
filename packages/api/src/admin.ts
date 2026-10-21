@@ -1,4 +1,4 @@
-import { MEMBER_SOURCES, type Card, type CardAdjustInput, type FreezeOverridable, type PeriodCard, type RuleErrorCode, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type OrderStatus, type RefundBasis, type RefundMethod, type RefundStatus, type LedgerEntry, type MemberSource, type PayChannel, type Product, type ProductInput, type ProductPatch, type RevenueBucket, type RevenueCategory, type RevenueChannel, type Share, type ShareRecordState, type StaffInput, type StaffPatch, type StaffRole, type AuditAction, type AuditLogEntry, type ClassRules, type ClassType, type ClassTypeInput, type ClassTypePatch, type ClassSession, type SessionPatch, type ClassBooking, type CoachProfile, type CoachView, type PtBooking, type PtSlot, type PtSlotMark, type PtCancelKind, type PtRules } from '@climb/core';
+import { MEMBER_SOURCES, type Card, type CardAdjustInput, type FreezeOverridable, type PeriodCard, type RuleErrorCode, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type OrderStatus, type RefundBasis, type RefundMethod, type RefundStatus, type LedgerEntry, type MemberSource, type PayChannel, type Product, type ProductInput, type ProductPatch, type RevenueBucket, type RevenueCategory, type RevenueChannel, type Share, type ShareDisplayStatus, type StaffInput, type StaffPatch, type StaffRole, type AuditAction, type AuditLogEntry, type ClassRules, type ClassType, type ClassTypeInput, type ClassTypePatch, type ClassSession, type SessionPatch, type ClassBooking, type CoachProfile, type CoachView, type PtBooking, type PtSlot, type PtSlotMark, type PtCancelKind, type PtRules } from '@climb/core';
 import type { Cents, DateKey } from '@climb/utils';
 import { createHttp, type ClientOptions } from './client';
 
@@ -539,11 +539,14 @@ export interface CheckInListRow extends MemberEntryRow {
 
 /**
  * 分享记录 GET /admin/shares?store=&kind=（任务 21）：次卡转赠和老带新邀请，最近发的在前（同一天后发的在前）。
- * - 状态由数据推导，规则和文字见 @climb/core 的 shareRecord.ts（跟小程序「已发记录」同名同义）：过期看 expiresOn，用没用看领取人那张卡。
+ * - 状态由数据推导，用 @climb/core 的 share.ts（跟小程序分支同一份）：shareDisplayStatus，文字 SHARE_STATUS_TEXT；过期看 expiresOn，用没用看领取人那张卡。
  * - 门店按发起人的归属门店算（同看板老带新漏斗），口径同财务页：没有这家店 404；只管部分门店的员工必须带自己的店，否则 403。
  * - kind 不带是两种都要；不是 count / referral 的 400（data.field = kind）。先不分页。
  * 不返回分享 token（拿到就能领）。
  */
+/** 分享类型的文字（后台分享记录用；状态文字用 core share.ts 的 SHARE_STATUS_TEXT） */
+export const SHARE_KIND_TEXT: Record<Share['kind'], string> = { count: '次卡转赠', referral: '老带新' };
+
 export interface ShareList {
   storeId: string | null;
   items: ShareRow[];
@@ -564,7 +567,7 @@ export interface ShareRow {
   createdOn: DateKey;
   /** 领取截止，也是领到的卡、体验券的到期日（含） */
   expiresOn: DateKey;
-  state: ShareRecordState;
+  status: ShareDisplayStatus;
   /** used 的才有：朋友第一次用它入场的日期（撤销的不算） */
   usedOn: DateKey | null;
 }
@@ -572,7 +575,7 @@ export interface ShareRow {
 /**
  * 卡流水 GET /admin/cards/:id/ledger。没有这张卡 404；能看哪些会员的卡同会员详情。
  * entries 按发生时间正序，同一时刻按写入顺序；最后一笔的变化后剩余、到期日 = 卡上的（对账见 @climb/core 的 ledgerMismatch）。
- * 原因、变化量、变化后的文字用 @climb/core 的 LEDGER_REASON_TEXT / ledgerDeltaText / ledgerAfterText，跟小程序使用记录一致。
+ * 原因文字用 @climb/core ledger.ts 的 LEDGER_REASON_LABELS（跟小程序使用记录同一份），变化量、变化后的文字用 ledgerCheck.ts 的 ledgerDeltaText / ledgerAfterText。
  */
 export interface CardLedger {
   card: Card;
@@ -624,7 +627,7 @@ export interface CheckInPreviewBody {
   storeId: string;
 }
 
-export interface CheckInPreview {
+export interface DeskCheckInPreview {
   memberId: string;
   memberName: string;
   storeId: string;
@@ -815,12 +818,7 @@ export interface RefundResult {
   followers: PeriodCard[];
 }
 
-export const ORDER_STATUS_TEXT: Record<OrderStatus, string> = {
-  unpaid: '没付款',
-  paid: '已付款',
-  partially_refunded: '部分退款',
-  refunded: '已退款',
-};
+/** 订单状态的文字用 @climb/core orders.ts 的 ORDER_STATUS_LABELS（跟小程序分支同一份） */
 
 export const REFUND_METHOD_TEXT: Record<RefundMethod, string> = {
   wechat_original: '微信原路退回',
@@ -925,7 +923,7 @@ export function createAdminApi(opts: ClientOptions) {
         const s = qs.toString();
         return http<CheckInList>('GET', s ? `/admin/check-ins?${s}` : '/admin/check-ins');
       },
-      preview: (body: CheckInPreviewBody) => http<CheckInPreview>('POST', '/admin/check-ins/preview', body),
+      preview: (body: CheckInPreviewBody) => http<DeskCheckInPreview>('POST', '/admin/check-ins/preview', body),
       create: (body: CreateDeskCheckInBody) => http<DeskCheckInResult>('POST', '/admin/check-ins', body),
       void: (id: string, body: VoidCheckInBody) => http<VoidCheckInResult>('POST', `/admin/check-ins/${encodeURIComponent(id)}/void`, body),
     },

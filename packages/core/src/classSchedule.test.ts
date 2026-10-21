@@ -96,7 +96,7 @@ describe('取消一节课', () => {
     expect(r.bookings.map(b => [b.id, b.status])).toEqual([['b1', 'voided'], ['w1', 'voided']]);
     expect(r.changes).toEqual([{ card: { ...card, remaining: 10 }, delta: 1, reason: 'class_void', bookingId: 'b1' }]);
     expect(classLedgerEntry({ id: 'l1', change: r.changes[0]!, at: 'x', operator: { operatorType: 'staff', operatorId: 's1' }, note: '教练生病' })).toEqual({
-      id: 'l1', cardId: 'c1', at: 'x', delta: 1, remainingAfter: 10, expiresOnAfter: '2026-12-31', reason: 'class_void', ref: { type: 'class_booking', id: 'b1' }, operatorType: 'staff', operatorId: 's1', note: '教练生病',
+      id: 'l1', cardId: 'c1', at: 'x', on: 'x', delta: 1, remainingAfter: 10, expiresOnAfter: '2026-12-31', reason: 'class_void', refType: 'class_booking', refId: 'b1', operatorType: 'staff', operatorId: 's1', note: '教练生病',
     });
     expect(codeOf(() => staffCancelSession({ session: r.session, bookings, cards: [card], reason: 'x', now }))).toBe('class-cancelled');
   });

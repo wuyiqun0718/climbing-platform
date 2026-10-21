@@ -1,44 +1,19 @@
-import { formatDot, type DateKey } from '@climb/utils';
-import type { Card } from './types';
+import type { DateKey } from '@climb/utils';
+import type { Card, LedgerEntry, LedgerReason } from './types';
 
-/**
- * 卡的流水（card_ledger）：次数或有效期每变一次记一笔，只追加不修改。
- * 卡上的 remaining / expiresOn 只是缓存，必须等于最后一笔的「变化后」，每天对账用 ledgerMismatch 查。
- * 后台卡流水和小程序「使用记录」的文字都用这里。
- */
-
-export type LedgerReason =
-  | 'purchase'
-  | 'check_in'
-  | 'check_in_void'
-  | 'share_out'
-  | 'share_return'
-  | 'claim'
-  | 'adjust'
-  | 'refund'
-  | 'import'
-  | 'freeze'
-  | 'unfreeze'
-  | 'class_book'
-  | 'class_cancel'
-  | 'class_void'
-  | 'pt_book'
-  | 'pt_cancel'
-  | 'pt_void';
-
-export const LEDGER_REASON_TEXT: Record<LedgerReason, string> = {
-  purchase: '买卡',
+/** 流水原因的中文，会员端和后台都用这一份 */
+export const LEDGER_REASON_LABELS: Record<LedgerReason, string> = {
+  purchase: '购买',
   check_in: '入场',
   check_in_void: '撤销入场',
   share_out: '送给朋友',
   share_return: '朋友没领，退回',
   claim: '领取朋友送的',
-  adjust: '手动调整',
+  adjust: '前台调整',
   refund: '退款',
-  import: '青橙导入',
+  import: '从原系统转入',
   freeze: '冻结',
   unfreeze: '解冻',
-  // 下面几条的文字跟小程序分支 ledger.ts 的 LEDGER_REASON_LABELS 一致
   class_book: '约团课',
   class_cancel: '取消约课，退回',
   class_void: '团课取消，退回',
@@ -47,63 +22,44 @@ export const LEDGER_REASON_TEXT: Record<LedgerReason, string> = {
   pt_void: '教练取消，退回',
 };
 
-export type LedgerOperatorType = 'member' | 'staff' | 'system';
+/** 卡现在还剩几次：次卡、课时看 remaining，体验券没用过算 1 次，期限卡没有次数 */
+export function remainingOf(card: Card): number | undefined {
+  if (card.kind === 'period') return undefined;
+  if (card.kind === 'referral') return card.usedOn ? 0 : 1;
+  return card.remaining;
+}
 
-export interface LedgerEntry {
+/** 卡变化之后记一笔流水；card 传变化后的卡 */
+export function ledgerEntry(args: {
   id: string;
-  cardId: string;
-  /** 发生时间，ISO 8601 带时区，比如 2026-10-21T14:05:00+08:00 */
-  at: string;
-  /** 次数变化，比如 -1；只改有效期或状态时为 0 */
+  card: Card;
   delta: number;
-  /** 变化后剩余次数；期限卡、体验券为 null */
-  remainingAfter: number | null;
-  expiresOnAfter: DateKey;
   reason: LedgerReason;
-  /** 关联的入场记录、订单、分享 */
-  ref: { type: 'check_in' | 'order' | 'share' | 'import' | 'class_booking' | 'pt_booking'; id: string } | null;
-  operatorType: LedgerOperatorType;
-  /** 会员 ID 或员工 ID；system 为 null */
-  operatorId: string | null;
-  note: string;
+  on: DateKey;
+  at: string;
+  ref?: { type: NonNullable<LedgerEntry['refType']>; id: string };
+  note?: string;
+}): LedgerEntry {
+  const { card, ref } = args;
+  const entry: LedgerEntry = {
+    id: args.id,
+    cardId: card.id,
+    delta: args.delta,
+    expiresOnAfter: card.expiresOn,
+    reason: args.reason,
+    on: args.on,
+    at: args.at,
+  };
+  const remainingAfter = remainingOf(card);
+  if (remainingAfter !== undefined) entry.remainingAfter = remainingAfter;
+  if (ref) Object.assign(entry, { refType: ref.type, refId: ref.id });
+  if (args.note) entry.note = args.note;
+  return entry;
 }
 
-const hasCount = (card: Card) => card.kind !== 'period' && card.kind !== 'referral';
-
-/**
- * 对账：流水按时间排好后，每一笔的剩余 = 上一笔剩余 + 变化量，最后一笔的剩余和到期日 = 卡上的。
- * 一致返回 null，否则返回第一处不一致的说明。
- */
-export function ledgerMismatch(card: Card, entries: LedgerEntry[]): string | null {
-  const mine = entries.filter(e => e.cardId === card.id);
-  if (!mine.length) return '没有流水';
-  let prev: number | null = null;
-  for (const e of mine) {
-    if (!hasCount(card)) {
-      if (e.remainingAfter !== null || e.delta !== 0) return `${e.id}：这种卡不记次数`;
-      continue;
-    }
-    if (e.remainingAfter === null || e.remainingAfter < 0) return `${e.id}：剩余次数不对`;
-    if ((prev ?? 0) + e.delta !== e.remainingAfter) return `${e.id}：${prev ?? 0} ${e.delta >= 0 ? '+' : ''}${e.delta} ≠ ${e.remainingAfter}`;
-    prev = e.remainingAfter;
-  }
-  const last = mine[mine.length - 1]!;
-  if (hasCount(card) && 'remaining' in card && last.remainingAfter !== card.remaining) return `最后一笔剩 ${last.remainingAfter}，卡上剩 ${card.remaining}`;
-  if (last.expiresOnAfter !== card.expiresOn) return `最后一笔到期 ${last.expiresOnAfter}，卡上 ${card.expiresOn}`;
+/** 入场后要不要记流水、记多少：扣了次数或用掉体验券才记；期限卡、同日再次入场不记 */
+export function entryLedgerDelta(before: Card, after: Card, deducted: number): number | null {
+  if (deducted > 0) return -deducted;
+  if (before.kind === 'referral' && after.kind === 'referral' && !before.usedOn && after.usedOn) return -1;
   return null;
-}
-
-const unitOf = (card: Card) => (card.kind === 'pt' ? '节' : '次');
-
-/** 变化量的文字：+10 次、-1 次；次数没变的写有效期变了没有 */
-export function ledgerDeltaText(card: Card, e: LedgerEntry, prev: LedgerEntry | undefined): string {
-  if (e.delta) return `${e.delta > 0 ? '+' : '−'}${Math.abs(e.delta)} ${unitOf(card)}`;
-  if (prev && prev.expiresOnAfter !== e.expiresOnAfter) return '改有效期';
-  return '—';
-}
-
-/** 变化后的文字：剩 6 次，2027.02.06 到期；期限卡只写到期日 */
-export function ledgerAfterText(card: Card, e: LedgerEntry): string {
-  const exp = `${formatDot(e.expiresOnAfter)} 到期`;
-  return e.remainingAfter === null ? exp : `剩 ${e.remainingAfter} ${unitOf(card)}，${exp}`;
 }

@@ -1,9 +1,11 @@
 import { addDays, daysBetween, type Cents, type DateKey } from '@climb/utils';
 import type { PayChannel } from './finance';
-import { followersAfter, periodEndOn } from './freeze';
-import type { LedgerEntry } from './ledger';
+import { followersAfter } from './cardAdjust';
+import { periodEndOn } from './freeze';
+import type { OrderStatus } from './orders';
+import { ledgerOnOf } from './ledgerCheck';
 import { RuleError, type RuleErrorCode } from './rules';
-import type { Card, PeriodCard } from './types';
+import type { Card, PeriodCard, LedgerEntry } from './types';
 
 /**
  * 退款（任务 18）：能不能退、最多退多少、建议退多少、怎么退、退完卡和订单变成什么样。
@@ -29,7 +31,7 @@ export type RefundMethod = 'wechat_original' | 'offline';
 export type RefundStatus = 'processing' | 'succeeded' | 'failed';
 
 /** 订单状态：已退 = 退成功的合计等于实付，部分退 = 退成功了一部分 */
-export type OrderStatus = 'unpaid' | 'paid' | 'partially_refunded' | 'refunded';
+// 订单状态 OrderStatus 和文字 ORDER_STATUS_LABELS 在 orders.ts（跟小程序分支一致）；没付款是 pending
 
 /** 原订单渠道 → 退款方式；null 是不能在后台退的 */
 export const REFUND_METHOD_BY_CHANNEL: Record<PayChannel, RefundMethod | null> = {
@@ -63,7 +65,7 @@ export function refundableCents(order: RefundOrder, refunds: readonly RefundLike
 
 /** 订单状态，只看退成功的 */
 export function orderStatus(order: Pick<RefundOrder, 'amountCents' | 'paidOn'>, refunds: readonly RefundLike[]): OrderStatus {
-  if (!order.paidOn) return 'unpaid';
+  if (!order.paidOn) return 'pending';
   const done = refunds.filter(r => r.status === 'succeeded').reduce((n, r) => n + r.amountCents, 0);
   if (done <= 0) return 'paid';
   return done >= order.amountCents ? 'refunded' : 'partially_refunded';
@@ -193,11 +195,13 @@ export function refundLedgerEntry(args: {
     id: args.id,
     cardId: card.id,
     at: args.at,
+    on: ledgerOnOf(args.at),
     delta: args.delta,
-    remainingAfter: 'remaining' in card ? card.remaining : null,
+    ...('remaining' in card ? { remainingAfter: card.remaining } : {}),
     expiresOnAfter: card.expiresOn,
     reason: 'refund',
-    ref: { type: 'order', id: args.orderId },
+    refType: 'order',
+    refId: args.orderId,
     ...args.operator,
     note: args.note,
   };

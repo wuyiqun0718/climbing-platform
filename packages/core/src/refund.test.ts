@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { freezePeriodCard, unfreezePeriodCard } from './freeze';
 import { defaultFreezeRules, defaultRules } from './gym';
-import { ledgerMismatch, type LedgerEntry } from './ledger';
+import { ledgerMismatch } from './ledgerCheck';
+import type { LedgerEntry } from './types';
 import { purchaseLedgerEntry } from './order';
 import { orderStatus, pastFrozenDays, planRefund, refundableCents, refundBasisText, refundBlockedBy, refundLedgerEntry, suggestedRefund, type RefundLike, type RefundOrder } from './refund';
 import { entryOptions, RuleError } from './rules';
@@ -29,7 +30,7 @@ describe('能退多少、订单状态', () => {
 
   it('订单状态只看退成功的', () => {
     expect(orderStatus(wechat, [])).toBe('paid');
-    expect(orderStatus({ ...wechat, paidOn: null }, [])).toBe('unpaid');
+    expect(orderStatus({ ...wechat, paidOn: null }, [])).toBe('pending');
     expect(orderStatus(wechat, [ok(30_000)])).toBe('partially_refunded');
     expect(orderStatus(wechat, [ok(30_000), ok(98_000)])).toBe('refunded');
     expect(orderStatus(wechat, [{ amountCents: 128_000, status: 'processing' }])).toBe('paid');
@@ -64,10 +65,10 @@ describe('建议退款金额（占位公式）', () => {
     const back = unfreezePeriodCard({ card: frozen, cards: [frozen], on: '2026-10-11' }).card;
     expect(back.expiresOn).toBe('2026-12-09');
     const ledger: LedgerEntry[] = [
-      { id: 'l1', cardId: 'p1', at: '2026-09-01T10:00:00+08:00', delta: 0, remainingAfter: null, expiresOnAfter: season.expiresOn, reason: 'purchase', ref: null, operatorType: 'member', operatorId: 'jie', note: '' },
-      { id: 'l2', cardId: 'p1', at: '2026-10-01T10:00:00+08:00', delta: 0, remainingAfter: null, expiresOnAfter: season.expiresOn, reason: 'freeze', ref: null, operatorType: 'member', operatorId: 'jie', note: '' },
-      { id: 'lx', cardId: 'p2', at: '2026-10-01T10:00:00+08:00', delta: 0, remainingAfter: null, expiresOnAfter: '2027-01-01', reason: 'adjust', ref: null, operatorType: 'member', operatorId: 'jie', note: '' },
-      { id: 'l3', cardId: 'p1', at: '2026-10-11T10:00:00+08:00', delta: 0, remainingAfter: null, expiresOnAfter: back.expiresOn, reason: 'unfreeze', ref: null, operatorType: 'member', operatorId: 'jie', note: '' },
+      { id: 'l1', cardId: 'p1', at: '2026-09-01T10:00:00+08:00', on: '2026-09-01', delta: 0, expiresOnAfter: season.expiresOn, reason: 'purchase', operatorType: 'member', operatorId: 'jie', note: '' },
+      { id: 'l2', cardId: 'p1', at: '2026-10-01T10:00:00+08:00', on: '2026-10-01', delta: 0, expiresOnAfter: season.expiresOn, reason: 'freeze', operatorType: 'member', operatorId: 'jie', note: '' },
+      { id: 'lx', cardId: 'p2', at: '2026-10-01T10:00:00+08:00', on: '2026-10-01', delta: 0, expiresOnAfter: '2027-01-01', reason: 'adjust', operatorType: 'member', operatorId: 'jie', note: '' },
+      { id: 'l3', cardId: 'p1', at: '2026-10-11T10:00:00+08:00', on: '2026-10-11', delta: 0, expiresOnAfter: back.expiresOn, reason: 'unfreeze', operatorType: 'member', operatorId: 'jie', note: '' },
     ];
     const frozenDays = pastFrozenDays(ledger, 'p1');
     expect(frozenDays).toBe(10);
@@ -120,7 +121,7 @@ describe('退款', () => {
     const buy = purchaseLedgerEntry({ id: 'l1', card: { ...tenTimes, remaining: 10 }, at: '2026-09-01T10:00:00+08:00', orderId: 'o1', operator: { operatorType: 'member', operatorId: 'jie' } });
     const use: LedgerEntry = { ...buy, id: 'l2', delta: -4, remainingAfter: 6, reason: 'check_in' };
     const entry = refundLedgerEntry({ id: 'l3', card: r.card!, delta: r.delta, at: '2026-10-21T15:00:00+08:00', orderId: 'o1', operator: { operatorType: 'staff', operatorId: 's1' }, note: '搬家' });
-    expect(entry).toMatchObject({ reason: 'refund', delta: -6, remainingAfter: 0, ref: { type: 'order', id: 'o1' } });
+    expect(entry).toMatchObject({ reason: 'refund', delta: -6, remainingAfter: 0, refType: 'order', refId: 'o1' });
     expect(ledgerMismatch(r.card!, [buy, use, entry])).toBeNull();
   });
 

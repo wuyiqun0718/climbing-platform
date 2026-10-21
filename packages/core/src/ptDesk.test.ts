@@ -62,7 +62,7 @@ describe('后台取消私教', () => {
   it('流水关联到私教预约', () => {
     const r = run('coach', '有事');
     expect(ptLedgerEntry({ id: 'l1', change: r.changes[0]!, at: 't', operator: { operatorType: 'staff', operatorId: 's1' }, note: '有事' })).toEqual({
-      id: 'l1', cardId: 'c1', at: 't', delta: 1, remainingAfter: 5, expiresOnAfter: '2026-12-31', reason: 'pt_void', ref: { type: 'pt_booking', id: 'pb1' }, operatorType: 'staff', operatorId: 's1', note: '有事',
+      id: 'l1', cardId: 'c1', at: 't', on: 't', delta: 1, remainingAfter: 5, expiresOnAfter: '2026-12-31', reason: 'pt_void', refType: 'pt_booking', refId: 'pb1', operatorType: 'staff', operatorId: 's1', note: '有事',
     });
   });
 });

@@ -1,8 +1,8 @@
 import type { PastCheckIn } from './checkIn';
 import { isPolicyInForce, type InsurancePolicy } from './insurance';
-import type { LedgerEntry } from './ledger';
+import { ledgerOnOf } from './ledgerCheck';
 import { RuleError } from './rules';
-import type { Card } from './types';
+import type { Card, LedgerEntry } from './types';
 
 /**
  * 撤销入场（docs/mvp-plan.md 第 9 节已定：前台、店长、老板都能撤，扫码和前台登记的都能撤，必须填原因，记流水和操作日志）。
@@ -123,11 +123,13 @@ export function checkInVoidLedgerEntry(args: {
     id: args.id,
     cardId: card.id,
     at: args.at,
+    on: ledgerOnOf(args.at),
     delta: args.restored,
     remainingAfter: card.remaining,
     expiresOnAfter: card.expiresOn,
     reason: 'check_in_void',
-    ref: { type: 'check_in', id: args.checkInId },
+    refType: 'check_in',
+    refId: args.checkInId,
     ...args.operator,
     note: args.restored || !args.movedTo ? args.note : `${args.note}（扣次转到同一天的入场 ${args.movedTo}）`,
   };

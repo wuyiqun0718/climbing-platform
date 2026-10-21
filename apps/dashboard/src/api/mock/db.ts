@@ -1,5 +1,5 @@
 import { MEMBER_SOURCES, type DeskCheckInResult, type DeskOrderResult, type RefundResult, type EntryMethod, type VoidCheckInResult, type MemberSource, type Staff, type Store } from '@climb/api';
-import { DEFAULT_DESK_QR_KIND, REFUND_METHOD_BY_CHANNEL, type AuditLogEntry, type CoachProfile, type DeskQrKind, type EntryQr, type PtBooking, type PtSlotMark, type ClassBooking, type ClassSession, type ClassType, defaultRules, insuranceForEntry, newPolicy, type Card, type RefundMethod, type RefundStatus, type InsurancePolicy, type CountCard, type GiftCard, type LessonCard, type Share, type GymRules, type LedgerEntry, type Product, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
+import { DEFAULT_DESK_QR_KIND, REFUND_METHOD_BY_CHANNEL, ledgerOnOf, newShareToken, type AuditLogEntry, type CoachProfile, type DeskQrKind, type EntryQr, type PtBooking, type PtSlotMark, type ClassBooking, type ClassSession, type ClassType, defaultRules, insuranceForEntry, newPolicy, type Card, type RefundMethod, type RefundStatus, type InsurancePolicy, type CountCard, type GiftCard, type LessonCard, type Share, type GymRules, type LedgerEntry, type Product, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
 import { addDays, addMonths, daysBetween, endOfMonth, fromDateKey, monthOf, type DateKey } from '@climb/utils';
 
 /** 会员（对应 members 表），目前放了看板「新客从哪来」和会员列表用到的字段 */
@@ -108,6 +108,21 @@ export function mockPasswordHash(staffId: string, password: string): string {
   }
   return `fnv1a:${h.toString(16).padStart(8, '0')}`;
 }
+
+/**
+ * 示例流水的写法：沿用 ref 对象、剩余次数写 null，存成 core 的 LedgerEntry（types.ts，跟小程序分支同一份）：
+ * refType / refId，on 取记录时间的日期，期限卡不带 remainingAfter。
+ */
+type SeedLedger = Omit<LedgerEntry, 'on' | 'refType' | 'refId' | 'remainingAfter'> & {
+  remainingAfter?: number | null;
+  ref?: { type: NonNullable<LedgerEntry['refType']>; id: string } | null;
+};
+function toLedger({ ref, remainingAfter, ...e }: SeedLedger): LedgerEntry {
+  return { ...e, on: ledgerOnOf(e.at), ...(remainingAfter == null ? {} : { remainingAfter }), ...(ref ? { refType: ref.type, refId: ref.id } : {}) };
+}
+
+/** 示例分享的 token：按分享 id 算出固定的「随机」字节（示例数据每次一样），格式同 core shareToken.ts */
+const seedShareToken = (id: string) => newShareToken(n => Uint8Array.from({ length: n }, (_, i) => (id.charCodeAt(i % id.length) * 31 + i * 17) % 256));
 
 /** 示例数据生成时的会员：都到过店 */
 type SeedMember = Omit<MockMember, 'phone' | 'lastEntryOn' | 'waiverSignedOn'> & { firstVisitOn: DateKey; firstVisitStoreId: string };
@@ -405,8 +420,8 @@ function withLedger<T extends Pick<MockDb, 'members' | 'cards' | 'checkIns'>>(da
   let n = 0;
 
   const cards = data.cards.map((card): Card => {
-    const add = (e: Omit<LedgerEntry, 'id' | 'cardId' | 'expiresOnAfter' | 'ref' | 'note'> & Partial<Pick<LedgerEntry, 'ref' | 'note'>>) =>
-      ledger.push({ id: `l-${++n}`, cardId: card.id, expiresOnAfter: card.expiresOn, ref: null, note: '', ...e });
+    const add = (e: Omit<SeedLedger, 'id' | 'cardId' | 'expiresOnAfter' | 'note'> & Partial<Pick<SeedLedger, 'note'>>) =>
+      ledger.push(toLedger({ id: `l-${++n}`, cardId: card.id, expiresOnAfter: card.expiresOn, note: '', ...e }));
     const m = members.get(card.memberId)!;
     if (card.kind === 'period') {
       const on = card.startsOn <= today ? card.startsOn : today;
@@ -453,7 +468,7 @@ function withShares<T extends Pick<MockDb, 'members' | 'cards' | 'checkIns' | 'l
   const { ledger, checkIns } = data;
   const cards = [...data.cards];
   const shares: Share[] = [];
-  const add = (e: Omit<LedgerEntry, 'id' | 'note' | 'operatorType'> & { operatorId: string }) => ledger.push({ id: `l-${ledger.length + 1}`, note: '', operatorType: 'member', ...e });
+  const add = (e: Omit<SeedLedger, 'id' | 'note' | 'operatorType'> & { operatorId: string }) => ledger.push(toLedger({ id: `l-${ledger.length + 1}`, note: '', operatorType: 'member', ...e }));
   const dayOf = (at: string) => at.slice(0, 10);
   const lastOn = (cardId: string) => ledger.filter(e => e.cardId === cardId).reduce((max, e) => (dayOf(e.at) > max ? dayOf(e.at) : max), '');
   const gifts = data.members.filter(m => m.source === 'gift');
@@ -461,7 +476,8 @@ function withShares<T extends Pick<MockDb, 'members' | 'cards' | 'checkIns' | 'l
   const countCards = () => cards.filter((c): c is CountCard => c.kind === 'count' && (c.status ?? 'normal') === 'normal' && c.remaining >= 3);
 
   const share = (card: CountCard, quantity: number, on: DateKey): Share => {
-    const sh: Share = { id: `sh-${shares.length + 1}`, kind: 'count', fromMemberId: card.memberId, quantity, createdOn: on, expiresOn: card.expiresOn, status: 'pending' };
+    const id = `sh-${shares.length + 1}`;
+    const sh: Share = { id, kind: 'count', token: seedShareToken(id), fromMemberId: card.memberId, fromCardId: card.id, quantity, createdOn: on, expiresOn: card.expiresOn, status: 'pending' };
     shares.push(sh);
     return sh;
   };
@@ -483,12 +499,12 @@ function withShares<T extends Pick<MockDb, 'members' | 'cards' | 'checkIns' | 'l
   };
 
   // 1. 已用完那张送出去的
-  const out = ledger.find(e => e.reason === 'share_out' && !e.ref);
+  const out = ledger.find(e => e.reason === 'share_out' && !e.refType);
   const recipient1 = gifts[0];
   if (out && recipient1) {
     const card = cards.find(c => c.id === out.cardId) as CountCard;
     const sh = share(card, -out.delta, dayOf(out.at));
-    out.ref = { type: 'share', id: sh.id };
+    Object.assign(out, { refType: 'share', refId: sh.id });
     claim(sh, recipient1.id);
   }
 
@@ -546,8 +562,8 @@ function withClassBookings<T extends Pick<MockDb, 'members' | 'cards' | 'ledger'
   const day = fromDateKey(today).getDay();
   const monday = addDays(today, day === 0 ? -6 : 1 - day);
   const bookings: MockClassBooking[] = [];
-  const add = (e: Omit<LedgerEntry, 'id' | 'note' | 'operatorType' | 'expiresOnAfter'> & { operatorId: string }) =>
-    ledger.push({ id: `l-${ledger.length + 1}`, note: '', operatorType: 'member', expiresOnAfter: '', ...e });
+  const add = (e: Omit<SeedLedger, 'id' | 'note' | 'operatorType' | 'expiresOnAfter'> & { operatorId: string }) =>
+    ledger.push(toLedger({ id: `l-${ledger.length + 1}`, note: '', operatorType: 'member', expiresOnAfter: '', ...e }));
   let n = 0;
   for (const s of sessions.filter(x => x.on >= monday)) {
     for (let k = 0; k < 3; k++) {
@@ -582,8 +598,8 @@ function withPt<T extends Pick<MockDb, 'cards' | 'ledger'>>(data: T, today: Date
   const memberId = 'm-old-14';
   const card: LessonCard = { id: 'c-pt-m-old-14', kind: 'pt', memberId, productId: 'p-pt5', name: '私教 5 节', total: 5, remaining: 5, expiresOn: addMonths(today, 3) };
   cards.push(card);
-  const add = (e: Pick<LedgerEntry, 'at' | 'delta' | 'reason' | 'ref'>) =>
-    ledger.push({ id: `l-${ledger.length + 1}`, cardId: card.id, remainingAfter: card.remaining, expiresOnAfter: card.expiresOn, operatorType: 'member', operatorId: memberId, note: '', ...e });
+  const add = (e: Pick<SeedLedger, 'at' | 'delta' | 'reason' | 'ref'>) =>
+    ledger.push(toLedger({ id: `l-${ledger.length + 1}`, cardId: card.id, remainingAfter: card.remaining, expiresOnAfter: card.expiresOn, operatorType: 'member', operatorId: memberId, note: '', ...e }));
   add({ at: `${addDays(today, -10)}T10:00:00+08:00`, delta: 5, reason: 'purchase', ref: null });
   const ptBookings: PtBooking[] = [];
   for (const [on, hour, status] of [[addDays(today, -1), 18, 'attended'], [addDays(today, 1), 14, 'booked']] as const) {

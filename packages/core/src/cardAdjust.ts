@@ -1,10 +1,24 @@
-import type { DateKey } from '@climb/utils';
-import { followersAfter, freezePeriodCard, freezeQuotaLeft } from './freeze';
+import { addDays, daysBetween, type DateKey } from '@climb/utils';
+import { freezePeriodCard, freezeQuotaLeft, periodEndOn } from './freeze';
 import { FREEZE_DAYS_LIMIT } from './freezeRules';
 import type { FreezeRules } from './gym';
-import type { LedgerEntry } from './ledger';
+import { ledgerOnOf } from './ledgerCheck';
 import { isPeriodActive, RuleError, type RuleErrorCode } from './rules';
-import type { Card, PeriodCard } from './types';
+import type { Card, PeriodCard, LedgerEntry } from './types';
+
+/**
+ * 期限卡的有效期改了（后台调整、退款）以后，后面接着的期限卡跟着挪。规则同 freeze.ts 里冻结、解冻用的 chainFollowers
+ * （那个没导出，freeze.ts 跟小程序分支保持一致，所以这里照着写一份，两边要一起改）。
+ */
+export function followersAfter(card: PeriodCard, cards: readonly Card[]): PeriodCard[] {
+  const followers = cards.filter((c): c is PeriodCard =>
+    c.kind === 'period' && c.memberId === card.memberId && c.id !== card.id && c.startsOn > card.startsOn && (c.status ?? 'normal') === 'normal');
+  if (!followers.length) return [];
+  const first = followers.reduce((min, c) => (c.startsOn < min ? c.startsOn : min), followers[0]!.startsOn);
+  const shift = daysBetween(first, addDays(periodEndOn(card), 1));
+  if (shift === 0) return [];
+  return followers.map(c => ({ ...c, startsOn: addDays(c.startsOn, shift), expiresOn: addDays(c.expiresOn, shift) }));
+}
 
 /**
  * 后台改卡（任务 17）：调次数、改到期日，帮会员冻结、解冻期限卡。
@@ -130,11 +144,11 @@ export function cardChangeLedgerEntry(args: {
     id: args.id,
     cardId: card.id,
     at: args.at,
+    on: ledgerOnOf(args.at),
     delta: args.delta ?? 0,
-    remainingAfter: hasCount(card) ? card.remaining : null,
+    ...(hasCount(card) ? { remainingAfter: card.remaining } : {}),
     expiresOnAfter: card.expiresOn,
     reason: args.reason,
-    ref: null,
     ...args.operator,
     note: args.note,
   };

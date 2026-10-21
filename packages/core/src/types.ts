@@ -1,8 +1,5 @@
 import type { Cents, DateKey } from '@climb/utils';
 
-/** 跟小程序分支一样，从 types 也能拿到 LedgerReason（classes.ts 从这里引） */
-export type { LedgerReason } from './ledger';
-
 export type ProductCategory = 'period' | 'count' | 'pt' | 'class';
 
 /** 在售商品：期限卡、次卡、私教课包、团课包 */
@@ -19,11 +16,11 @@ export interface Product {
   validMonths?: number;
   perks: string[];
   onSale: boolean;
-  /** 列表里的顺序，同一组里小的在前；没填算 0（见 product.ts 的 sortProducts） */
+  /** 后台（mvp/dashboard 任务 19）：列表里的顺序，同一组里小的在前；没填算 0（见 product.ts 的 sortProducts） */
   sort?: number;
 }
 
-/** 卡的状态：正常、冻结、作废、已退款。冻结和解冻的规则见任务 17 */
+/** 卡的状态：正常、冻结、作废、已退款。只有正常的卡能入场、转赠、发老带新 */
 export type CardStatus = 'normal' | 'frozen' | 'void' | 'refunded';
 
 interface CardBase {
@@ -82,13 +79,18 @@ export interface LessonCard extends CardBase {
 export type Card = PeriodCard | CountCard | GiftCard | ReferralVoucher | LessonCard;
 export type EntryCard = PeriodCard | CountCard | GiftCard | ReferralVoucher;
 
-export type ShareStatus = 'pending' | 'claimed' | 'used';
+/** returned：次卡转赠过期没人领，次数退回原卡（退不退等馆方定，见 mvp-plan 第 9 节问题 4） */
+export type ShareStatus = 'pending' | 'claimed' | 'used' | 'returned';
 
 /** 发到微信里的分享：次卡转赠或老带新邀请 */
 export interface Share {
   id: string;
   kind: 'count' | 'referral';
+  /** 放在分享路径里，领取和查看都按它（@climb/core shareToken.ts）；不对外暴露 id */
+  token: string;
   fromMemberId: string;
+  /** 次卡转赠：从哪张卡里拆出来的（到期退回时用） */
+  fromCardId?: string;
   /** 次卡转赠的次数 */
   quantity?: number;
   createdOn: DateKey;
@@ -101,7 +103,54 @@ export interface CheckIn {
   id: string;
   memberId: string;
   cardId: string;
+  /** 在哪家店入的场（卡三店通用，入场记录带门店） */
+  storeId: string;
   on: DateKey;
   /** 扣了几次（期限卡和同日再次入场为 0） */
   deducted: number;
 }
+
+/** 流水原因，和后端 card_ledger.reason 一致 */
+export type LedgerReason =
+  | 'purchase'
+  | 'check_in'
+  | 'check_in_void'
+  | 'share_out'
+  | 'share_return'
+  | 'claim'
+  | 'adjust'
+  | 'refund'
+  | 'import'
+  | 'freeze'
+  | 'unfreeze'
+  | 'class_book'
+  | 'class_cancel'
+  | 'class_void'
+  | 'pt_book'
+  | 'pt_cancel'
+  | 'pt_void';
+
+/** 卡的流水：次数或有效期每变一次记一笔，只追加不修改 */
+export interface LedgerEntry {
+  id: string;
+  cardId: string;
+  /** 次数变化，比如 -1；只改有效期（或期限卡）时为 0 */
+  delta: number;
+  /** 变化后还剩几次；期限卡没有 */
+  remainingAfter?: number;
+  expiresOnAfter: DateKey;
+  reason: LedgerReason;
+  refType?: 'check_in' | 'order' | 'share' | 'class_booking' | 'pt_booking' | 'import';
+  refId?: string;
+  /** 业务日期 */
+  on: DateKey;
+  /** 记录时间（ISO） */
+  at: string;
+  note?: string;
+  /** 后台（mvp/dashboard）：谁做的这笔，会员、员工还是系统（冻满自动解冻）；会员端可以不填 */
+  operatorType?: LedgerOperatorType;
+  /** 会员 ID 或员工 ID；system 为 null */
+  operatorId?: string | null;
+}
+
+export type LedgerOperatorType = 'member' | 'staff' | 'system';
