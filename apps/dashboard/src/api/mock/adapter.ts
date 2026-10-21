@@ -26,6 +26,8 @@ import {
   type CreateProductBody,
   type ClassTypeBody,
   type AdminClassRow,
+  type PtTimelineView,
+  type AdminPtSlot,
   type AttendResult,
   type CancelBookingResult,
   type ClassRosterView,
@@ -99,6 +101,9 @@ import {
   insuranceForEntry,
   entryPolicy,
   shareRecordState,
+  ptBookingsOn,
+  ptRangeError,
+  ptTimeline,
   coachProfileErrors,
   cleanCoachProfile,
   listCoaches,
@@ -1548,6 +1553,33 @@ function cancelClassBooking(db: MockDb, staff: Staff, id: string, body: { reason
   return ok(res);
 }
 
+/** 私教时间轴：口径见 @climb/api 的 PtTimelineView，格子按 core 的 ptTimeline（pt.ts 的 ptDaySlots，营业时间来自 ptRules） */
+function ptSlotsView(db: MockDb, staff: Staff, q: URLSearchParams): ApiResponse {
+  const from = q.get('from') || db.today;
+  const to = q.get('to') || (isDateKey(from) ? addDays(from, 6) : from);
+  const bad = ptRangeError(from, to);
+  if (bad) return fail(400, 'bad-range', bad);
+  const storeId = q.get('store');
+  const scope = storeScope(db, staff, storeId);
+  if (!Array.isArray(scope)) return scope;
+  const names = new Map(db.members.map(m => [m.id, m.name]));
+  const t = ptTimeline({ coaches: listCoaches(db.staff, storeId), from, to, bookings: db.ptBookings, marks: db.ptSlotMarks, now: mockNow(db), rules: db.rules.ptRules });
+  const res: PtTimelineView = {
+    from,
+    to,
+    storeId,
+    hours: t.hours,
+    coaches: t.rows.map(r => ({
+      coach: r.coach,
+      days: r.days.map(d => ({
+        on: d.on,
+        slots: d.slots.map(({ booking, ...x }): AdminPtSlot => (booking ? { ...x, booking: { ...booking, memberName: names.get(booking.memberId) ?? '' } } : x)),
+      })),
+    })),
+  };
+  return ok(res);
+}
+
 /** 新建卡种：口径见 @climb/api 的 CreateProductBody，规则都在 @climb/core 的 product.ts */
 function createProduct(db: MockDb, staff: Staff, body: Partial<CreateProductBody> | null): ApiResponse {
   if (!canDo(staff.role, 'product.edit') || !canDo(staff.role, 'product.price')) return fail(403, 'forbidden', '没有新建卡种的权限');
@@ -1594,6 +1626,7 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
     },
   },
   { method: 'GET', path: /^\/admin\/auth\/me$/, auth: true, handle: ({ staff }) => ok(staff) },
+  { method: 'GET', path: /^\/admin\/pt-slots$/, auth: true, handle: ({ db, query, staff }) => ptSlotsView(db, staff!, query) },
   { method: 'GET', path: /^\/admin\/coaches$/, auth: true, handle: ({ db }) => ok(listCoaches(db.staff)) },
   // 小程序的教练列表（mvp/miniapp 的 GET /coaches?store=）：在用、有教练资料的员工，id 是员工 id。小程序 mock 合并后从 db.staff 出
   { method: 'GET', path: /^\/coaches$/, auth: false, handle: ({ db, query }) => ok(listCoaches(db.staff, query.get('store'))) },
@@ -1626,7 +1659,7 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
         monthRevenueCents: sum('monthRevenueCents'),
         todayEntries: sum('todayEntries'),
         lastWeekSameTimeEntries: sum('lastWeekSameTimeEntries'),
-        todayBookings: classBookingsOn(db.classSessions, db.classBookings, db.today, ids),
+        todayBookings: classBookingsOn(db.classSessions, db.classBookings, db.today, ids) + ptBookingsOn(db.ptBookings, db.today, ids),
         activeMembers: sum('activeMembers'),
         newcomers: newcomerRows(db, ids),
         referral: referralFunnel(db, ids),

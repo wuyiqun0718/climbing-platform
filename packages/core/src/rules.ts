@@ -52,7 +52,18 @@ export type RuleErrorCode =
   | 'class-store-busy'
   | 'class-time-locked'
   // 后台团课签到（classRoster.ts）
-  | 'class-checkin-not-open';
+  | 'class-checkin-not-open'
+  // 私教（pt.ts，跟小程序分支同名）
+  | 'pt-outside-hours'
+  | 'pt-slot-past'
+  | 'pt-slot-taken'
+  | 'pt-coach-off'
+  | 'pt-member-busy'
+  | 'pt-no-card'
+  | 'pt-started'
+  | 'pt-cancel-too-late'
+  | 'pt-booking-not-pending'
+  | 'pt-reason-required';
 
 export class RuleError extends Error {
   constructor(public code: RuleErrorCode, message: string) {

@@ -1,13 +1,14 @@
 <script setup lang="ts">
 /**
  * 课程排期页：团课课表（任务 26，components/ClassSchedule.vue），团课课程种类的新建、编辑、停用（任务 25），
- * 和团课规则（取消截止、候补、迟到，占位，等馆方）。私教（28–30）以后加。校验都在 @climb/core 的 classTypes.ts，这里只负责显示和提交。
+ * 和团课规则（取消截止、候补、迟到，占位，等馆方）；私教时间轴（任务 29，components/CoachTimeline.vue，只读）。校验都在 @climb/core 的 classTypes.ts，这里只负责显示和提交。
  */
 import { classRulesErrors, type ClassRules, type ClassRulesErrors, type ClassType } from '@climb/core';
 import { DataTable, Field, errorText, useToast, type Column } from '@climb/ui-web';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { api } from '../api';
 import ClassSchedule from '../components/ClassSchedule.vue';
+import CoachTimeline from '../components/CoachTimeline.vue';
 import ClassTypeForm from '../components/ClassTypeForm.vue';
 import { canDo } from '../permissions';
 import { session } from '../session';
@@ -151,6 +152,14 @@ async function saveRules() {
         <button v-if="canEdit" type="button" class="link" :disabled="toggling !== null" @click.stop="toggle(row)" @keydown.enter.stop>{{ row.active ? '停用' : '启用' }}</button>
       </template>
     </DataTable>
+  </section>
+
+  <header class="sub-h">
+    <h2>私教</h2>
+    <p>每位教练一行，按私教营业时间每小时一格</p>
+  </header>
+  <section class="panel">
+    <CoachTimeline />
   </section>
 
   <section class="card">

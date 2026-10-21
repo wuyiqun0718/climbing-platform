@@ -61,7 +61,7 @@ export interface LedgerEntry {
   expiresOnAfter: DateKey;
   reason: LedgerReason;
   /** 关联的入场记录、订单、分享 */
-  ref: { type: 'check_in' | 'order' | 'share' | 'import' | 'class_booking'; id: string } | null;
+  ref: { type: 'check_in' | 'order' | 'share' | 'import' | 'class_booking' | 'pt_booking'; id: string } | null;
   operatorType: LedgerOperatorType;
   /** 会员 ID 或员工 ID；system 为 null */
   operatorId: string | null;

@@ -23,3 +23,5 @@ export * from './classTypes';
 export * from './classSchedule';
 export * from './classRoster';
 export * from './coach';
+export * from './pt';
+export * from './ptTimeline';

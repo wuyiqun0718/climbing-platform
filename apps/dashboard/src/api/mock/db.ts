@@ -1,5 +1,5 @@
 import { MEMBER_SOURCES, type DeskCheckInResult, type DeskOrderResult, type RefundResult, type EntryMethod, type VoidCheckInResult, type MemberSource, type Staff, type Store } from '@climb/api';
-import { REFUND_METHOD_BY_CHANNEL, type AuditLogEntry, type CoachProfile, type ClassBooking, type ClassSession, type ClassType, defaultRules, insuranceForEntry, newPolicy, type Card, type RefundMethod, type RefundStatus, type InsurancePolicy, type CountCard, type GiftCard, type LessonCard, type Share, type GymRules, type LedgerEntry, type Product, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
+import { REFUND_METHOD_BY_CHANNEL, type AuditLogEntry, type CoachProfile, type PtBooking, type PtSlotMark, type ClassBooking, type ClassSession, type ClassType, defaultRules, insuranceForEntry, newPolicy, type Card, type RefundMethod, type RefundStatus, type InsurancePolicy, type CountCard, type GiftCard, type LessonCard, type Share, type GymRules, type LedgerEntry, type Product, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
 import { addDays, addMonths, daysBetween, endOfMonth, fromDateKey, monthOf, type DateKey } from '@climb/utils';
 
 /** 会员（对应 members 表），目前放了看板「新客从哪来」和会员列表用到的字段 */
@@ -115,6 +115,9 @@ export interface MockDb {
   classSessions: ClassSession[];
   /** 团课预约（对应 class_bookings 表），小程序约课写这里；示例见 withClassBookings */
   classBookings: MockClassBooking[];
+  /** 私教：会员约的（对应 pt_bookings）和后台标的线下约、不接课（对应 pt_slot_marks），结构同小程序分支；小程序 mock 合并后读同一份 */
+  ptBookings: PtBooking[];
+  ptSlotMarks: PtSlotMark[];
   /** mock 的「现在」几点（HH:mm:ss），测试里固定；不填用本机时间。日期用 today */
   clock?: string;
   /** 每家店的看板数字（示例），全部门店 = 各店相加 */
@@ -176,7 +179,7 @@ export function createMockDb(today: DateKey, rules: GymRules = defaultRules): Mo
       { id: 'ct-rope', name: '顶绳进阶', minutes: 90, capacity: 8, credits: 2, coachId: 's-manager', active: true },
       { id: 'ct-kids', name: '亲子攀岩', minutes: 60, capacity: 10, credits: 1, active: false },
     ],
-    ...withClassBookings(withShares(withLedger(withCheckIns(sampleMembers(today), staff, today), staff, today), today), sampleClassSessions(today), today),
+    ...withPt(withClassBookings(withShares(withLedger(withCheckIns(sampleMembers(today), staff, today), staff, today), today), sampleClassSessions(today), today), today),
     ...sampleOrders(today),
     products: sampleProducts(),
     deskOrderRequests: {},
@@ -541,6 +544,34 @@ function withClassBookings<T extends Pick<MockDb, 'members' | 'cards' | 'ledger'
     }
   }
   return { ...data, classSessions: sessions, classBookings: bookings };
+}
+
+/**
+ * 示例私教（照小程序分支的示例）：明天 Max 14 点会员约了、15 点线下约了学员、19 点带队比赛不接课；后天店长阿凯上午 10 点不接课；
+ * 昨天 Max 18 点那节上完了。约课的会员有一张私教 5 节课包，买卡、约课各记一笔流水。
+ */
+function withPt<T extends Pick<MockDb, 'cards' | 'ledger'>>(data: T, today: DateKey): T & Pick<MockDb, 'ptBookings' | 'ptSlotMarks'> {
+  const { cards, ledger } = data;
+  const memberId = 'm-old-14';
+  const card: LessonCard = { id: 'c-pt-m-old-14', kind: 'pt', memberId, productId: 'p-pt5', name: '私教 5 节', total: 5, remaining: 5, expiresOn: addMonths(today, 3) };
+  cards.push(card);
+  const add = (e: Pick<LedgerEntry, 'at' | 'delta' | 'reason' | 'ref'>) =>
+    ledger.push({ id: `l-${ledger.length + 1}`, cardId: card.id, remainingAfter: card.remaining, expiresOnAfter: card.expiresOn, operatorType: 'member', operatorId: memberId, note: '', ...e });
+  add({ at: `${addDays(today, -10)}T10:00:00+08:00`, delta: 5, reason: 'purchase', ref: null });
+  const ptBookings: PtBooking[] = [];
+  for (const [on, hour, status] of [[addDays(today, -1), 18, 'attended'], [addDays(today, 1), 14, 'booked']] as const) {
+    const id = `pb-${ptBookings.length + 1}`;
+    const createdAt = `${addDays(today, -3)}T20:00:00+08:00`;
+    card.remaining -= 1;
+    add({ at: createdAt, delta: -1, reason: 'pt_book', ref: { type: 'pt_booking', id } });
+    ptBookings.push({ id, coachId: 's-coach-max', memberId, storeId: 'bingang', on, hour, status, cardId: card.id, deducted: 1, createdAt });
+  }
+  const ptSlotMarks: PtSlotMark[] = [
+    { id: 'ptm-1', coachId: 's-coach-max', on: addDays(today, 1), hour: 15, kind: 'offline', note: '小王' },
+    { id: 'ptm-2', coachId: 's-coach-max', on: addDays(today, 1), hour: 19, kind: 'off', note: '带队比赛' },
+    { id: 'ptm-3', coachId: 's-manager', on: addDays(today, 2), hour: 10, kind: 'off' },
+  ];
+  return { ...data, ptBookings, ptSlotMarks };
 }
 
 /** 示例订单：三家店最近 70 天，每天几笔，渠道和品类照原型的比例大致铺开；再放几笔退款 */

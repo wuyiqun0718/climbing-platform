@@ -1,4 +1,4 @@
-import { ApiError, createAdminApi, createApi, type AdminClassRow, type CreateClassBody, type CreateStaffBody } from '@climb/api';
+import { ApiError, createAdminApi, createApi, type AdminClassRow, type CreateClassBody, type CreateStaffBody, type PtTimelineView } from '@climb/api';
 import { defaultFreezeRules, freezeBlockedBy, ledgerMismatch } from '@climb/core';
 import { addDays, endOfMonth } from '@climb/utils';
 import { describe, expect, it } from 'vitest';
@@ -1795,5 +1795,78 @@ describe('后台 mock：教练资料', () => {
     expect(await status(api.staff.update('s-coach-max', { coach: coach() }))).toBe(403);
     await login('13800000003');
     expect((await api.coaches()).map(c => c.id)).toEqual(['s-manager', 's-coach-max']);
+  });
+});
+
+describe('后台 mock：私教时间轴', () => {
+  // 2026-10-21；示例：10-22 Max 14 点会员约了、15 点线下约「小王」、19 点不接课；10-23 店长阿凯 10 点不接课；10-20 Max 18 点上完了
+  function ptSetup() {
+    const s = setup();
+    s.db.clock = '12:00:00';
+    return s;
+  }
+  const slotOf = (v: PtTimelineView, coachId: string, on: string, hour: number) => v.coaches.find(c => c.coach.id === coachId)!.days.find(d => d.on === on)!.slots.find(s => s.hour === hour)!;
+
+  it('默认今天起 7 天，每位教练一行，营业时间按 ptRules 每小时一格；状态和会员名字、备注', async () => {
+    const { api, login, db } = ptSetup();
+    await login('13800000001');
+    const v = await api.ptSlots();
+    expect(v).toMatchObject({ from: '2026-10-21', to: '2026-10-27', storeId: null });
+    expect(v.hours).toEqual([10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]);
+    expect(v.coaches.map(c => c.coach.id)).toEqual(['s-manager', 's-coach-max']);
+    expect(v.coaches[0]!.days.map(d => d.on)).toEqual(['2026-10-21', '2026-10-22', '2026-10-23', '2026-10-24', '2026-10-25', '2026-10-26', '2026-10-27']);
+    const member = db.members.find(m => m.id === 'm-old-14')!.name;
+    expect(slotOf(v, 's-coach-max', '2026-10-22', 14)).toMatchObject({ status: 'member', past: false, booking: { memberId: 'm-old-14', memberName: member, status: 'booked', storeId: 'bingang' } });
+    expect(slotOf(v, 's-coach-max', '2026-10-22', 15)).toMatchObject({ status: 'offline', mark: { note: '小王' } });
+    expect(slotOf(v, 's-coach-max', '2026-10-22', 19)).toMatchObject({ status: 'off', mark: { note: '带队比赛' } });
+    expect(slotOf(v, 's-manager', '2026-10-23', 10)).toMatchObject({ status: 'off' });
+    expect(slotOf(v, 's-coach-max', '2026-10-21', 11)).toMatchObject({ status: 'free', past: true });
+    expect(slotOf(v, 's-coach-max', '2026-10-21', 13)).toMatchObject({ status: 'free', past: false });
+    const back = await api.ptSlots({ from: '2026-10-20', to: '2026-10-20' });
+    expect(slotOf(back, 's-coach-max', '2026-10-20', 18)).toMatchObject({ status: 'member', past: true, booking: { status: 'attended' } });
+    for (const c of db.cards.filter(c => c.kind === 'pt')) expect(ledgerMismatch(c, db.ledger)).toBeNull();
+  });
+
+  it('营业时间改了格子跟着变，不写死', async () => {
+    const { api, login, db } = ptSetup();
+    await login('13800000001');
+    db.rules = { ...db.rules, ptRules: { ...db.rules.ptRules, openHour: 9, closeHour: 12 } };
+    const v = await api.ptSlots({ from: '2026-10-22', to: '2026-10-22' });
+    expect(v.hours).toEqual([9, 10, 11]);
+    expect(v.coaches[0]!.days[0]!.slots.map(s => s.hour)).toEqual([9, 10, 11]);
+  });
+
+  it('按门店：只列在这家店接私教的教练；只管部分门店的必须带自己的店', async () => {
+    const { api, login } = ptSetup();
+    await login('13800000001');
+    expect((await api.ptSlots({ store: 'huiju' })).coaches).toEqual([]);
+    await login('13800000003');
+    expect(await status(api.ptSlots())).toBe(403);
+    expect(await status(api.ptSlots({ store: 'huiju' }))).toBe(403);
+    expect((await api.ptSlots({ store: 'bingang' })).coaches.map(c => c.coach.id)).toEqual(['s-manager', 's-coach-max']);
+  });
+
+  it('一次最多 7 天；日期不对 400', async () => {
+    const { api, login } = ptSetup();
+    await login('13800000001');
+    expect(await status(api.ptSlots({ from: '2026-10-21', to: '2026-10-28' }))).toBe(400);
+    expect(await status(api.ptSlots({ from: '2026-10-22', to: '2026-10-21' }))).toBe(400);
+    expect(await status(api.ptSlots({ from: '2026-02-30' }))).toBe(400);
+  });
+
+  it('停用的教练不出现', async () => {
+    const { api, login } = ptSetup();
+    await login('13800000001');
+    await api.staff.update('s-coach-max', { active: false });
+    expect((await api.ptSlots()).coaches.map(c => c.coach.id)).toEqual(['s-manager']);
+  });
+
+  it('看板「今日约课」算上今天的私教', async () => {
+    const { api, login, db } = ptSetup();
+    await login('13800000001');
+    const before = (await api.dashboard({ store: 'bingang' })).todayBookings;
+    db.ptBookings.push({ id: 'pb-today', coachId: 's-coach-max', memberId: 'm-old-14', storeId: 'bingang', on: '2026-10-21', hour: 20, status: 'booked', cardId: 'c-pt-m-old-14', deducted: 1, createdAt: 'x' });
+    db.ptBookings.push({ id: 'pb-gone', coachId: 's-coach-max', memberId: 'm-old-14', storeId: 'bingang', on: '2026-10-21', hour: 21, status: 'cancelled', cardId: 'c-pt-m-old-14', deducted: 1, createdAt: 'x' });
+    expect((await api.dashboard({ store: 'bingang' })).todayBookings).toBe(before + 1);
   });
 });

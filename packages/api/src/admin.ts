@@ -1,4 +1,4 @@
-import { MEMBER_SOURCES, type Card, type CardAdjustInput, type FreezeOverridable, type PeriodCard, type RuleErrorCode, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type OrderStatus, type RefundBasis, type RefundMethod, type RefundStatus, type LedgerEntry, type MemberSource, type PayChannel, type Product, type ProductInput, type ProductPatch, type RevenueBucket, type RevenueCategory, type RevenueChannel, type Share, type ShareRecordState, type StaffInput, type StaffPatch, type StaffRole, type AuditAction, type AuditLogEntry, type ClassRules, type ClassType, type ClassTypeInput, type ClassTypePatch, type ClassSession, type SessionPatch, type ClassBooking, type CoachProfile, type CoachView } from '@climb/core';
+import { MEMBER_SOURCES, type Card, type CardAdjustInput, type FreezeOverridable, type PeriodCard, type RuleErrorCode, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type OrderStatus, type RefundBasis, type RefundMethod, type RefundStatus, type LedgerEntry, type MemberSource, type PayChannel, type Product, type ProductInput, type ProductPatch, type RevenueBucket, type RevenueCategory, type RevenueChannel, type Share, type ShareRecordState, type StaffInput, type StaffPatch, type StaffRole, type AuditAction, type AuditLogEntry, type ClassRules, type ClassType, type ClassTypeInput, type ClassTypePatch, type ClassSession, type SessionPatch, type ClassBooking, type CoachProfile, type CoachView, type PtBooking, type PtSlot, type PtSlotMark } from '@climb/core';
 import type { Cents, DateKey } from '@climb/utils';
 import { createHttp, type ClientOptions } from './client';
 
@@ -331,6 +331,28 @@ export interface CancelBookingResult {
   booking: RosterRow;
   /** 候补补上的 */
   promoted: RosterRow[];
+}
+
+/**
+ * 私教时间轴 GET /admin/pt-slots?from=&to=&store=（任务 29），只读。规则在 @climb/core 的 pt.ts（跟小程序分支逐字一致）和 ptTimeline.ts。
+ * - from 不带是今天，to 不带是 from 往后 6 天（含），一次最多 7 天，不对的 400。
+ * - 门店口径同财务页（storeScope）：只管部分门店的员工必须带自己的店。教练是在这家店接私教的（coach.ts 的 listCoaches），不带 store 是全部教练。
+ * - 每天按 GymRules.ptRules 的营业时间每小时一格（hours），状态 free / member / offline / off；会员约的带预约和会员名字，线下约的、不接课的带标记和备注。
+ *   一位教练同一时间只能在一处，别的店的预约、标记也占着这一格（看 booking.storeId）。
+ * 标记、确认、取消见任务 30。看板「今日约课」也算上今天的私教（占着格子的预约，按预约的门店）。
+ */
+export interface AdminPtSlot extends PtSlot {
+  booking?: PtBooking & { memberName: string };
+  mark?: PtSlotMark;
+}
+
+export interface PtTimelineView {
+  from: DateKey;
+  to: DateKey;
+  storeId: string | null;
+  /** 每天的整点，按 ptRules */
+  hours: number[];
+  coaches: { coach: CoachView; days: { on: DateKey; slots: AdminPtSlot[] }[] }[];
 }
 
 /** 后台列表的一页。page 从 1 开始；超出范围时后端夹到最后一页，以返回的 page 为准 */
@@ -802,6 +824,14 @@ export function createAdminApi(opts: ClientOptions) {
       update: (id: string, body: UpdateStaffBody) => http<StaffRow>('PATCH', `/admin/staff/${encodeURIComponent(id)}`, body),
     },
     coaches: () => http<CoachView[]>('GET', '/admin/coaches'),
+    ptSlots: (q: { from?: DateKey; to?: DateKey; store?: string } = {}) => {
+      const qs = new URLSearchParams();
+      if (q.from) qs.set('from', q.from);
+      if (q.to) qs.set('to', q.to);
+      if (q.store) qs.set('store', q.store);
+      const s = qs.toString();
+      return http<PtTimelineView>('GET', s ? `/admin/pt-slots?${s}` : '/admin/pt-slots');
+    },
     stores: {
       list: () => http<Store[]>('GET', '/admin/stores'),
     },

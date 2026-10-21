@@ -14,6 +14,19 @@ export interface GymRules {
   freezeRules: FreezeRules;
   /** 团课规则，岩馆在后台配置 */
   classRules: ClassRules;
+  /** 私教约课规则，岩馆在后台配置 */
+  ptRules: PtRules;
+}
+
+/** 私教约课规则（docs/mvp-plan.md 第 9 节「要问馆方」第 12 条）；后台私教时间轴（mvp/dashboard 任务 29–30）也按它画格子 */
+export interface PtRules {
+  /** 每小时一格：第一格几点开始、最后一格几点结束（整点，24 小时制）。比如 10、23 是 10:00–23:00，共 13 格 */
+  openHour: number;
+  closeHour: number;
+  /** 上课前多少分钟截止会员自助取消；截止前取消退课时，截止后要找前台 */
+  cancelBeforeMinutes: number;
+  /** 会员约了要不要教练确认；要的话先是 pending（已扣课时、占着格子），教练拒绝就退课时 */
+  needCoachConfirm: boolean;
 }
 
 /** 团课规则（docs/mvp-plan.md 第 9 节「要问馆方」第 11 条）；后台团课课程种类（mvp/dashboard 任务 25）里配 */
@@ -86,6 +99,14 @@ export const defaultClassRules: ClassRules = {
   lateGraceMinutes: 15,
 };
 
+/** 私教规则的默认值，全是占位，等馆方定（第 12 条）：10:00–23:00 每小时一格（跟营业时间一致）、提前 12 小时截止取消、不用教练确认 */
+export const defaultPtRules: PtRules = {
+  openHour: 10,
+  closeHour: 23,
+  cancelBeforeMinutes: 12 * 60,
+  needCoachConfirm: false,
+};
+
 export const defaultRules: GymRules = {
   referralsPerMonth: 1,
   referralRequiresInviterSameDay: true,
@@ -93,6 +114,7 @@ export const defaultRules: GymRules = {
   expiryReminderDays: 7,
   freezeRules: defaultFreezeRules,
   classRules: defaultClassRules,
+  ptRules: defaultPtRules,
 };
 
 export const defaultFeatures: GymFeatures = {
@@ -103,7 +125,11 @@ export const defaultFeatures: GymFeatures = {
   events: true,
 };
 
-type GymRulesInput = Partial<Omit<GymRules, 'freezeRules' | 'classRules'>> & { freezeRules?: Partial<FreezeRules>; classRules?: Partial<ClassRules> };
+type GymRulesInput = Partial<Omit<GymRules, 'freezeRules' | 'classRules' | 'ptRules'>> & {
+  freezeRules?: Partial<FreezeRules>;
+  classRules?: Partial<ClassRules>;
+  ptRules?: Partial<PtRules>;
+};
 type GymInput = Omit<GymConfig, 'rules' | 'features'> & { rules?: GymRulesInput; features?: Partial<GymFeatures> };
 
 export function defineGym(input: GymInput): GymConfig {
@@ -114,6 +140,7 @@ export function defineGym(input: GymInput): GymConfig {
       ...input.rules,
       freezeRules: { ...defaultFreezeRules, ...input.rules?.freezeRules },
       classRules: { ...defaultClassRules, ...input.rules?.classRules },
+      ptRules: { ...defaultPtRules, ...input.rules?.ptRules },
     },
     features: { ...defaultFeatures, ...input.features },
   };

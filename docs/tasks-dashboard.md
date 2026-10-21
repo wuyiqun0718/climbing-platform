@@ -221,11 +221,12 @@
 - 完成标准：小程序约私教列表能拿到教练。
 - 补（2026-10-22）：教练就是员工，员工账号上多一份 `coach`（core 的 `coach.ts` 的 `CoachProfile`：tags、bio、avatarUrl、priceCents、storeIds），教练 id 用员工 id，手机号用员工账号的（小程序按手机号认教练本人）。小程序 `GET /coaches?store=` 返回的字段跟小程序分支 `@climb/api` 的 `Coach` 一样（id、name、tags、bio、storeIds），`Coach` 接口和 `createApi().coaches.list` 也加到了这边的 `@climb/api`。规则：可约门店至少一家、要存在、必须是员工能操作的店的子集（全部门店的随便选），改员工能操作的店时超出的也拦；单节价正整数分；停用的员工不出现在列表里（`listCoaches`，列表里只露出还在员工范围内的可约门店）；提成不算。新建、修改员工时带 `coach`（null 去掉），写在 `staff.update` 操作日志里。`GET /admin/coaches` 给后台选教练（课程默认教练、排课），登录的员工都能看，课程页改用它。占位：标签最多 5 个、简介 200 字、单节价最多 1 万元、头像先填 https 链接（上传等对象存储）。头像、单节价小程序的 `Coach` 还没有，先只在后台。示例：店长阿凯和 Max（只做教练的员工，手机号同小程序示例教练）有教练资料。
 
-**29. 私教时间轴**
+**29. 私教时间轴** ✅
 - 依赖：28
 - 涉及文件：`CoursesPage.vue` 私教 tab、`src/components/CoachTimeline.vue`、契约 `GET /admin/pt-slots?from=&to=&store=`、mock
 - 内容：照原型：每位教练一行，10:00–23:00 每小时一格，可切 7 天；格子显示空闲、会员约的、线下约的、不接课。
 - 完成标准：营业时间从 `gym` 配置读，不写死。
+- 补（2026-10-22）：`pt.ts`、`pt.test.ts` 从小程序分支原样拷过来（拷来的测试里 `defineGym` 那行去掉了这边还没有的 `entryQrLink`），`gym.ts` 的 `PtRules` / `defaultPtRules` / `GymRules.ptRules` 和 `defineGym` 的合并、`rules.ts` 的 pt-* 错误码照小程序原样加（pt_* 流水原因在 26 已经加了），流水 ref 加 `pt_booking`。只读视图在新文件 core 的 `ptTimeline.ts`：`ptTimeline`（每位教练一行、每天一列，格子用 `ptDaySlots`，营业时间来自 `ptRules`，挂上预约和标记）、`ptRangeError`（一次最多 7 天）、`ptBookingsOn`（看板「今日约课」现在也算今天占着格子的私教）。接口 `GET /admin/pt-slots?from=&to=&store=`（from 默认今天、to 默认往后 6 天），门店口径同财务页，教练按 `listCoaches` 在这家店接私教的；会员约的格子带会员名字。mock 加了 `db.ptBookings` / `db.ptSlotMarks`（结构同小程序的 PtBooking / PtSlotMark，示例照小程序：Max 明天 14 点会员约、15 点线下约小王、19 点不接课，店长阿凯后天 10 点不接课，昨天 18 点上完一节；课包和流水对得上）。页面在课程排期页「私教」，可切 7 天。
 
 **30. 私教预约处理**
 - 依赖：29
