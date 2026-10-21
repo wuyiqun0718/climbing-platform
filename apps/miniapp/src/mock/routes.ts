@@ -8,6 +8,7 @@ import { createCheckInRoutes } from './routes/checkins';
 import { createClassRoutes } from './routes/classes';
 import { createInsuranceRoutes } from './routes/insurance';
 import { createOrderRoutes } from './routes/orders';
+import { createPtRoutes } from './routes/pt';
 import { createShareRoutes } from './routes/shares';
 import { createWaiverRoutes } from './routes/waivers';
 
@@ -52,6 +53,7 @@ export function createRoutes(db: MockDb, env: { rules: GymRules; today: () => Da
     ...createInsuranceRoutes(db, { ...env, requireMember }),
     ...createShareRoutes(db, { ...env, nextId, requireMember, myCard, replaceCard, record }),
     ...createClassRoutes(db, { ...env, nextId, requireMember, replaceCard, record }),
+    ...createPtRoutes(db, { ...env, nextId, requireMember, replaceCard, record }),
 
     'GET /products': () => db.products.filter(p => p.onSale),
     'GET /stores': () => db.stores,

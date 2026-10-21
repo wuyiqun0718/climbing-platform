@@ -1,4 +1,4 @@
-import type { Card, CheckIn, ClassBooking, ClassBookingStatus, ClassSession, EntryCard, EntryOption, InsurancePolicy, LedgerEntry, Order, Product, ReferralRecordState, ReferralStatus, ReferralWait, RuleErrorCode, Share, ShareDisplayStatus, WaiverHistory, WaiverSignature, WaiverVersion } from '@climb/core';
+import type { Card, CheckIn, ClassBooking, ClassBookingStatus, ClassSession, PtBooking, PtBookingStatus, EntryCard, EntryOption, InsurancePolicy, LedgerEntry, Order, Product, ReferralRecordState, ReferralStatus, ReferralWait, RuleErrorCode, Share, ShareDisplayStatus, WaiverHistory, WaiverSignature, WaiverVersion } from '@climb/core';
 import { createHttp, type ClientOptions } from './client';
 
 export * from './client';
@@ -198,6 +198,48 @@ export interface MyClassBooking extends ClassBooking {
 /** `POST /class-bookings/:id/cancel` 的返回：取消后的预约。退次、候补补位都在后端一起做好 */
 export type CancelClassBookingResult = MyClassBooking;
 
+/** `GET /coaches?store=`：能约私教的教练（后台教练资料，mvp/dashboard 任务 28） */
+export interface Coach {
+  id: string;
+  name: string;
+  tags: string[];
+  bio: string;
+  /** 在哪几家店接私教 */
+  storeIds: string[];
+}
+
+/**
+ * 会员看到的私教时段：只有能不能约，不告诉会员格子是被谁占的（别的会员、线下约的、教练不接课都显示「约不了」）。
+ * 后台时间轴用 @climb/core 的 PtSlot（free / member / offline / off），那是另一个接口。
+ */
+export interface PtSlotView {
+  /** 开始的整点，比如 14 是 14:00–15:00 */
+  hour: number;
+  /** 现在能约（@climb/core ptBookBlockedBy 只剩「没课包」或者没拦）；已过、被占、我这个时间约了别的教练都为 false */
+  available: boolean;
+  /** 我自己约的这一格 */
+  mine: { bookingId: string; status: Extract<PtBookingStatus, 'pending' | 'booked'> } | null;
+}
+
+/** `GET /coaches/:id/slots`：一位教练 from 起 days 天的时段，每天按 GymRules.ptRules 的营业时间每小时一格 */
+export interface CoachSlots {
+  coach: Coach;
+  days: { on: string; slots: PtSlotView[] }[];
+  /** 当前会员有没有能用的私教课包：没有为 'pt-no-card'（页面引导去买）；没登录为 null */
+  cardBlockedBy: RuleErrorCode | null;
+}
+
+/** 我的一节私教：预约本身，加上教练、门店、课包名，取消截止时间和现在能不能自己取消 */
+export interface MyPtBooking extends PtBooking {
+  coachName: string;
+  storeName: string;
+  cardName: string;
+  /** 自助取消截止时间（ISO），上课前 ptRules.cancelBeforeMinutes 分钟 */
+  cancelDeadline: string;
+  /** 现在能不能自己取消（@climb/core ptCancelBlockedBy）；能为 null */
+  cancelBlockedBy: RuleErrorCode | null;
+}
+
 /**
  * 接口定义（后端还没开始写，路径是约定稿）。
  * 新增接口时在这里加方法，两个端都能直接用上。
@@ -284,6 +326,27 @@ export function createApi(opts: ClientOptions) {
       cancel: (bookingId: string) => http<CancelClassBookingResult>('POST', `/class-bookings/${encodeURIComponent(bookingId)}/cancel`),
       /** 我的预约：所有状态都返回，按开课时间排，最近要上的在前，上过的、取消的在后 */
       mine: () => http<MyClassBooking[]>('GET', '/me/class-bookings'),
+    },
+    pt: {
+      /** 教练列表；store 填了只列在这家店接私教的教练。不用登录 */
+      coaches: (q: { store?: string } = {}) => http<Coach[]>('GET', q.store ? `/coaches?store=${encodeURIComponent(q.store)}` : '/coaches'),
+      /** 一位教练 from（默认今天）起 days 天（默认 7）的时段。没登录也能看，mine 为 null */
+      slots: (coachId: string, q: { from?: string; days?: number } = {}) => {
+        const qs = Object.entries(q).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&');
+        return http<CoachSlots>('GET', `/coaches/${encodeURIComponent(coachId)}/slots${qs ? `?${qs}` : ''}`);
+      },
+      /**
+       * 约私教：扣 1 节私教课时（流水 pt_book，关联预约）。要教练确认时状态是 pending。
+       * idempotencyKey 由页面点「确认」时生成一次，重试、连点只约一次。
+       * 这一格被占了返回 409 pt-slot-taken（两个人抢同一格只有一个成功），其他见 @climb/core ptBookBlockedBy；
+       * 教练不在这家店接私教返回 400 coach-not-at-store
+       */
+      book: (body: { coachId: string; storeId: string; on: string; hour: number; cardId?: string; idempotencyKey: string }) =>
+        http<MyPtBooking>('POST', '/pt-bookings', body),
+      /** 取消自己的私教：截止前退课时（pt_cancel）；截止后返回 409 pt-cancel-too-late，要找前台 */
+      cancel: (bookingId: string) => http<MyPtBooking>('POST', `/pt-bookings/${encodeURIComponent(bookingId)}/cancel`),
+      /** 我的私教预约：还没上的在前（近的在前），上过的、取消的在后 */
+      mine: () => http<MyPtBooking[]>('GET', '/me/pt-bookings'),
     },
     shares: {
       /**

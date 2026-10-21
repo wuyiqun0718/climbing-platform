@@ -1,4 +1,4 @@
-import { ledgerEntry, snapshotOf, type Card, type CheckIn, type ClassBooking, type ClassSession, type ClassType, type EntryQr, type InsurancePolicy, type LedgerEntry, type Order, type Product, type Share, type WaiverSignature, type WaiverVersion } from '@climb/core';
+import { ledgerEntry, snapshotOf, type Card, type CheckIn, type ClassBooking, type ClassSession, type ClassType, type PtBooking, type PtSlotMark, type EntryQr, type InsurancePolicy, type LedgerEntry, type Order, type Product, type Share, type WaiverSignature, type WaiverVersion } from '@climb/core';
 import { addDays, type DateKey } from '@climb/utils';
 
 export interface MockMember {
@@ -24,10 +24,20 @@ export interface MockCheckIn extends CheckIn {
   policyId: string;
 }
 
-/** 教练（员工），团课和私教用；后台员工账号（mvp/dashboard 任务 22）建 */
+/** 教练（员工），团课和私教用；后台员工账号和教练资料（mvp/dashboard 任务 22、28）建 */
 export interface MockCoach {
   id: string;
   name: string;
+  /** 擅长什么，教练列表上的小标签 */
+  tags: string[];
+  bio: string;
+  /** 在哪几家店接私教；教练列表按门店筛 */
+  storeIds: string[];
+}
+
+/** 私教预约：后端 pt_bookings 表里多存一个幂等键 */
+export interface MockPtBooking extends PtBooking {
+  idempotencyKey?: string;
 }
 
 /** 团课预约：后端 class_bookings 表里多存一个幂等键 */
@@ -58,6 +68,9 @@ export interface MockDb {
   classTypes: ClassType[];
   classSessions: ClassSession[];
   classBookings: MockClassBooking[];
+  /** 私教：后台标的线下约、不接课，会员约的；后台私教时间轴（/admin/pt-slots）读写同一份 */
+  ptSlotMarks: PtSlotMark[];
+  ptBookings: MockPtBooking[];
   /** 自增序号，用来生成 id */
   seq: number;
 }
@@ -91,7 +104,7 @@ export const MOCK_WAIVER: WaiverVersion = {
 };
 
 /**
- * 示例数据，跟原型一致：年卡会员阿杰（还有一张 10 次卡、一张团课 10 次），第一次来的小鹿什么卡都没有。
+ * 示例数据，跟原型一致：年卡会员阿杰（还有一张 10 次卡、一张团课 10 次、一张私教 5 节），第一次来的小鹿什么卡都没有。
  * 另有一位从青橙导入的老会员老周（20 次卡剩 8 次），还没登录过小程序，没有 openid。
  * 价格是原型里的占位价（docs/project-context.md 第 7 节）。
  */
@@ -99,6 +112,7 @@ export function seedDb(today: DateKey): MockDb {
   const year: Card = { id: 'card-ajie-year', kind: 'period', memberId: MOCK_MEMBERS.ajie, productId: 'year', name: '年卡', startsOn: addDays(today, -209), expiresOn: addDays(today, 155) };
   const c10: Card = { id: 'card-ajie-c10', kind: 'count', memberId: MOCK_MEMBERS.ajie, productId: 'c10', name: '10 次卡', total: 10, remaining: 6, expiresOn: addDays(today, 118) };
   const k10: Card = { id: 'card-ajie-class10', kind: 'class', memberId: MOCK_MEMBERS.ajie, productId: 'class10', name: '团课 10 次', total: 10, remaining: 10, expiresOn: addDays(today, 170) };
+  const pt5: Card = { id: 'card-ajie-pt5', kind: 'pt', memberId: MOCK_MEMBERS.ajie, productId: 'pt5', name: '私教 5 节', total: 5, remaining: 5, expiresOn: addDays(today, 175) };
   const c20: Card = { id: 'card-laozhou-c20', kind: 'count', memberId: MOCK_MEMBERS.laozhou, productId: 'c20', name: '20 次卡', total: 20, remaining: 8, expiresOn: addDays(today, 200) };
   // 阿杰的 10 次卡：买了以后带朋友来用过 4 次，流水和入场记录对得上
   const c10Visits = [[-50, 'binggang'], [-36, 'huiju'], [-21, 'binggang'], [-7, 'huanqiugang']] as const;
@@ -114,6 +128,7 @@ export function seedDb(today: DateKey): MockDb {
       id: `led-seed-${i + 3}`, card: { ...c10, remaining: 9 - i }, delta: -1, reason: 'check_in', on: ci.on, at: at(ci.on), ref: { type: 'check_in', id: ci.id },
     })),
     ledgerEntry({ id: 'led-seed-8', card: k10, delta: 10, reason: 'purchase', on: addDays(today, -10), at: at(addDays(today, -10)), ref: { type: 'order', id: 'order-seed-4' } }),
+    ledgerEntry({ id: 'led-seed-9', card: pt5, delta: 5, reason: 'purchase', on: addDays(today, -5), at: at(addDays(today, -5)), ref: { type: 'order', id: 'order-seed-5' } }),
     ledgerEntry({ id: 'led-seed-7', card: c20, delta: 8, reason: 'import', on: addDays(today, -3), at: at(addDays(today, -3)), note: '青橙导入' }),
   ];
   const p = (id: string, category: Product['category'], name: string, yuan: number, extra: Partial<Product> = {}): Product => ({
@@ -147,6 +162,7 @@ export function seedDb(today: DateKey): MockDb {
     order('order-seed-2', 'pt-trial', addDays(today, -80), { status: 'refunded', wxTransactionId: 'mock-wx-order-seed-2' }),
     order('order-seed-3', 'c10', addDays(today, -62), { wxTransactionId: 'mock-wx-order-seed-3', cardId: c10.id }),
     order('order-seed-4', 'class10', addDays(today, -10), { wxTransactionId: 'mock-wx-order-seed-4', cardId: k10.id }),
+    order('order-seed-5', 'pt5', addDays(today, -5), { wxTransactionId: 'mock-wx-order-seed-5', cardId: pt5.id }),
   ];
   const { classTypes, classSessions } = seedClasses(today);
   return {
@@ -161,7 +177,7 @@ export function seedDb(today: DateKey): MockDb {
       { id: 'huanqiugang', name: '环球港店' },
     ],
     products,
-    cards: [year, c10, k10, c20],
+    cards: [year, c10, k10, pt5, c20],
     shares: [],
     checkIns,
     entryQrs: [],
@@ -175,15 +191,28 @@ export function seedDb(today: DateKey): MockDb {
     classTypes,
     classSessions,
     classBookings: [],
+    ptSlotMarks: seedPtMarks(today),
+    ptBookings: [],
     seq: 0,
   };
 }
 
 export const MOCK_COACHES: MockCoach[] = [
-  { id: 'coach-max', name: 'Max' },
-  { id: 'coach-kiki', name: 'Kiki' },
-  { id: 'coach-may', name: 'May' },
+  { id: 'coach-max', name: 'Max', tags: ['抱石', '力量训练'], bio: '前省队抱石选手，课上会拍视频逐帧拆动作。', storeIds: ['binggang', 'huiju'] },
+  { id: 'coach-kiki', name: 'Kiki', tags: ['零基础', '柔韧'], bio: '第一次摸岩点也不用紧张，从站姿开始教。', storeIds: ['huanqiugang', 'huiju'] },
+  { id: 'coach-may', name: 'May', tags: ['先锋攀登', '保护技术'], bio: '持证先锋保护教练，想从抱石转先锋从她这里开始。', storeIds: ['binggang'] },
 ];
+
+/** 私教示例：明天 Max 15 点线下约了学员、19 点有事不接课，May 后天上午不接课 */
+function seedPtMarks(today: DateKey): PtSlotMark[] {
+  const tomorrow = addDays(today, 1);
+  return [
+    { id: 'ptm-seed-1', coachId: 'coach-max', on: tomorrow, hour: 15, kind: 'offline', note: '小王' },
+    { id: 'ptm-seed-2', coachId: 'coach-max', on: tomorrow, hour: 19, kind: 'off', note: '带队比赛' },
+    { id: 'ptm-seed-3', coachId: 'coach-may', on: addDays(today, 2), hour: 10, kind: 'off' },
+    { id: 'ptm-seed-4', coachId: 'coach-may', on: addDays(today, 2), hour: 11, kind: 'off' },
+  ];
+}
 
 /**
  * 团课示例：跟原型的课表一样，从今天起 7 天，每种课按星期几开。
@@ -230,7 +259,7 @@ export interface MockStorage {
 const DB_KEY = 'mock:db';
 const WX_KEY = 'mock:wx';
 /** 示例数据的结构改了就加 1，存着的旧数据会被丢掉、重新生成 */
-const DB_VERSION = 9;
+const DB_VERSION = 10;
 
 /** 读存着的数据；没有或者版本不对就用示例数据重新生成 */
 export function loadDb(storage: MockStorage, today: DateKey): MockDb {

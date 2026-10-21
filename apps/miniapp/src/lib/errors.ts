@@ -66,6 +66,10 @@ const API_MESSAGES: Record<string, string> = {
   'wx-already-bound': '这个微信已经绑过手机号了',
   'product-not-found': '没找到这个商品，可能已经下架了',
   'order-not-found': '没找到这个订单',
+  'class-not-found': '没找到这节课',
+  'booking-not-found': '没找到这个预约',
+  'coach-not-found': '没找到这位教练',
+  'coach-not-at-store': '这位教练不在这家店上私教，换一家店看看',
 };
 
 const MESSAGES: Record<string, string> = { ...API_MESSAGES, ...RULE_MESSAGES };
