@@ -1,3 +1,4 @@
+import type { CoachProfile } from './coach';
 import { normalizePhone, phoneError } from './member';
 import type { RuleErrorCode } from './rules';
 
@@ -37,6 +38,8 @@ export interface StaffInput {
   storeIds: string[];
   /** 初始密码 */
   password: string;
+  /** 教练资料（任务 28）：不填或 null 不是教练。校验用 coach.ts 的 coachProfileErrors（可约门店要在员工能操作的店里） */
+  coach?: CoachProfile | null;
 }
 
 /** 修改员工 PATCH /admin/staff/:id：只传要改的；password 是重置密码，active 是停用、启用 */

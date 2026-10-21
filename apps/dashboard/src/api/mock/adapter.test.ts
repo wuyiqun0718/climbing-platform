@@ -1732,3 +1732,68 @@ describe('后台 mock：团课名单和签到', () => {
     expect((await api.dashboard()).todayBookings).toBe(2);
   });
 });
+
+describe('后台 mock：教练资料', () => {
+  const coach = (over: Record<string, unknown> = {}) => ({ tags: ['抱石'], bio: '耐心', avatarUrl: null, priceCents: 30_000, storeIds: ['bingang'], ...over });
+  const field = (p: Promise<unknown>) => p.then(() => null, (e: ApiError) => [e.status, (e.data as { field?: string }).field, (e.data as { message?: string }).message]);
+
+  it('小程序教练列表：在用、有教练资料的员工，id 是员工 id，字段同小程序的 Coach；按门店筛', async () => {
+    const { db } = setup();
+    const mp = createApi({ baseURL: '', gymId: 'benchmark', adapter: createMockAdapter(db) });
+    expect(await mp.coaches.list()).toEqual([
+      { id: 's-manager', name: '店长阿凯', tags: ['顶绳', '保护技术'], bio: '带顶绳进阶课，教你自己做保护。', storeIds: ['bingang'] },
+      { id: 's-coach-max', name: 'Max', tags: ['抱石', '力量训练'], bio: '前省队抱石选手，课上会拍视频逐帧拆动作。', storeIds: ['bingang'] },
+    ]);
+    expect(await mp.coaches.list({ store: 'huiju' })).toEqual([]);
+    // 教练本人按员工手机号认（同小程序分支示例里的教练手机号）
+    expect(db.staff.find(s => s.id === 's-coach-max')!.phone).toBe('13900000001');
+  });
+
+  it('停用员工后不再出现在教练列表；重新启用又出现', async () => {
+    const { api, login, db } = setup();
+    const mp = createApi({ baseURL: '', gymId: 'benchmark', adapter: createMockAdapter(db) });
+    await login('13800000001');
+    await api.staff.update('s-coach-max', { active: false });
+    expect((await mp.coaches.list()).map(c => c.id)).toEqual(['s-manager']);
+    expect((await api.coaches()).map(c => c.id)).toEqual(['s-manager']);
+    await api.staff.update('s-coach-max', { active: true });
+    expect((await mp.coaches.list()).map(c => c.id)).toEqual(['s-manager', 's-coach-max']);
+  });
+
+  it('给员工加、改、去掉教练资料；可约门店要在员工能操作的店里；单节价正整数分；写操作日志', async () => {
+    const { api, login, db } = setup();
+    const mp = createApi({ baseURL: '', gymId: 'benchmark', adapter: createMockAdapter(db) });
+    await login('13800000001');
+    expect(await field(api.staff.update('s-desk', { coach: coach({ storeIds: ['huiju'] }) }))).toEqual([400, 'coach', '接私教的店只能从这个员工能操作的店里选']);
+    expect(await field(api.staff.update('s-desk', { coach: coach({ storeIds: [] }) }))).toEqual([400, 'coach', '至少选一家接私教的店']);
+    expect((await field(api.staff.update('s-desk', { coach: coach({ priceCents: 0 }) })))?.[1]).toBe('coach');
+    expect((await field(api.staff.update('s-desk', { coach: coach({ priceCents: 299.5 }) })))?.[1]).toBe('coach');
+    const row = await api.staff.update('s-desk', { coach: coach({ tags: [' 抱石 ', ''] }) });
+    expect(row.coach).toEqual(coach());
+    expect((await mp.coaches.list()).map(c => c.id)).toContain('s-desk');
+    expect(db.auditLogs.at(-1)).toMatchObject({ action: 'staff.update', targetId: 's-desk', before: {}, after: { coach: coach() } });
+    await api.staff.update('s-desk', { coach: coach({ priceCents: 32_000 }) });
+    expect(db.auditLogs.at(-1)).toMatchObject({ before: { coach: { priceCents: 30_000 } }, after: { coach: { priceCents: 32_000 } } });
+    await api.staff.update('s-desk', { coach: null });
+    expect((await mp.coaches.list()).map(c => c.id)).not.toContain('s-desk');
+    expect(db.auditLogs.at(-1)).toMatchObject({ after: {} });
+  });
+
+  it('改员工能操作的店时，已有教练资料的可约门店超出了要拦下；一起改就行；全部门店的员工随便选', async () => {
+    const { api, login } = setup();
+    await login('13800000001');
+    expect(await field(api.staff.update('s-coach-max', { allStores: false, storeIds: ['huiju'] }))).toEqual([400, 'coach', '接私教的店只能从这个员工能操作的店里选']);
+    const r = await api.staff.update('s-coach-max', { allStores: false, storeIds: ['huiju'], coach: coach({ storeIds: ['huiju'] }) });
+    expect(r).toMatchObject({ storeIds: ['huiju'], coach: { storeIds: ['huiju'] } });
+    const made = await api.staff.create({ phone: '13900000020', name: '新教练', role: 'desk', allStores: true, storeIds: [], password: 'abc123', coach: coach({ storeIds: ['huiju', 'huanqiu'] }) });
+    expect(made.coach).toMatchObject({ storeIds: ['huiju', 'huanqiu'] });
+  });
+
+  it('只有馆长能改教练资料；后台教练列表登录的员工都能看（排课选教练用）', async () => {
+    const { api, login } = setup();
+    await login('13800000002');
+    expect(await status(api.staff.update('s-coach-max', { coach: coach() }))).toBe(403);
+    await login('13800000003');
+    expect((await api.coaches()).map(c => c.id)).toEqual(['s-manager', 's-coach-max']);
+  });
+});

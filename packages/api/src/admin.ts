@@ -1,4 +1,4 @@
-import { MEMBER_SOURCES, type Card, type CardAdjustInput, type FreezeOverridable, type PeriodCard, type RuleErrorCode, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type OrderStatus, type RefundBasis, type RefundMethod, type RefundStatus, type LedgerEntry, type MemberSource, type PayChannel, type Product, type ProductInput, type ProductPatch, type RevenueBucket, type RevenueCategory, type RevenueChannel, type Share, type ShareRecordState, type StaffInput, type StaffPatch, type StaffRole, type AuditAction, type AuditLogEntry, type ClassRules, type ClassType, type ClassTypeInput, type ClassTypePatch, type ClassSession, type SessionPatch, type ClassBooking } from '@climb/core';
+import { MEMBER_SOURCES, type Card, type CardAdjustInput, type FreezeOverridable, type PeriodCard, type RuleErrorCode, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type OrderStatus, type RefundBasis, type RefundMethod, type RefundStatus, type LedgerEntry, type MemberSource, type PayChannel, type Product, type ProductInput, type ProductPatch, type RevenueBucket, type RevenueCategory, type RevenueChannel, type Share, type ShareRecordState, type StaffInput, type StaffPatch, type StaffRole, type AuditAction, type AuditLogEntry, type ClassRules, type ClassType, type ClassTypeInput, type ClassTypePatch, type ClassSession, type SessionPatch, type ClassBooking, type CoachProfile, type CoachView } from '@climb/core';
 import type { Cents, DateKey } from '@climb/utils';
 import { createHttp, type ClientOptions } from './client';
 
@@ -32,10 +32,15 @@ export interface Staff {
  *   停用自己、改自己的角色、改完没有在用的馆长 422（data.code 是 core 的 staffChangeBlockedBy）。
  * 可操作门店：allStores = true 存成 storeIds = []（全部门店）；否则至少一家存在的店。
  * 停用后登录 403（staff-inactive）；停用、重置密码后这个员工已经登录的 token 立即失效（401）。改自己的密码也一样，要重新登录。
+ * 教练资料（任务 28）：新建、修改时带 coach（null 去掉教练资料），校验用 core 的 coachProfileErrors，可约门店要在这个员工（改完以后）能操作的店里，
+ * 不对的 400（data.field = coach，message 说哪一项）；改员工能操作的门店时，已有教练资料的可约门店超出了也 400。教练的 id 就是员工 id。
+ * 小程序 GET /coaches 只列在用、有教练资料的员工。GET /admin/coaches：同样的列表给后台选教练用（排课、课程默认教练），登录的员工都能看。
  * 后端只存密码哈希（bcrypt / argon2）。每次改动写一条操作日志（audit_logs，任务 23 查）：新建、改资料（改前改后只记改了的字段）、重置密码（不记密码）。
  */
 export interface StaffRow extends Staff {
   active: boolean;
+  /** 教练资料（任务 28）；不是教练为 null */
+  coach: CoachProfile | null;
   /** 建号时间（ISO 8601 带时区） */
   createdAt: string;
 }
@@ -796,6 +801,7 @@ export function createAdminApi(opts: ClientOptions) {
       create: (body: CreateStaffBody) => http<StaffRow>('POST', '/admin/staff', body),
       update: (id: string, body: UpdateStaffBody) => http<StaffRow>('PATCH', `/admin/staff/${encodeURIComponent(id)}`, body),
     },
+    coaches: () => http<CoachView[]>('GET', '/admin/coaches'),
     stores: {
       list: () => http<Store[]>('GET', '/admin/stores'),
     },

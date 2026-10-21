@@ -99,6 +99,9 @@ import {
   insuranceForEntry,
   entryPolicy,
   shareRecordState,
+  coachProfileErrors,
+  cleanCoachProfile,
+  listCoaches,
   classBookingsOn,
   classRoster,
   attendBooking,
@@ -389,10 +392,18 @@ function entryRow(db: MockDb, { memberId: _m, void: v, policyId, ...c }: MockChe
 }
 
 /** 员工列表的一行：不带密码哈希和 token 版本号 */
-const staffRow = (s: MockStaff): StaffRow => ({ ...toStaff(s), active: s.active, createdAt: s.createdAt });
+const staffRow = (s: MockStaff): StaffRow => ({ ...toStaff(s), active: s.active, createdAt: s.createdAt, coach: s.coach });
 
-/** 操作日志里员工的资料（不含密码） */
-const staffAuditFields = (s: MockStaff) => ({ phone: s.phone, name: s.name, role: s.role, storeIds: s.storeIds, active: s.active });
+/** 操作日志里员工的资料（不含密码）；不是教练的不带 coach */
+const staffAuditFields = (s: MockStaff) => ({ phone: s.phone, name: s.name, role: s.role, storeIds: s.storeIds, active: s.active, coach: s.coach ?? undefined });
+
+/** 员工的教练资料校验（core 的 coachProfileErrors）：可约门店要在员工（改完以后）能操作的店里；null 是不当教练 */
+function staffCoachError(db: MockDb, coach: unknown, staffStoreIds: string[]): ApiResponse | null {
+  if (coach === null || coach === undefined) return null;
+  if (typeof coach !== 'object') return badInput('coach', '教练资料格式不对');
+  const errs = coachProfileErrors(coach as Record<string, unknown>, staffStoreIds, db.stores.map(st => st.id));
+  return errs ? badInput('coach', Object.values(errs)[0]!) : null;
+}
 
 /** 写一条操作日志（只追加）。before / after 先过 @climb/core 的 auditSnapshot，去掉敏感字段 */
 function audit(
@@ -453,17 +464,21 @@ function createStaff(db: MockDb, staff: Staff, body: Partial<CreateStaffBody> | 
     return badInput(field, errs[field]!);
   }
   const b = body as CreateStaffBody;
+  const storeIds = staffStoreIds(b.allStores, b.storeIds);
+  const coachErr = staffCoachError(db, b.coach, storeIds);
+  if (coachErr) return coachErr;
   const id = nextId('s-new-', db.staff);
   const s: MockStaff = {
     id,
     name: b.name.trim(),
     phone: normalizePhone(b.phone),
     role: b.role,
-    storeIds: staffStoreIds(b.allStores, b.storeIds),
+    storeIds,
     passwordHash: mockPasswordHash(id, b.password),
     active: true,
     tokenVersion: 0,
     createdAt: nowAt(db),
+    coach: b.coach ? cleanCoachProfile(b.coach) : null,
   };
   db.staff.push(s);
   audit(db, staff, { action: 'staff.create', targetType: 'staff', targetId: s.id, storeId: null, before: null, after: staffAuditFields(s) });
@@ -483,12 +498,17 @@ function updateStaff(db: MockDb, staff: Staff, id: string, body: UpdateStaffBody
   }
   const blocked = staffChangeBlockedBy(staff.id, target, patch, db.staff);
   if (blocked) return fail(422, blocked, STAFF_BLOCKED_TEXT[blocked]);
+  // 教练资料按改完以后的门店查：改了能操作的店、已有的可约门店超出了也拦下
+  const nextStoreIds = patch.allStores !== undefined || patch.storeIds !== undefined ? staffStoreIds(patch.allStores ?? false, patch.storeIds ?? []) : target.storeIds;
+  const coachErr = staffCoachError(db, patch.coach !== undefined ? patch.coach : target.coach, nextStoreIds);
+  if (coachErr) return coachErr;
 
   const before = staffAuditFields(target);
   if (patch.phone !== undefined) target.phone = normalizePhone(patch.phone);
   if (patch.name !== undefined) target.name = patch.name.trim();
   if (patch.role !== undefined) target.role = patch.role;
   if (patch.allStores !== undefined || patch.storeIds !== undefined) target.storeIds = staffStoreIds(patch.allStores ?? false, patch.storeIds ?? []);
+  if (patch.coach !== undefined) target.coach = patch.coach ? cleanCoachProfile(patch.coach) : null;
   if (patch.active !== undefined) {
     if (target.active && !patch.active) target.tokenVersion++;
     target.active = patch.active;
@@ -1574,6 +1594,9 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
     },
   },
   { method: 'GET', path: /^\/admin\/auth\/me$/, auth: true, handle: ({ staff }) => ok(staff) },
+  { method: 'GET', path: /^\/admin\/coaches$/, auth: true, handle: ({ db }) => ok(listCoaches(db.staff)) },
+  // 小程序的教练列表（mvp/miniapp 的 GET /coaches?store=）：在用、有教练资料的员工，id 是员工 id。小程序 mock 合并后从 db.staff 出
+  { method: 'GET', path: /^\/coaches$/, auth: false, handle: ({ db, query }) => ok(listCoaches(db.staff, query.get('store'))) },
   { method: 'GET', path: /^\/admin\/staff$/, auth: true, handle: ({ db, staff }) => staffList(db, staff!) },
   { method: 'POST', path: /^\/admin\/staff$/, auth: true, handle: ({ db, body, staff }) => createStaff(db, staff!, body) },
   {

@@ -2,11 +2,12 @@
 /**
  * 员工账号（任务 22）：列出全部员工（停用的也在），新增、修改、重置密码、停用和启用。只有馆长（permissions.ts 的 staff 页、staff.manage）。
  * 规则都在 @climb/core 的 staff.ts，接口拦下的（停用自己、降级自己、没有在用的馆长）直接显示接口的说法。
- * 教练也是员工，教练资料（头像、简介、单节价）见任务 28。
+ * 教练也是员工：员工上勾「是教练」填教练资料（任务 28），小程序约私教的教练列表就是这里在用的教练。
  */
 import type { StaffRow } from '@climb/api';
 import { STAFF_ROLE_TEXT } from '@climb/core';
 import { DataTable, errorText, useToast, type Column } from '@climb/ui-web';
+import { formatYuan } from '@climb/utils';
 import { onMounted, ref } from 'vue';
 import { api } from '../api';
 import StaffForm from '../components/StaffForm.vue';
@@ -39,6 +40,7 @@ const columns: Column<StaffRow>[] = [
   { key: 'phone', label: '手机号', num: true },
   { key: 'role', label: '角色', format: r => STAFF_ROLE_TEXT[r.role] },
   { key: 'storeIds', label: '可操作门店', format: storeText },
+  { key: 'coach', label: '教练', format: r => (r.coach ? `单节 ${formatYuan(r.coach.priceCents)}，${r.coach.storeIds.map(id => session.state.stores.find(s => s.id === id)?.name ?? id).join('、')}` : '—') },
   { key: 'active', label: '状态', width: '140px' },
 ];
 

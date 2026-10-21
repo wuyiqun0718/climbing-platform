@@ -1,5 +1,5 @@
 import { MEMBER_SOURCES, type DeskCheckInResult, type DeskOrderResult, type RefundResult, type EntryMethod, type VoidCheckInResult, type MemberSource, type Staff, type Store } from '@climb/api';
-import { REFUND_METHOD_BY_CHANNEL, type AuditLogEntry, type ClassBooking, type ClassSession, type ClassType, defaultRules, insuranceForEntry, newPolicy, type Card, type RefundMethod, type RefundStatus, type InsurancePolicy, type CountCard, type GiftCard, type LessonCard, type Share, type GymRules, type LedgerEntry, type Product, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
+import { REFUND_METHOD_BY_CHANNEL, type AuditLogEntry, type CoachProfile, type ClassBooking, type ClassSession, type ClassType, defaultRules, insuranceForEntry, newPolicy, type Card, type RefundMethod, type RefundStatus, type InsurancePolicy, type CountCard, type GiftCard, type LessonCard, type Share, type GymRules, type LedgerEntry, type Product, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
 import { addDays, addMonths, daysBetween, endOfMonth, fromDateKey, monthOf, type DateKey } from '@climb/utils';
 
 /** 会员（对应 members 表），目前放了看板「新客从哪来」和会员列表用到的字段 */
@@ -77,6 +77,8 @@ export interface MockStaff extends Staff {
   passwordHash: string;
   active: boolean;
   tokenVersion: number;
+  /** 教练资料（任务 28），不是教练为 null；教练 id 就是员工 id */
+  coach: CoachProfile | null;
   createdAt: string;
 }
 
@@ -151,11 +153,13 @@ export interface MockDb {
 
 export function createMockDb(today: DateKey, rules: GymRules = defaultRules): MockDb {
   // 示例账号，密码都是 123456
-  const account = (s: Staff): MockStaff => ({ ...s, passwordHash: mockPasswordHash(s.id, '123456'), active: true, tokenVersion: 0, createdAt: '2026-01-05T10:00:00+08:00' });
+  const account = (s: Staff, coach: CoachProfile | null = null): MockStaff => ({ ...s, passwordHash: mockPasswordHash(s.id, '123456'), active: true, tokenVersion: 0, createdAt: '2026-01-05T10:00:00+08:00', coach });
+  // 教练也是员工：店长阿凯带顶绳；Max 是只做教练的员工（手机号同小程序分支示例里的教练），在滨港店接私教
   const staff: MockDb['staff'] = [
     account({ id: 's-owner', name: '馆长', phone: '13800000001', role: 'owner', storeIds: [] }),
-    account({ id: 's-manager', name: '店长阿凯', phone: '13800000002', role: 'manager', storeIds: ['bingang'] }),
+    account({ id: 's-manager', name: '店长阿凯', phone: '13800000002', role: 'manager', storeIds: ['bingang'] }, { tags: ['顶绳', '保护技术'], bio: '带顶绳进阶课，教你自己做保护。', avatarUrl: null, priceCents: 35_000, storeIds: ['bingang'] }),
     account({ id: 's-desk', name: '前台小葵', phone: '13800000003', role: 'desk', storeIds: ['bingang'] }),
+    account({ id: 's-coach-max', name: 'Max', phone: '13900000001', role: 'desk', storeIds: ['bingang'] }, { tags: ['抱石', '力量训练'], bio: '前省队抱石选手，课上会拍视频逐帧拆动作。', avatarUrl: null, priceCents: 40_000, storeIds: ['bingang'] }),
   ];
   return {
     today,

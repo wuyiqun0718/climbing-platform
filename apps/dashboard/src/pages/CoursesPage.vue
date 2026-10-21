@@ -37,13 +37,11 @@ async function load() {
 onMounted(async () => {
   load();
   loadRules();
-  // 教练列表等任务 28；现在只有老板能拿员工列表，拿不到就不能换默认教练
-  if (can('staff.manage')) {
-    try {
-      coaches.value = (await api.staff.list()).filter(s => s.active).map(s => ({ id: s.id, name: s.name }));
-    } catch {
-      // 不影响别的
-    }
+  // 教练列表（任务 28）：在用、有教练资料的员工，登录的员工都能看
+  try {
+    coaches.value = (await api.coaches()).map(c => ({ id: c.id, name: c.name }));
+  } catch {
+    // 不影响别的，拿不到就只能保留原来的教练
   }
 });
 

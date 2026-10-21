@@ -2,7 +2,7 @@
 /**
  * 新建、修改团课课程种类的弹窗（任务 25），用 v-model:open；type 为空是新建。
  * 校验在 @climb/core 的 classTypes.ts，这里只负责显示和提交。改种类不影响已排的课。
- * 默认教练先从员工列表选（只有老板拿得到员工列表；教练资料和教练列表见任务 28），拿不到就只显示现在的。
+ * 默认教练从教练列表选（GET /admin/coaches，在用、有教练资料的员工），列表里没有的只显示现在的。
  */
 import { classTypePatchErrors, newClassTypeErrors, type ClassType, type ClassTypeErrors, type ClassTypeInput, type ClassTypePatch } from '@climb/core';
 import { Field, Modal, errorText } from '@climb/ui-web';

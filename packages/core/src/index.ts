@@ -22,3 +22,4 @@ export * from './classes';
 export * from './classTypes';
 export * from './classSchedule';
 export * from './classRoster';
+export * from './coach';
