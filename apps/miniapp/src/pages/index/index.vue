@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { entryOptions, type Card, type EntryOption } from '@climb/core';
+import { cardText, entryOptions, type Card, type EntryOption } from '@climb/core';
 import { toCssVarString } from '@climb/theme';
 // 小程序组件要按 .vue 路径引入，uni-app 才会生成 usingComponents
 import MemberCard from '@climb/ui-mp/MemberCard.vue';
-import { addDays, daysBetween, formatDot, toDateKey } from '@climb/utils';
+import { addDays, toDateKey } from '@climb/utils';
 import { onLoad } from '@dcloudio/uni-app';
 import gym from '@gym';
 
@@ -20,15 +20,13 @@ const options = entryOptions(cards, { today, rules: gym.rules, hasCheckedIn: () 
 const vars = toCssVarString(gym.theme);
 const logo = `/static/gym/${gym.logo}`;
 
+// 卡的文字跟后台会员详情共用 @climb/core 的 cardText
 function cardView(o: EntryOption) {
   const c = o.card;
-  if (c.kind === 'period') {
-    return { kind: '期限卡', tone: 'brand' as const, value: daysBetween(today, c.expiresOn) + 1, unit: '天后到期', meta: `${formatDot(c.startsOn)} – ${formatDot(c.expiresOn)}` };
-  }
-  if (c.kind === 'count' || c.kind === 'gift') {
-    return { kind: c.kind === 'gift' ? '好友赠送' : '次卡', tone: 'accent' as const, value: c.remaining, unit: `/ ${c.total} 次`, meta: `${formatDot(c.expiresOn)} 前有效，这次入场扣 ${o.deducts} 次` };
-  }
-  return { kind: '老带新', tone: 'neutral' as const, value: o.usable ? '可用' : '等待', unit: '', meta: `${formatDot(c.expiresOn)} 前有效` };
+  const t = cardText(c, today, { usable: o.usable });
+  if (c.kind === 'period') return { ...t, tone: 'brand' as const };
+  if (c.kind === 'count' || c.kind === 'gift') return { ...t, tone: 'accent' as const, meta: `${t.meta}，这次入场扣 ${o.deducts} 次` };
+  return { ...t, tone: 'neutral' as const };
 }
 
 onLoad(() => {

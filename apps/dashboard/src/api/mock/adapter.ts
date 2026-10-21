@@ -1,6 +1,7 @@
 import {
   MEMBER_SOURCES,
   MEMBERS_PAGE_SIZE,
+  MEMBER_RECENT_LIMIT,
   type ApiRequest,
   type ApiResponse,
   type DashboardSummary,
@@ -8,7 +9,10 @@ import {
   type FinanceRefundRow,
   type FinanceSummary,
   type LoginResult,
+  type MemberDetail,
+  type MemberEntryRow,
   type MemberListRow,
+  type MemberOrderRow,
   type NewcomerRow,
   type PageOf,
   type ReferralFunnel,
@@ -16,7 +20,7 @@ import {
   type Staff,
   type StoreCompareRow,
 } from '@climb/api';
-import { expiringPeriodCards, financeRangeError, isCardValid, summarizeRevenue, type RevenueChannel } from '@climb/core';
+import { expiringPeriodCards, financeRangeError, isCardValid, summarizeRevenue, type Card, type RevenueChannel } from '@climb/core';
 import { maskPhone, monthOf } from '@climb/utils';
 import { MEMBERS_VISIBLE_ACROSS_STORES, canSeePage, canSeeStore } from '../../permissions';
 import type { MockDb } from './db';
@@ -130,6 +134,53 @@ function memberList(db: MockDb, staff: Staff, q: string, page: number): PageOf<M
   return { items, total: sorted.length, page: cur, pageSize };
 }
 
+/** 会员详情：口径见 @climb/api 的 MemberDetail */
+function memberDetail(db: MockDb, staff: Staff, id: string): ApiResponse {
+  const m = db.members.find(x => x.id === id);
+  if (!m) return fail(404, 'member-not-found', '没有这个会员');
+  if (!MEMBERS_VISIBLE_ACROSS_STORES && !canSeeStore(staff, m.homeStoreId)) return fail(403, 'forbidden', '没有这家店的权限');
+  const valid = (c: Card) => (isCardValid(c, db.today) ? 0 : 1);
+  const cards = db.cards
+    .filter(c => c.memberId === id)
+    .sort((a, b) => valid(a) - valid(b) || b.expiresOn.localeCompare(a.expiresOn) || a.id.localeCompare(b.id));
+  const refunded = (orderId: string) =>
+    db.refunds.filter(r => r.orderId === orderId && r.refundedOn).reduce((n, r) => n + r.amountCents, 0);
+  // 没付款的排最前（刚下的单），其余按付款日倒序
+  const recentOrders = db.orders
+    .filter(o => o.memberId === id)
+    .sort((a, b) => (b.paidOn ?? '9999').localeCompare(a.paidOn ?? '9999') || b.id.localeCompare(a.id, undefined, { numeric: true }))
+    .slice(0, MEMBER_RECENT_LIMIT)
+    .map((o): MemberOrderRow => ({
+      id: o.id,
+      storeId: o.storeId,
+      productName: o.productName,
+      category: o.category,
+      channel: o.channel,
+      amountCents: o.amountCents,
+      paidOn: o.paidOn,
+      refundedCents: refunded(o.id),
+    }));
+  const recentEntries = db.checkIns
+    .filter(c => c.memberId === id)
+    .sort((a, b) => b.on.localeCompare(a.on) || b.id.localeCompare(a.id, undefined, { numeric: true }))
+    .slice(0, MEMBER_RECENT_LIMIT)
+    .map(({ memberId: _m, ...c }): MemberEntryRow => c);
+  const res: MemberDetail = {
+    id: m.id,
+    name: m.name,
+    phone: m.phone,
+    source: m.source,
+    homeStoreId: m.homeStoreId,
+    firstVisitOn: m.firstVisitOn,
+    firstVisitStoreId: m.firstVisitStoreId,
+    waiver: m.waiverSignedOn ? { signedOn: m.waiverSignedOn, version: db.waiverVersion } : null,
+    cards,
+    recentOrders,
+    recentEntries,
+  };
+  return ok(res);
+}
+
 const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handle: Handler }[] = [
   {
     method: 'POST',
@@ -223,6 +274,12 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
       if (!Number.isInteger(page) || page < 1) return fail(400, 'bad-page', '页码不对');
       return ok(memberList(db, staff!, (query.get('q') ?? '').trim(), page));
     },
+  },
+  {
+    method: 'GET',
+    path: /^\/admin\/members\/([^/]+)$/,
+    auth: true,
+    handle: ({ db, params, staff }) => memberDetail(db, staff!, decodeURIComponent(params[0]!)),
   },
 ];
 

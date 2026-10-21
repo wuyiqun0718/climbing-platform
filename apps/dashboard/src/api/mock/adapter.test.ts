@@ -15,7 +15,7 @@ function setup() {
 
 type M = MockDb['members'][number];
 const member = (id: string, source: M['source'], store: string, firstVisitOn: string, firstCardOn: string | null = null): M => ({
-  id, name: `会员${id}`, phone: '', source, homeStoreId: store, firstVisitOn, firstVisitStoreId: store, firstCardOn, lastEntryOn: null,
+  id, name: `会员${id}`, phone: '', source, homeStoreId: store, firstVisitOn, firstVisitStoreId: store, firstCardOn, lastEntryOn: null, waiverSignedOn: null,
 });
 
 const status = (p: Promise<unknown>) => p.then(() => 200, (e: ApiError) => e.status);
@@ -307,5 +307,67 @@ describe('后台 mock：会员列表', () => {
     await login('13800000001');
     const rows = (await api.members.list({ page: 1 })).items;
     expect(rows.some(r => r.validCards > 0)).toBe(true);
+  });
+});
+
+describe('后台 mock：会员详情', () => {
+  it('基本信息、完整手机号、告知书；没这个人 404', async () => {
+    const { api, login, db } = setup();
+    db.members = [{ ...member('a', 'referral', 'huiju', '2026-10-02'), phone: '13812345678', waiverSignedOn: '2026-10-02' }, member('b', 'walkin', 'huiju', '2026-10-03')];
+    await login('13800000003');
+    const a = await api.members.get('a');
+    expect(a).toMatchObject({ id: 'a', phone: '13812345678', source: 'referral', homeStoreId: 'huiju', waiver: { signedOn: '2026-10-02', version: db.waiverVersion } });
+    expect((await api.members.get('b')).waiver).toBeNull();
+    expect(await status(api.members.get('nobody'))).toBe(404);
+  });
+
+  it('卡：全部列出，有效的在前，再按到期日倒序；不带别人的卡', async () => {
+    const { api, login, db } = setup();
+    db.members = [member('a', 'walkin', 'huiju', '2026-09-01')];
+    const count = (id: string, extra: object = {}) => ({ id, kind: 'count' as const, memberId: 'a', productId: 'p', name: '10 次卡', total: 10, remaining: 3, expiresOn: '2026-12-31', ...extra });
+    db.cards = [
+      count('expired', { expiresOn: '2026-10-20' }),
+      count('ok'),
+      count('refunded', { status: 'refunded', expiresOn: '2027-06-01' }),
+      count('later', { expiresOn: '2027-03-01' }),
+      count('other', { memberId: 'b' }),
+    ];
+    await login('13800000003');
+    expect((await api.members.get('a')).cards.map(c => c.id)).toEqual(['later', 'ok', 'refunded', 'expired']);
+  });
+
+  it('最近订单：倒序、最多 10 条，退款只算退成功的', async () => {
+    const { api, login, db } = setup();
+    db.members = [member('a', 'walkin', 'huiju', '2026-01-01')];
+    const order = (i: number, paidOn: string | null) => ({ id: `o${i}`, storeId: 'huiju', memberId: 'a', productName: '月卡', channel: 'wechat' as const, category: 'period' as const, amountCents: 59_900, paidOn });
+    db.orders = [...Array.from({ length: 12 }, (_, i) => order(i, `2026-10-${String(i + 1).padStart(2, '0')}`)), order(99, null), { ...order(100, '2026-10-20'), memberId: 'b' }];
+    db.refunds = [
+      { id: 'r1', orderId: 'o11', amountCents: 20_000, refundedOn: '2026-10-15', reason: '' },
+      { id: 'r2', orderId: 'o11', amountCents: 10_000, refundedOn: null, reason: '' },
+    ];
+    await login('13800000003');
+    const rows = (await api.members.get('a')).recentOrders;
+    expect(rows.map(r => r.id)).toEqual(['o99', 'o11', 'o10', 'o9', 'o8', 'o7', 'o6', 'o5', 'o4', 'o3']);
+    expect(rows[1].refundedCents).toBe(20_000);
+    expect(rows[2].refundedCents).toBe(0);
+  });
+
+  it('最近入场：倒序，撤销的也列出；示例数据里最晚一次 = 会员列表的最近入场', async () => {
+    const { api, login, db } = setup();
+    await login('13800000001');
+    const withEntries = db.members.filter(x => x.lastEntryOn);
+    for (const x of withEntries.slice(0, 40)) {
+      const d = await api.members.get(x.id);
+      expect(d.recentEntries[0]?.on).toBe(x.lastEntryOn);
+      expect(d.recentEntries.map(e => e.on)).toEqual([...d.recentEntries.map(e => e.on)].sort().reverse());
+    }
+    for (const x of db.members.filter(y => !y.lastEntryOn)) expect((await api.members.get(x.id)).recentEntries).toEqual([]);
+    expect(db.checkIns.filter(c => c.voided)).toHaveLength(1);
+    // 用了卡的入场，卡都是这个会员自己的，而且当天在有效期内
+    for (const c of db.checkIns.filter(x => x.cardId)) {
+      const card = db.cards.find(k => k.id === c.cardId)!;
+      expect(card.memberId).toBe(c.memberId);
+      expect(card.expiresOn >= c.on).toBe(true);
+    }
   });
 });

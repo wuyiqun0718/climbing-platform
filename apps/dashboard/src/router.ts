@@ -46,8 +46,8 @@ export const router = createRouter({
       meta: { label: n.label, page: n.name },
       component: PAGES[n.name] ?? (() => import('./pages/TodoPage.vue')),
     })),
-    // 会员详情（任务 11 再做页面），会员列表和看板「7 天内到期」点进来
-    { path: '/members/:id', name: 'member', meta: { label: '会员详情', page: 'members' as const }, component: () => import('./pages/TodoPage.vue') },
+    // 会员详情，会员列表和看板「7 天内到期」点进来
+    { path: '/members/:id', name: 'member', meta: { label: '会员详情', page: 'members' as const }, component: () => import('./pages/MemberDetailPage.vue') },
     { path: '/:rest(.*)*', redirect: '/' },
   ],
 });

@@ -1,4 +1,4 @@
-import type { RevenueBucket, RevenueCategory, RevenueChannel } from '@climb/core';
+import type { Card, PayChannel, RevenueBucket, RevenueCategory, RevenueChannel } from '@climb/core';
 import type { Cents, DateKey } from '@climb/utils';
 import { createHttp, type ClientOptions } from './client';
 
@@ -176,13 +176,73 @@ export interface MemberListRow {
   lastEntryOn: DateKey | null;
 }
 
-export const CHANNEL_TEXT: Record<RevenueChannel, string> = {
+/** 会员详情里最近订单、最近入场各给几条（更早的去订单、入场记录页看） */
+export const MEMBER_RECENT_LIMIT = 10;
+
+/**
+ * 会员详情 GET /admin/members/:id。没有这个人 404；能看哪些店的会员同会员列表。
+ * 卡的展示文字和状态用 @climb/core 的 cardText / cardState，跟小程序一致。
+ */
+export interface MemberDetail {
+  id: string;
+  name: string;
+  /** 完整手机号 */
+  phone: string;
+  source: MemberSource;
+  /** 归属门店（按办卡门店，等馆方） */
+  homeStoreId: string;
+  firstVisitOn: DateKey | null;
+  firstVisitStoreId: string | null;
+  /** 风险告知书：没签过为 null（第一次入场时在小程序里签） */
+  waiver: { signedOn: DateKey; version: string } | null;
+  /** 所有的卡，包括过期、用完、冻结、作废、退款的；有效的在前，再按到期日倒序 */
+  cards: Card[];
+  /** 最近的订单，按下单（付款）日期倒序，最多 MEMBER_RECENT_LIMIT 条 */
+  recentOrders: MemberOrderRow[];
+  /** 最近的入场，按日期倒序，最多 MEMBER_RECENT_LIMIT 条，撤销的也列出来 */
+  recentEntries: MemberEntryRow[];
+}
+
+export interface MemberOrderRow {
+  id: string;
+  storeId: string;
+  /** 订单快照里的商品名 */
+  productName: string;
+  category: RevenueCategory;
+  channel: PayChannel;
+  amountCents: Cents;
+  /** 没付款的为 null */
+  paidOn: DateKey | null;
+  /** 已经退成功的金额，没退过为 0 */
+  refundedCents: Cents;
+}
+
+export type EntryMethod = 'scan' | 'desk';
+export const ENTRY_METHOD_TEXT: Record<EntryMethod, string> = { scan: '扫码', desk: '前台登记' };
+
+export interface MemberEntryRow {
+  id: string;
+  storeId: string;
+  on: DateKey;
+  /** 用的卡；没卡（买单次票、美团券直接入场）为 null */
+  cardId: string | null;
+  cardName: string;
+  /** 扣了几次（期限卡、同日再次入场为 0） */
+  deducted: number;
+  method: EntryMethod;
+  voided: boolean;
+}
+
+export const PAY_CHANNEL_TEXT: Record<PayChannel, string> = {
   wechat: '微信支付',
   desk_cash: '现金',
   desk_pos: 'POS',
   desk_transfer: '转账',
   meituan: '美团、点评',
+  legacy: '青橙导入',
 };
+
+export const CHANNEL_TEXT: Record<RevenueChannel, string> = PAY_CHANNEL_TEXT;
 
 export const REVENUE_CATEGORY_TEXT: Record<RevenueCategory, string> = {
   period: '期限卡',
@@ -217,6 +277,7 @@ export function createAdminApi(opts: ClientOptions) {
         const s = qs.toString();
         return http<PageOf<MemberListRow>>('GET', s ? `/admin/members?${s}` : '/admin/members');
       },
+      get: (id: string) => http<MemberDetail>('GET', `/admin/members/${encodeURIComponent(id)}`),
     },
   };
 }

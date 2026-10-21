@@ -1,4 +1,4 @@
-import { MEMBER_SOURCES, type MemberSource, type Staff, type Store } from '@climb/api';
+import { MEMBER_SOURCES, type EntryMethod, type MemberSource, type Staff, type Store } from '@climb/api';
 import { defaultRules, type Card, type CountCard, type GymRules, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
 import { addDays, addMonths, daysBetween, monthOf, type DateKey } from '@climb/utils';
 
@@ -14,8 +14,24 @@ export interface MockMember {
   firstVisitStoreId: string;
   /** 第一次买期限卡或次卡的日期，没买过为 null */
   firstCardOn: DateKey | null;
-  /** 最近一次入场。等任务 15 有了入场记录再改成从入场记录算 */
+  /** 最近一次入场，跟 checkIns 里最晚的一条一致（mock 里由入场记录生成时对齐）。等任务 15 再改成从入场记录算 */
   lastEntryOn: DateKey | null;
+  /** 签风险告知书的日期（第一次入场时签），没签为 null */
+  waiverSignedOn: DateKey | null;
+}
+
+/** 入场记录（对应 check_ins 表） */
+export interface MockCheckIn {
+  id: string;
+  memberId: string;
+  storeId: string;
+  on: DateKey;
+  /** 没卡（单次票、美团券直接入场）为 null */
+  cardId: string | null;
+  cardName: string;
+  deducted: number;
+  method: EntryMethod;
+  voided: boolean;
 }
 
 /** 老带新邀请（对应 shares 表 kind = referral） */
@@ -52,6 +68,13 @@ export interface MockDb {
   /** 订单和退款（财务页用；看板的营收目前还是 storeStats 里的示例数字） */
   orders: MockOrder[];
   refunds: MockRefund[];
+  /**
+   * 入场记录：每个到过店的会员最近几次。示例数据没有回头去扣卡上的次数（卡流水在任务 12），
+   * 所以次卡的剩余和这里的扣次对不上，任务 15 起新登记的入场会真的扣。
+   */
+  checkIns: MockCheckIn[];
+  /** 当前的告知书版本（对应 waiver_versions 里最新的一版） */
+  waiverVersion: string;
   /** 岩馆规则，mock 判断规则时传给 @climb/core */
   rules: GymRules;
   today: DateKey;
@@ -72,8 +95,9 @@ export function createMockDb(today: DateKey, rules: GymRules = defaultRules): Mo
       { id: 's-manager', name: '店长阿凯', phone: '13800000002', role: 'manager', storeIds: ['bingang'], password: '123456', active: true },
       { id: 's-desk', name: '前台小葵', phone: '13800000003', role: 'desk', storeIds: ['bingang'], password: '123456', active: true },
     ],
-    ...sampleMembers(today),
+    ...withCheckIns(sampleMembers(today), today),
     ...sampleOrders(today),
+    waiverVersion: '2026-01',
     storeStats: {
       bingang: { monthRevenueCents: 6_194_200, todayEntries: 45, lastWeekSameTimeEntries: 41, todayBookings: 9, activeMembers: 138 },
       huiju: { monthRevenueCents: 4_504_900, todayEntries: 33, lastWeekSameTimeEntries: 35, todayBookings: 7, activeMembers: 101 },
@@ -95,7 +119,7 @@ function sampleMembers(today: DateKey): Pick<MockDb, 'members' | 'referrals' | '
   const storeIds = ['bingang', 'huiju', 'huanqiu'];
   const monthStart = `${monthOf(today)}-01`;
   const daysSoFar = Number(today.slice(8, 10));
-  const members: Omit<MockMember, 'phone' | 'lastEntryOn'>[] = [];
+  const members: Omit<MockMember, 'phone' | 'lastEntryOn' | 'waiverSignedOn'>[] = [];
   const referrals: MockReferral[] = [];
   const cards: Card[] = [];
   let named = 0;
@@ -157,7 +181,7 @@ function sampleMembers(today: DateKey): Pick<MockDb, 'members' | 'referrals' | '
  * 会员列表要的手机号和最近入场，单独用一个伪随机数生成，不影响上面看板示例数字。
  * 手机号前 4 位后面接序号，保证不重复；青橙导入的有一半还没来过。
  */
-function withContact(members: Omit<MockMember, 'phone' | 'lastEntryOn'>[], today: DateKey): MockMember[] {
+function withContact(members: Omit<MockMember, 'phone' | 'lastEntryOn' | 'waiverSignedOn'>[], today: DateKey): MockMember[] {
   let seed = 23;
   const rand = (n: number) => {
     seed = (seed * 1103515245 + 12345) % 2147483648;
@@ -167,12 +191,12 @@ function withContact(members: Omit<MockMember, 'phone' | 'lastEntryOn'>[], today
     const phone = `1${[39, 58, 86, 37][i % 4]}${String(i).padStart(4, '0')}${String(rand(10000)).padStart(4, '0')}`;
     const never = m.source === 'legacy_import' && i % 2 === 0;
     const lastEntryOn = never ? null : addDays(m.firstVisitOn, rand(daysBetween(m.firstVisitOn, today) + 1));
-    return { ...m, phone, lastEntryOn };
+    return { ...m, phone, lastEntryOn, waiverSignedOn: never ? null : m.firstVisitOn };
   });
 }
 
 /** 本月办了卡的新客每人一张 10 次卡，用掉几次；有一张已经用完、一张冻结了（都不算有效卡） */
-function newcomerCountCards(members: Omit<MockMember, 'phone' | 'lastEntryOn'>[]): CountCard[] {
+function newcomerCountCards(members: Omit<MockMember, 'phone' | 'lastEntryOn' | 'waiverSignedOn'>[]): CountCard[] {
   const bought = members.filter(m => !m.id.startsWith('m-old-') && m.firstCardOn);
   return bought.map((m, i): CountCard => ({
     id: `c-${m.id}`,
@@ -185,6 +209,49 @@ function newcomerCountCards(members: Omit<MockMember, 'phone' | 'lastEntryOn'>[]
     expiresOn: addMonths(m.firstCardOn!, 6),
     ...(i === 1 ? { status: 'frozen' as const } : {}),
   }));
+}
+
+/**
+ * 示例入场记录：每个到过店的会员在第一次到店到最近入场之间有 1–5 次，最晚的一次就是 lastEntryOn。
+ * 用当天能用的卡（期限卡优先，其次次卡），没有就记单次票（美团来的记美团券）；
+ * 大约十分之一是前台登记，有一条撤销了的（撤销的那条不是最晚的那次，lastEntryOn 不受影响）。
+ */
+function withCheckIns<T extends Pick<MockDb, 'members' | 'cards'>>(data: T, today: DateKey): T & Pick<MockDb, 'checkIns'> {
+  let seed = 31;
+  const rand = (n: number) => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed % n;
+  };
+  const checkIns: MockCheckIn[] = [];
+  let n = 0;
+  for (const m of data.members) {
+    if (!m.lastEntryOn) continue;
+    const span = daysBetween(m.firstVisitOn, m.lastEntryOn);
+    const days = new Set([m.lastEntryOn, m.firstVisitOn]);
+    for (let k = rand(4); k > 0; k--) days.add(addDays(m.firstVisitOn, rand(span + 1)));
+    const sorted = [...days].filter(d => d <= today).sort();
+    for (const on of sorted) {
+      const mine = data.cards.filter(c => c.memberId === m.id);
+      const period = mine.find(c => c.kind === 'period' && c.startsOn <= on && c.expiresOn >= on);
+      const count = mine.find(c => c.kind === 'count' && (c.status ?? 'normal') === 'normal' && c.expiresOn >= on && m.firstCardOn !== null && m.firstCardOn <= on);
+      const card = period ?? count;
+      checkIns.push({
+        id: `ci-${++n}`,
+        memberId: m.id,
+        storeId: m.homeStoreId,
+        on,
+        cardId: card?.id ?? null,
+        cardName: card?.name ?? (m.source === 'platform' ? '美团单次票' : m.source === 'referral' && on === m.firstVisitOn ? '老带新体验券' : '单次票'),
+        deducted: card?.kind === 'count' ? 1 : 0,
+        method: rand(10) === 0 ? 'desk' : 'scan',
+        voided: false,
+      });
+    }
+  }
+  // 撤销一条：找一个入场两次以上的老会员，撤销其中较早的一次
+  const twice = checkIns.find((c, i) => c.memberId.startsWith('m-old-') && checkIns[i + 1]?.memberId === c.memberId);
+  if (twice) twice.voided = true;
+  return { ...data, checkIns };
 }
 
 /** 示例订单：三家店最近 70 天，每天几笔，渠道和品类照原型的比例大致铺开；再放几笔退款 */
