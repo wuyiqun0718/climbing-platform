@@ -2,6 +2,7 @@ import type { Card, CheckIn, Product, Share } from '@climb/core';
 import { createHttp, type ClientOptions } from './client';
 
 export * from './client';
+export * from './admin';
 
 /**
  * 接口定义（后端还没开始写，路径是约定稿）。
