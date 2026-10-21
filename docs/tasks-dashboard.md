@@ -27,7 +27,7 @@
 - 内容：原型用 Google Fonts 加载 ZCOOL QingKe HuangYou（标题）和 Bricolage Grotesque（数字），应用里只写了字体名没加载，全部回退成系统字体。改用 `@fontsource/zcool-qingke-huangyou` 和 `@fontsource-variable/bricolage-grotesque`（opsz + wght），由 Vite 打包，不依赖 Google；ZCOOL 按 unicode-range 分片按需下载。字体模块放在 `@climb/theme/fonts.css`，两端共用 family 名；小程序不引这个 CSS。favicon 跟着岩馆走：`gyms/<岩馆>/assets/favicon.png`，由 prepare-gym 复制到 `/gym/`。
 - 完成标准：dev 页面 `document.fonts` 里两个字体都是 loaded，标题和数字跟原型一致；`/gym/favicon.png` 返回 200，没有 favicon 404；typecheck、test 通过。
 
-**2. 登录和会话**
+**2. 登录和会话** ✅
 - 依赖：1
 - 涉及文件：`src/pages/LoginPage.vue`、`src/session.ts`、`src/router.ts`、`src/App.vue`
 - 内容：手机号 + 密码登录；token 存 localStorage（读写包 try/catch）；路由守卫，没登录跳登录页；401 时清 token 回登录页；侧栏底部显示员工名和退出。
