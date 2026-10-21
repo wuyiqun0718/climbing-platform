@@ -1,5 +1,5 @@
 import { MEMBER_SOURCES, type DeskCheckInResult, type DeskOrderResult, type RefundResult, type EntryMethod, type VoidCheckInResult, type MemberSource, type Staff, type Store } from '@climb/api';
-import { REFUND_METHOD_BY_CHANNEL, type AuditLogEntry, defaultRules, insuranceForEntry, newPolicy, type Card, type RefundMethod, type RefundStatus, type InsurancePolicy, type CountCard, type GiftCard, type Share, type GymRules, type LedgerEntry, type Product, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
+import { REFUND_METHOD_BY_CHANNEL, type AuditLogEntry, type ClassType, defaultRules, insuranceForEntry, newPolicy, type Card, type RefundMethod, type RefundStatus, type InsurancePolicy, type CountCard, type GiftCard, type Share, type GymRules, type LedgerEntry, type Product, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
 import { addDays, addMonths, daysBetween, endOfMonth, monthOf, type DateKey } from '@climb/utils';
 
 /** 会员（对应 members 表），目前放了看板「新客从哪来」和会员列表用到的字段 */
@@ -104,6 +104,8 @@ export interface MockDb {
   stores: Store[];
   staff: MockStaff[];
   auditLogs: MockAuditLog[];
+  /** 团课课程种类（对应 class_types 表）；有一个停用的 */
+  classTypes: ClassType[];
   /** 每家店的看板数字（示例），全部门店 = 各店相加 */
   storeStats: Record<string, { monthRevenueCents: number; todayEntries: number; lastWeekSameTimeEntries: number; todayBookings: number; activeMembers: number }>;
   members: MockMember[];
@@ -156,6 +158,11 @@ export function createMockDb(today: DateKey, rules: GymRules = defaultRules): Mo
     ],
     staff,
     auditLogs: [],
+    classTypes: [
+      { id: 'ct-intro', name: '入门抱石', minutes: 60, capacity: 12, credits: 1, active: true },
+      { id: 'ct-rope', name: '顶绳进阶', minutes: 90, capacity: 8, credits: 2, coachId: 's-manager', active: true },
+      { id: 'ct-kids', name: '亲子攀岩', minutes: 60, capacity: 10, credits: 1, active: false },
+    ],
     ...withShares(withLedger(withCheckIns(sampleMembers(today), staff, today), staff, today), today),
     ...sampleOrders(today),
     products: sampleProducts(),

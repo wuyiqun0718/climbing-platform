@@ -1,4 +1,4 @@
-import { MEMBER_SOURCES, type Card, type CardAdjustInput, type FreezeOverridable, type PeriodCard, type RuleErrorCode, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type OrderStatus, type RefundBasis, type RefundMethod, type RefundStatus, type LedgerEntry, type MemberSource, type PayChannel, type Product, type ProductInput, type ProductPatch, type RevenueBucket, type RevenueCategory, type RevenueChannel, type Share, type ShareRecordState, type StaffInput, type StaffPatch, type StaffRole, type AuditAction, type AuditLogEntry } from '@climb/core';
+import { MEMBER_SOURCES, type Card, type CardAdjustInput, type FreezeOverridable, type PeriodCard, type RuleErrorCode, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type OrderStatus, type RefundBasis, type RefundMethod, type RefundStatus, type LedgerEntry, type MemberSource, type PayChannel, type Product, type ProductInput, type ProductPatch, type RevenueBucket, type RevenueCategory, type RevenueChannel, type Share, type ShareRecordState, type StaffInput, type StaffPatch, type StaffRole, type AuditAction, type AuditLogEntry, type ClassRules, type ClassType, type ClassTypeInput, type ClassTypePatch } from '@climb/core';
 import type { Cents, DateKey } from '@climb/utils';
 import { createHttp, type ClientOptions } from './client';
 
@@ -222,6 +222,21 @@ export interface ExportResult {
   /** 数据行数（不含表头） */
   rows: number;
 }
+
+/**
+ * 团课课程种类（任务 25），类型跟小程序同一份（@climb/core 的 classes.ts），校验在 classTypes.ts。
+ * - GET /admin/class-types：全部种类（含停用的），启用的在前、按课程名。登录的员工都能看（排课要选）。
+ * - POST /admin/class-types：新建，要 classType.edit（等馆方，先店长以上），不是 403；校验用 core 的 newClassTypeErrors，不对的 400（data.field）。
+ * - PATCH /admin/class-types/:id：只传要改的（课程名、时长、人数上限、扣次、默认教练、启用停用），没有 404；校验用 classTypePatchErrors。
+ * 停用后不能再排新课（core 的 sessionFromType），已排的照常上；改种类不影响已排的课（排课时拷到 ClassSession）。
+ * 默认教练是在用的员工 ID（教练资料见任务 28）。新建、修改都写操作日志（class_type.create / class_type.update，只记改了的字段）。
+ *
+ * 团课规则 GET/PUT /admin/settings/class-rules：取消截止、候补、迟到（GymRules.classRules，默认值是占位，等馆方）。
+ * GET 登录的员工都能看；PUT 只有 settings.classRules（先只有老板），要传全部字段，校验用 core 的 classRulesErrors。改了写操作日志。
+ */
+export type ClassTypeBody = ClassTypeInput;
+export type ClassTypePatchBody = ClassTypePatch;
+export type ClassRulesBody = ClassRules;
 
 /** 后台列表的一页。page 从 1 开始；超出范围时后端夹到最后一页，以返回的 page 为准 */
 export interface PageOf<T> {
@@ -744,6 +759,11 @@ export function createAdminApi(opts: ClientOptions) {
     exports: {
       create: <K extends ExportKind>(kind: K, filters: ExportFilters[K]) => http<ExportResult>('POST', `/admin/exports/${kind}`, filters),
     },
+    classTypes: {
+      list: () => http<ClassType[]>('GET', '/admin/class-types'),
+      create: (body: ClassTypeBody) => http<ClassType>('POST', '/admin/class-types', body),
+      update: (id: string, body: ClassTypePatchBody) => http<ClassType>('PATCH', `/admin/class-types/${encodeURIComponent(id)}`, body),
+    },
     auditLogs: (q: { store?: string; action?: AuditAction; page?: number } = {}) => {
       const qs = new URLSearchParams();
       if (q.store) qs.set('store', q.store);
@@ -755,6 +775,8 @@ export function createAdminApi(opts: ClientOptions) {
     settings: {
       freezeRules: () => http<FreezeRules>('GET', '/admin/settings/freeze-rules'),
       saveFreezeRules: (body: FreezeRulesBody) => http<FreezeRules>('PUT', '/admin/settings/freeze-rules', body),
+      classRules: () => http<ClassRules>('GET', '/admin/settings/class-rules'),
+      saveClassRules: (body: ClassRulesBody) => http<ClassRules>('PUT', '/admin/settings/class-rules', body),
     },
     cards: {
       ledger: (id: string) => http<CardLedger>('GET', `/admin/cards/${encodeURIComponent(id)}/ledger`),

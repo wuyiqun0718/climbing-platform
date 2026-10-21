@@ -18,3 +18,5 @@ export * from './product';
 export * from './shareRecord';
 export * from './staff';
 export * from './audit';
+export * from './classes';
+export * from './classTypes';

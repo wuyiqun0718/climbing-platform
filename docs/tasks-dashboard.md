@@ -191,11 +191,12 @@
 
 ### E. 团课
 
-**25. 团课课程种类**
+**25. 团课课程种类** ✅
 - 依赖：4、5
 - 涉及文件：`src/pages/CoursesPage.vue`（团课 tab）、契约 `GET/POST/PATCH /admin/class-types`、mock
 - 内容：课程名、时长、人数上限、默认教练、消耗（团课次数卡 1 次或单节价）。等馆方：候补、取消和迟到规则，先做成字段。
 - 完成标准：能新建、编辑、停用。
+- 补（2026-10-22）：`ClassType`、`ClassSession`、`ClassBooking` 等类型从小程序分支 `classes.ts` 原样拷过来（只拷了类型，约课规则函数合并时整份用那边的），`GymRules.classRules` / `ClassRules` / `defaultClassRules` 和 `defineGym` 的合并写法照小程序 `gym.ts` 原样加。校验在新文件 core 的 `classTypes.ts`：时长、人数上限、扣次是正整数（上限是占位常量），启用的不能重名，默认教练要是在用的员工；`sessionFromType` 排课时拷课名、时长、人数上限、扣次、默认教练，停用的种类抛 `class-type-inactive`（给 26 用）；`classRulesErrors` 校验团课规则。接口 `GET/POST/PATCH /admin/class-types`（编辑要 `classType.edit`，占位店长以上），团课规则 `GET/PUT /admin/settings/class-rules`（改要 `settings.classRules`，占位只有老板）；新建、修改、停用、改规则都写操作日志。「单节价」小程序的 `ClassType` 没有这个字段，先不做。默认教练先从员工列表选（只有老板拿得到），教练列表等 28。
 
 **26. 团课排期和发布**
 - 依赖：25

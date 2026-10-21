@@ -1441,3 +1441,56 @@ describe('后台 mock：导出', () => {
     expect(await status(api.exports.create('nope' as never, {} as never))).toBe(404);
   });
 });
+
+describe('后台 mock：团课课程种类', () => {
+  it('列出全部（含停用的），启用的在前、按课程名拼音；前台也能看', async () => {
+    const { api, login } = setup();
+    await login('13800000003');
+    const list = await api.classTypes.list();
+    expect(list.map(t => [t.name, t.active])).toEqual([['顶绳进阶', true], ['入门抱石', true], ['亲子攀岩', false]]);
+  });
+
+  it('新建、编辑、停用、重新启用；每次写操作日志，只记改了的字段', async () => {
+    const { api, login, db } = setup();
+    await login('13800000002');
+    const made = await api.classTypes.create({ name: '指力训练', minutes: 45, capacity: 6, coachId: 's-manager' });
+    expect(made).toMatchObject({ name: '指力训练', minutes: 45, capacity: 6, credits: 1, coachId: 's-manager', active: true });
+    expect(await api.classTypes.update(made.id, { capacity: 8, coachId: null })).not.toHaveProperty('coachId');
+    expect(await api.classTypes.update(made.id, { active: false })).toMatchObject({ active: false });
+    expect(await api.classTypes.update(made.id, { active: true })).toMatchObject({ active: true });
+    expect(db.auditLogs.map(l => [l.action, l.targetId, l.storeId, l.before, l.after])).toEqual([
+      ['class_type.create', made.id, null, null, { id: made.id, name: '指力训练', minutes: 45, capacity: 6, credits: 1, coachId: 's-manager', active: true }],
+      ['class_type.update', made.id, null, { capacity: 6, coachId: 's-manager' }, { capacity: 8 }],
+      ['class_type.update', made.id, null, { active: true }, { active: false }],
+      ['class_type.update', made.id, null, { active: false }, { active: true }],
+    ]);
+  });
+
+  it('时长、人数上限、扣次是正整数；重名、没有的教练 400；没有的种类 404；前台 403', async () => {
+    const { api, login } = setup();
+    const field = (p: Promise<unknown>) => p.then(() => null, (e: ApiError) => [e.status, (e.data as { field?: string }).field]);
+    await login('13800000003');
+    expect(await status(api.classTypes.create({ name: 'x', minutes: 60, capacity: 8 }))).toBe(403);
+    expect(await status(api.classTypes.update('ct-intro', { capacity: 1 }))).toBe(403);
+    await login('13800000001');
+    expect(await field(api.classTypes.create({ name: 'x', minutes: 0, capacity: 8 }))).toEqual([400, 'minutes']);
+    expect(await field(api.classTypes.create({ name: 'x', minutes: 60, capacity: 2.5 }))).toEqual([400, 'capacity']);
+    expect(await field(api.classTypes.create({ name: 'x', minutes: 60, capacity: 8, credits: -1 }))).toEqual([400, 'credits']);
+    expect(await field(api.classTypes.create({ name: '入门抱石', minutes: 60, capacity: 8 }))).toEqual([400, 'name']);
+    expect(await field(api.classTypes.create({ name: 'x', minutes: 60, capacity: 8, coachId: 'nobody' }))).toEqual([400, 'coachId']);
+    expect(await field(api.classTypes.update('ct-kids', { active: true, name: '入门抱石' }))).toEqual([400, 'name']);
+    expect(await status(api.classTypes.update('nope', { capacity: 1 }))).toBe(404);
+  });
+
+  it('团课规则：默认是占位值，老板能改（写日志），店长不能；校验不对 400', async () => {
+    const { api, login, db } = setup();
+    await login('13800000002');
+    expect(await api.settings.classRules()).toEqual({ cancelBeforeMinutes: 120, waitlist: true, waitlistMax: null, lateGraceMinutes: 15 });
+    expect(await status(api.settings.saveClassRules({ cancelBeforeMinutes: 60, waitlist: true, waitlistMax: null, lateGraceMinutes: 15 }))).toBe(403);
+    await login('13800000001');
+    expect(await api.settings.saveClassRules({ cancelBeforeMinutes: 60, waitlist: true, waitlistMax: 5, lateGraceMinutes: 15 })).toMatchObject({ cancelBeforeMinutes: 60, waitlistMax: 5 });
+    expect(db.rules.classRules.cancelBeforeMinutes).toBe(60);
+    expect(db.auditLogs.at(-1)).toMatchObject({ action: 'settings.class_rules', before: { cancelBeforeMinutes: 120, waitlistMax: null }, after: { cancelBeforeMinutes: 60, waitlistMax: 5 } });
+    expect(await status(api.settings.saveClassRules({ cancelBeforeMinutes: -1, waitlist: true, waitlistMax: null, lateGraceMinutes: 15 }))).toBe(400);
+  });
+});

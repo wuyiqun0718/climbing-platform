@@ -24,6 +24,8 @@ import {
   type CreateDeskOrderBody,
   type CreateMemberBody,
   type CreateProductBody,
+  type ClassTypeBody,
+  type ClassTypePatchBody,
   type CreateStaffBody,
   type StaffRow,
   type UpdateStaffBody,
@@ -87,6 +89,13 @@ import {
   insuranceForEntry,
   entryPolicy,
   shareRecordState,
+  newClassTypeErrors,
+  classTypePatchErrors,
+  buildClassType,
+  applyClassTypePatch,
+  sortClassTypes,
+  classRulesErrors,
+  pickClassRules,
   auditDiff,
   CARD_KIND_TEXT,
   CARD_STATE_TEXT,
@@ -1179,6 +1188,54 @@ function saveFreezeRules(db: MockDb, staff: Staff, body: any): ApiResponse {
   return ok(db.rules.freezeRules);
 }
 
+/** 团课课程种类校验要的现状：现有种类、能当默认教练的在用员工 */
+const classTypeCtx = (db: MockDb) => ({ types: db.classTypes, coachIds: db.staff.filter(s => s.active).map(s => s.id) });
+
+/** 新建团课课程种类：口径见 @climb/api 的 ClassTypeBody，规则在 @climb/core 的 classTypes.ts */
+function createClassType(db: MockDb, staff: Staff, body: Partial<ClassTypeBody> | null): ApiResponse {
+  if (!canDo(staff.role, 'classType.edit')) return fail(403, 'forbidden', '没有编辑团课课程的权限');
+  const errs = newClassTypeErrors(body ?? {}, classTypeCtx(db));
+  if (errs) {
+    const field = Object.keys(errs)[0] as keyof typeof errs;
+    return badInput(field, errs[field]!);
+  }
+  const t = buildClassType(nextId('ct-', db.classTypes), body as ClassTypeBody);
+  db.classTypes.push(t);
+  audit(db, staff, { action: 'class_type.create', targetType: 'class_type', targetId: t.id, storeId: null, before: null, after: t });
+  return ok(t);
+}
+
+/** 修改、停用团课课程种类：只改种类本身，已排的课不动 */
+function updateClassType(db: MockDb, staff: Staff, id: string, body: ClassTypePatchBody | null): ApiResponse {
+  if (!canDo(staff.role, 'classType.edit')) return fail(403, 'forbidden', '没有编辑团课课程的权限');
+  const i = db.classTypes.findIndex(t => t.id === id);
+  if (i < 0) return fail(404, 'class-type-not-found', '没有这个课程');
+  const type = db.classTypes[i]!;
+  const patch = body ?? {};
+  const errs = classTypePatchErrors(type, patch, classTypeCtx(db));
+  if (errs) {
+    const field = Object.keys(errs)[0] as keyof typeof errs;
+    return badInput(field, errs[field]!);
+  }
+  db.classTypes[i] = applyClassTypePatch(type, patch);
+  auditChange(db, staff, { action: 'class_type.update', targetType: 'class_type', targetId: id, storeId: null }, type, db.classTypes[i]!);
+  return ok(db.classTypes[i]);
+}
+
+/** 团课规则 PUT /admin/settings/class-rules；存在 db.rules 里，小程序约课 mock 合并后读同一份 */
+function saveClassRules(db: MockDb, staff: Staff, body: any): ApiResponse {
+  if (!canDo(staff.role, 'settings.classRules')) return fail(403, 'forbidden', '只有老板能改团课规则');
+  const errs = classRulesErrors(body ?? {});
+  if (errs) {
+    const field = Object.keys(errs)[0] as keyof typeof errs;
+    return badInput(field, errs[field]!);
+  }
+  const before = db.rules.classRules;
+  db.rules = { ...db.rules, classRules: pickClassRules(body) };
+  auditChange(db, staff, { action: 'settings.class_rules', targetType: 'settings', targetId: 'class-rules', storeId: null }, before, db.rules.classRules);
+  return ok(db.rules.classRules);
+}
+
 /** 新建卡种：口径见 @climb/api 的 CreateProductBody，规则都在 @climb/core 的 product.ts */
 function createProduct(db: MockDb, staff: Staff, body: Partial<CreateProductBody> | null): ApiResponse {
   if (!canDo(staff.role, 'product.edit') || !canDo(staff.role, 'product.price')) return fail(403, 'forbidden', '没有新建卡种的权限');
@@ -1415,6 +1472,16 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
     auth: true,
     handle: ({ db, params, body, staff }) => voidDeskCheckIn(db, staff!, decodeURIComponent(params[0]!), body),
   },
+  { method: 'GET', path: /^\/admin\/class-types$/, auth: true, handle: ({ db }) => ok(sortClassTypes(db.classTypes)) },
+  { method: 'POST', path: /^\/admin\/class-types$/, auth: true, handle: ({ db, body, staff }) => createClassType(db, staff!, body) },
+  {
+    method: 'PATCH',
+    path: /^\/admin\/class-types\/([^/]+)$/,
+    auth: true,
+    handle: ({ db, params, body, staff }) => updateClassType(db, staff!, decodeURIComponent(params[0]!), body),
+  },
+  { method: 'GET', path: /^\/admin\/settings\/class-rules$/, auth: true, handle: ({ db }) => ok(db.rules.classRules) },
+  { method: 'PUT', path: /^\/admin\/settings\/class-rules$/, auth: true, handle: ({ db, body, staff }) => saveClassRules(db, staff!, body) },
   {
     method: 'GET',
     path: /^\/admin\/settings\/freeze-rules$/,

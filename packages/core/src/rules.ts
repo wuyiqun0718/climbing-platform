@@ -35,7 +35,8 @@ export type RuleErrorCode =
   | 'product-off-sale'
   | 'staff-self-deactivate'
   | 'staff-self-demote'
-  | 'staff-last-owner';
+  | 'staff-last-owner'
+  | 'class-type-inactive';
 
 export class RuleError extends Error {
   constructor(public code: RuleErrorCode, message: string) {

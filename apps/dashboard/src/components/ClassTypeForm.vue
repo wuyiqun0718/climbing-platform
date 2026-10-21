@@ -1,0 +1,118 @@
+<script setup lang="ts">
+/**
+ * 新建、修改团课课程种类的弹窗（任务 25），用 v-model:open；type 为空是新建。
+ * 校验在 @climb/core 的 classTypes.ts，这里只负责显示和提交。改种类不影响已排的课。
+ * 默认教练先从员工列表选（只有老板拿得到员工列表；教练资料和教练列表见任务 28），拿不到就只显示现在的。
+ */
+import { classTypePatchErrors, newClassTypeErrors, type ClassType, type ClassTypeErrors, type ClassTypeInput, type ClassTypePatch } from '@climb/core';
+import { Field, Modal, errorText } from '@climb/ui-web';
+import { reactive, ref, useId, watch } from 'vue';
+import { api } from '../api';
+import { badField } from './memberForm';
+
+const props = defineProps<{ open: boolean; type: ClassType | null; types: ClassType[]; coaches: { id: string; name: string }[] }>();
+const emit = defineEmits<{ 'update:open': [open: boolean]; saved: [type: ClassType, created: boolean] }>();
+
+const formId = useId();
+const form = reactive({ name: '', minutes: '', capacity: '', credits: '1', coachId: '' });
+const errs = ref<ClassTypeErrors>({});
+const err = ref('');
+const busy = ref(false);
+
+watch(
+  () => props.open,
+  v => {
+    if (!v) return;
+    const t = props.type;
+    Object.assign(form, {
+      name: t?.name ?? '',
+      minutes: t ? String(t.minutes) : '60',
+      capacity: t ? String(t.capacity) : '',
+      credits: t ? String(t.credits) : '1',
+      coachId: t?.coachId ?? '',
+    });
+    errs.value = {};
+    err.value = '';
+  },
+  { immediate: true },
+);
+
+const int = (v: string) => (v.trim() === '' ? undefined : Number(v));
+
+async function submit() {
+  if (busy.value) return;
+  err.value = '';
+  const t = props.type;
+  const ctx = { types: props.types, coachIds: props.coaches.map(c => c.id) };
+  const common = { name: form.name, minutes: int(form.minutes), capacity: int(form.capacity), credits: int(form.credits) };
+  const body = t ? { ...common, coachId: form.coachId || null } : { ...common, ...(form.coachId ? { coachId: form.coachId } : {}) };
+  errs.value = (t ? classTypePatchErrors(t, body, ctx) : newClassTypeErrors(body, ctx)) ?? {};
+  if (Object.keys(errs.value).length) return;
+  busy.value = true;
+  try {
+    const saved = t ? await api.classTypes.update(t.id, body as ClassTypePatch) : await api.classTypes.create(body as ClassTypeInput);
+    emit('update:open', false);
+    emit('saved', saved, !t);
+  } catch (e) {
+    const field = badField(e);
+    if (field && field in form) errs.value = { [field]: errorText(e) };
+    else err.value = errorText(e, '保存失败，请重试');
+  } finally {
+    busy.value = false;
+  }
+}
+</script>
+
+<template>
+  <Modal :open="open" :title="type ? `修改 ${type.name}` : '新建团课课程'" :busy="busy" :close-on-backdrop="false" @update:open="v => emit('update:open', v)">
+    <form :id="formId" class="form" novalidate @submit.prevent="submit">
+      <p v-if="type" class="note">改了只影响以后排的课，已经排了的课照原来的上。</p>
+      <Field label="课程名" required :error="errs.name" v-slot="f">
+        <input v-model="form.name" v-bind="f.attrs" :disabled="busy" />
+      </Field>
+      <Field label="时长（分钟）" required :error="errs.minutes" v-slot="f">
+        <input v-model="form.minutes" v-bind="f.attrs" type="number" min="1" step="1" :disabled="busy" />
+      </Field>
+      <Field label="人数上限" required hint="排课时可以单独改" :error="errs.capacity" v-slot="f">
+        <input v-model="form.capacity" v-bind="f.attrs" type="number" min="1" step="1" :disabled="busy" />
+      </Field>
+      <Field label="每节扣团课课包几次" required :error="errs.credits" v-slot="f">
+        <input v-model="form.credits" v-bind="f.attrs" type="number" min="1" step="1" :disabled="busy" />
+      </Field>
+      <Field label="默认教练" :error="errs.coachId" v-slot="f">
+        <select v-model="form.coachId" v-bind="f.attrs" :disabled="busy">
+          <option value="">不指定</option>
+          <option v-for="c in coaches" :key="c.id" :value="c.id">{{ c.name }}</option>
+          <option v-if="form.coachId && !coaches.some(c => c.id === form.coachId)" :value="form.coachId">{{ form.coachId }}</option>
+        </select>
+      </Field>
+      <p v-if="err" class="err" role="alert">{{ err }}</p>
+    </form>
+    <template #footer>
+      <button type="button" class="btn" :disabled="busy" @click="emit('update:open', false)">取消</button>
+      <button type="submit" class="btn primary" :form="formId" :disabled="busy">{{ busy ? '保存中…' : '保存' }}</button>
+    </template>
+  </Modal>
+</template>
+
+<style scoped>
+.form { display: grid; gap: 14px; }
+.form input, .form select { font: inherit; }
+.note { margin: 0; font-size: 13px; color: var(--ink-muted); }
+.err { margin: 0; padding: 9px 12px; font-size: 13px; background: var(--accent-soft); border-radius: var(--radius-sm); }
+.btn {
+  height: 34px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.btn:hover:not(:disabled) { border-color: var(--ink); }
+.btn:disabled { cursor: default; opacity: 0.5; }
+.btn.primary { color: var(--on-brand); background: var(--brand); border-color: var(--brand); }
+</style>

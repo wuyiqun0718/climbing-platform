@@ -31,6 +31,7 @@ const PAGES: Partial<Record<PageKey, () => Promise<unknown>>> = {
   products: () => import('./pages/ProductsPage.vue'),
   settings: () => import('./pages/SettingsPage.vue'),
   audit: () => import('./pages/AuditPage.vue'),
+  courses: () => import('./pages/CoursesPage.vue'),
 };
 
 declare module 'vue-router' {

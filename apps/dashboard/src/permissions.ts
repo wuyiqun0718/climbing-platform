@@ -34,6 +34,10 @@ export type ActionKey =
   | 'staff.manage'
   /** 青橙导入（39） */
   | 'import.run'
+  /** 团课课程种类：新建、编辑、停用（25）。等馆方：先放店长以上 */
+  | 'classType.edit'
+  /** 改团课规则：取消截止、候补、迟到（25）。等馆方：跟冻结规则一样先只给老板 */
+  | 'settings.classRules'
   /** 导出 Excel（24）。等馆方：先放店长以上；每种导出另外要能看对应的页面（订单要财务） */
   | 'data.export'
   /** 导出时手机号不打码（24）。等馆方：先只给老板，其余跟会员列表一样打码 */
@@ -74,6 +78,8 @@ export const ACTION_ROLES: Record<ActionKey, readonly StaffRole[]> = {
   'import.run': OWNER,
   'settings.freezeRules': OWNER,
   'data.export': MANAGER_UP,
+  'classType.edit': MANAGER_UP,
+  'settings.classRules': OWNER,
   'member.fullPhone': OWNER,
 };
 

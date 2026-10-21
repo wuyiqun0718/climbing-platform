@@ -56,6 +56,8 @@ describe('操作权限', () => {
     'import.run': ['owner'],
     'settings.freezeRules': ['owner'],
     'data.export': ['owner', 'manager'],
+    'classType.edit': ['owner', 'manager'],
+    'settings.classRules': ['owner'],
     'member.fullPhone': ['owner'],
   };
 

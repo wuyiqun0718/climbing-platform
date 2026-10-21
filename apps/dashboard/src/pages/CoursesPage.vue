@@ -1,0 +1,192 @@
+<script setup lang="ts">
+/**
+ * 课程排期页。现在只有「团课课程」：课程种类的新建、编辑、停用（任务 25），和团课规则（取消截止、候补、迟到，占位，等馆方）。
+ * 排期（26）、私教（28–30）以后加 tab。校验都在 @climb/core 的 classTypes.ts，这里只负责显示和提交。
+ */
+import { classRulesErrors, type ClassRules, type ClassRulesErrors, type ClassType } from '@climb/core';
+import { DataTable, Field, errorText, useToast, type Column } from '@climb/ui-web';
+import { computed, onMounted, reactive, ref } from 'vue';
+import { api } from '../api';
+import ClassTypeForm from '../components/ClassTypeForm.vue';
+import { canDo } from '../permissions';
+import { session } from '../session';
+
+const toast = useToast();
+const types = ref<ClassType[]>([]);
+const coaches = ref<{ id: string; name: string }[]>([]);
+const loading = ref(true);
+const error = ref('');
+
+const can = (a: Parameters<typeof canDo>[1]) => !!session.state.staff && canDo(session.state.staff.role, a);
+const canEdit = computed(() => can('classType.edit'));
+const canRules = computed(() => can('settings.classRules'));
+
+async function load() {
+  loading.value = true;
+  error.value = '';
+  try {
+    types.value = await api.classTypes.list();
+  } catch (e) {
+    error.value = errorText(e, '团课课程加载失败');
+  } finally {
+    loading.value = false;
+  }
+}
+
+onMounted(async () => {
+  load();
+  loadRules();
+  // 教练列表等任务 28；现在只有老板能拿员工列表，拿不到就不能换默认教练
+  if (can('staff.manage')) {
+    try {
+      coaches.value = (await api.staff.list()).filter(s => s.active).map(s => ({ id: s.id, name: s.name }));
+    } catch {
+      // 不影响别的
+    }
+  }
+});
+
+const coachName = (id?: string) => (id ? (coaches.value.find(c => c.id === id)?.name ?? id) : '—');
+const columns: Column<ClassType>[] = [
+  { key: 'name', label: '课程名' },
+  { key: 'minutes', label: '时长', num: true, format: t => `${t.minutes} 分钟` },
+  { key: 'capacity', label: '人数上限', num: true },
+  { key: 'credits', label: '扣次', num: true, format: t => `${t.credits} 次` },
+  { key: 'coachId', label: '默认教练', format: t => coachName(t.coachId) },
+  { key: 'active', label: '状态', width: '140px' },
+];
+
+const formOpen = ref(false);
+const editing = ref<ClassType | null>(null);
+function openForm(t: ClassType | null) {
+  editing.value = t;
+  formOpen.value = true;
+}
+function onSaved(t: ClassType, created: boolean) {
+  toast.success(created ? `已新建：${t.name}` : `已保存：${t.name}`);
+  load();
+}
+
+const toggling = ref<string | null>(null);
+async function toggle(t: ClassType) {
+  if (toggling.value) return;
+  toggling.value = t.id;
+  try {
+    const saved = await api.classTypes.update(t.id, { active: !t.active });
+    toast.success(saved.active ? `已启用：${saved.name}` : `已停用：${saved.name}，已经排了的课照常上`);
+    await load();
+  } catch (e) {
+    toast.error(errorText(e, '操作失败，请重试'));
+  } finally {
+    toggling.value = null;
+  }
+}
+
+// 团课规则
+const rules = reactive({ cancelBeforeMinutes: '', waitlist: true, waitlistUnlimited: true, waitlistMax: '', lateGraceMinutes: '' });
+const rulesErrs = ref<ClassRulesErrors>({});
+const rulesErr = ref('');
+const rulesBusy = ref(false);
+function fillRules(r: ClassRules) {
+  Object.assign(rules, {
+    cancelBeforeMinutes: String(r.cancelBeforeMinutes),
+    waitlist: r.waitlist,
+    waitlistUnlimited: r.waitlistMax === null,
+    waitlistMax: r.waitlistMax === null ? '' : String(r.waitlistMax),
+    lateGraceMinutes: String(r.lateGraceMinutes),
+  });
+}
+async function loadRules() {
+  try {
+    fillRules(await api.settings.classRules());
+  } catch (e) {
+    rulesErr.value = errorText(e, '团课规则加载失败');
+  }
+}
+const int = (v: string) => (v.trim() === '' ? undefined : Number(v));
+async function saveRules() {
+  if (rulesBusy.value) return;
+  rulesErr.value = '';
+  const body = {
+    cancelBeforeMinutes: int(rules.cancelBeforeMinutes),
+    waitlist: rules.waitlist,
+    waitlistMax: rules.waitlistUnlimited ? null : int(rules.waitlistMax),
+    lateGraceMinutes: int(rules.lateGraceMinutes),
+  };
+  rulesErrs.value = classRulesErrors(body) ?? {};
+  if (Object.keys(rulesErrs.value).length) return;
+  rulesBusy.value = true;
+  try {
+    fillRules(await api.settings.saveClassRules(body as ClassRules));
+    toast.success('团课规则已保存');
+  } catch (e) {
+    rulesErr.value = errorText(e, '保存失败，请重试');
+  } finally {
+    rulesBusy.value = false;
+  }
+}
+</script>
+
+<template>
+  <header class="page-h">
+    <div>
+      <h1>课程排期</h1>
+      <p>团课课程：停用后不能再排新课，已经排了的照常上；改了只影响以后排的课</p>
+    </div>
+    <button v-if="canEdit" type="button" class="create" @click="openForm(null)">新建团课课程</button>
+  </header>
+  <ClassTypeForm v-model:open="formOpen" :type="editing" :types="types" :coaches="coaches" @saved="onSaved" />
+  <p v-if="error" class="state error" role="alert">
+    {{ error }}<button type="button" class="retry" @click="load">重试</button>
+  </p>
+  <section class="panel">
+    <DataTable :columns="columns" :rows="types" row-key="id" :loading="loading" empty="还没有团课课程" :clickable="canEdit" @row-click="(t: ClassType) => canEdit && openForm(t)">
+      <template #cell-active="{ row }">
+        <span class="status" :class="{ off: !row.active }">{{ row.active ? '启用' : '已停用' }}</span>
+        <button v-if="canEdit" type="button" class="link" :disabled="toggling !== null" @click.stop="toggle(row)" @keydown.enter.stop>{{ row.active ? '停用' : '启用' }}</button>
+      </template>
+    </DataTable>
+  </section>
+
+  <section class="card">
+    <h2>团课规则</h2>
+    <p class="sub">取消截止、候补、迟到的规则等馆方定，下面是先填的占位值。{{ canRules ? '' : '只有老板能改。' }}</p>
+    <form class="rules" novalidate @submit.prevent="saveRules">
+      <fieldset :disabled="!canRules || rulesBusy">
+        <Field label="开课前多少分钟截止自助取消" :error="rulesErrs.cancelBeforeMinutes" v-slot="f">
+          <input v-model="rules.cancelBeforeMinutes" v-bind="f.attrs" type="number" min="0" step="1" />
+        </Field>
+        <label class="check"><input v-model="rules.waitlist" type="checkbox" /> 满员后可以排候补</label>
+        <label class="check"><input v-model="rules.waitlistUnlimited" type="checkbox" :disabled="!rules.waitlist" /> 候补人数不限</label>
+        <Field v-if="!rules.waitlistUnlimited" label="候补最多几人" :error="rulesErrs.waitlistMax" v-slot="f">
+          <input v-model="rules.waitlistMax" v-bind="f.attrs" type="number" min="1" step="1" />
+        </Field>
+        <Field label="开课后多少分钟内签到不算迟到" :error="rulesErrs.lateGraceMinutes" v-slot="f">
+          <input v-model="rules.lateGraceMinutes" v-bind="f.attrs" type="number" min="0" step="1" />
+        </Field>
+        <button v-if="canRules" type="submit" class="create">{{ rulesBusy ? '保存中…' : '保存规则' }}</button>
+      </fieldset>
+      <p v-if="rulesErr" class="state error" role="alert">{{ rulesErr }}</p>
+    </form>
+  </section>
+</template>
+
+<style scoped>
+.page-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.page-h h1 { margin: 0; font-family: var(--font-display); font-size: 34px; font-weight: 400; }
+.page-h p { margin: 4px 0 16px; font-size: 13px; color: var(--ink-muted); }
+.create { padding: 6px 14px; font: inherit; font-weight: 600; color: var(--on-brand); background: var(--brand); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; justify-self: start; }
+.panel { margin-bottom: 24px; }
+.card h2 { margin: 0 0 4px; font-size: 16px; }
+.sub { margin: 0 0 12px; font-size: 13px; color: var(--ink-muted); }
+.rules fieldset { display: grid; gap: 12px; max-width: 360px; margin: 0; padding: 0; border: 0; }
+.rules input { font: inherit; }
+.check { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
+.status { margin-right: 10px; font-size: 13px; }
+.off { color: var(--ink-muted); }
+.link { padding: 0; font: inherit; font-size: 13px; color: var(--brand); background: none; border: 0; cursor: pointer; text-decoration: underline; }
+.link:disabled { cursor: default; opacity: 0.5; }
+.state { margin: 0 0 16px; font-size: 13px; color: var(--ink-muted); }
+.state.error { display: flex; align-items: center; gap: 12px; padding: 10px 14px; color: var(--ink); background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }
+.retry { padding: 2px 10px; font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
+</style>
