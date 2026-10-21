@@ -11,7 +11,7 @@ import { formatYuan } from '@climb/utils';
 import { onMounted, ref } from 'vue';
 import { api } from '../api';
 import StaffForm from '../components/StaffForm.vue';
-import { session } from '../session';
+import { session, storeLabel } from '../session';
 
 const rows = ref<StaffRow[]>([]);
 const loading = ref(true);
@@ -32,7 +32,7 @@ async function load() {
 onMounted(load);
 
 const storeText = (r: StaffRow) =>
-  r.storeIds.length === 0 ? '全部门店' : r.storeIds.map(id => session.state.stores.find(s => s.id === id)?.name ?? id).join('、');
+  r.storeIds.length === 0 ? '全部门店' : r.storeIds.map(storeLabel).join('、');
 const isMe = (r: StaffRow) => r.id === session.state.staff?.id;
 
 const columns: Column<StaffRow>[] = [
@@ -40,7 +40,7 @@ const columns: Column<StaffRow>[] = [
   { key: 'phone', label: '手机号', num: true },
   { key: 'role', label: '角色', format: r => STAFF_ROLE_TEXT[r.role] },
   { key: 'storeIds', label: '可操作门店', format: storeText },
-  { key: 'coach', label: '教练', format: r => (r.coach ? `单节 ${formatYuan(r.coach.priceCents)}，${r.coach.storeIds.map(id => session.state.stores.find(s => s.id === id)?.name ?? id).join('、')}` : '—') },
+  { key: 'coach', label: '教练', format: r => (r.coach ? `单节 ${formatYuan(r.coach.priceCents)}，${r.coach.storeIds.map(storeLabel).join('、')}` : '—') },
   { key: 'active', label: '状态', width: '140px' },
 ];
 
@@ -95,10 +95,10 @@ async function toggle(r: StaffRow) {
 </template>
 
 <style scoped>
-.page-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.page-h { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0 16px; }
 .page-h h1 { margin: 0; font-family: var(--font-display); font-size: 34px; font-weight: 400; }
 .page-h p { margin: 4px 0 16px; font-size: 13px; color: var(--ink-muted); }
-.create { padding: 6px 14px; font: inherit; font-weight: 600; color: var(--on-brand); background: var(--brand); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
+.create { flex: none; padding: 6px 14px; white-space: nowrap; font: inherit; font-weight: 600; color: var(--on-brand); background: var(--brand); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
 .status { margin-right: 10px; font-size: 13px; }
 .off { color: var(--ink-muted); }
 .link { padding: 0; font: inherit; font-size: 13px; color: var(--brand); background: none; border: 0; cursor: pointer; text-decoration: underline; }

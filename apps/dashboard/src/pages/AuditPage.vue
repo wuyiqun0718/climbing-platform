@@ -9,7 +9,7 @@ import { DataTable, Pager, errorText, type Column } from '@climb/ui-web';
 import { formatDotTime } from '@climb/utils';
 import { computed, ref, watch } from 'vue';
 import { api } from '../api';
-import { session } from '../session';
+import { session, storeLabel } from '../session';
 import { createLatest } from './dashboard';
 
 const action = ref<AuditAction | ''>('');
@@ -33,7 +33,7 @@ async function load() {
 watch(() => [session.state.staff?.id, session.state.storeId, action.value], () => (page.value = 1));
 watch(() => [session.state.staff?.id, session.state.storeId, action.value, page.value], () => session.state.staff && load(), { immediate: true });
 
-const storeNameOf = (id: string | null) => (id ? (session.state.stores.find(s => s.id === id)?.name ?? id) : '全馆');
+const storeNameOf = (id: string | null) => (id ? storeLabel(id) : '全馆');
 const show = (v: unknown) => (v === undefined || v === null ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v));
 /** 改前改后：一个字段一行，「字段：前 → 后」；新建的只列改后 */
 function changeText(r: AuditLogRow): string {
@@ -81,7 +81,7 @@ const columns = computed<Column<AuditLogRow>[]>(() => [
 </template>
 
 <style scoped>
-.page-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.page-h { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0 16px; }
 .page-h h1 { margin: 0; font-family: var(--font-display); font-size: 34px; font-weight: 400; }
 .page-h p { margin: 4px 0 16px; font-size: 13px; color: var(--ink-muted); }
 .filter { display: flex; align-items: center; gap: 8px; font-size: 13px; }

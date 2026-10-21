@@ -14,7 +14,7 @@ import ExportButton from '../components/ExportButton.vue';
 import ShareRecords from '../components/ShareRecords.vue';
 import { entryInsuranceText, voidMessage, voidResultText, voidText } from '../components/checkInVoid';
 import { canDo } from '../permissions';
-import { session } from '../session';
+import { session, storeLabel } from '../session';
 import { createLatest } from './dashboard';
 
 // 默认今天；「今天」先用本机日期，后端返回的日期以请求的为准
@@ -29,7 +29,7 @@ const tab = computed(() => (route.query.tab === 'shares' ? 'shares' : 'entries')
 const setTab = (t: 'entries' | 'shares') => router.replace({ query: t === 'shares' ? { tab: t } : {} });
 const toast = useToast();
 
-const storeNameOf = (id: string) => session.state.stores.find(s => s.id === id)?.name ?? id;
+const storeNameOf = storeLabel;
 
 async function load() {
   if (!isDateKey(date.value)) return;
@@ -123,10 +123,10 @@ function onVoided() {
 </template>
 
 <style scoped>
-.page-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.page-h { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0 16px; }
 .page-h h1 { margin: 0; font-family: var(--font-display); font-size: 34px; font-weight: 400; }
 .page-h p { margin: 4px 0 16px; font-size: 13px; color: var(--ink-muted); }
-.tools { display: flex; align-items: center; gap: 12px; }
+.tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 16px; }
 .date { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .date input { padding: 5px 8px; font: inherit; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); }
 .state { margin: 0 0 16px; font-size: 13px; color: var(--ink-muted); }

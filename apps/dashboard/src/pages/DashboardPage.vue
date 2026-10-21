@@ -6,7 +6,7 @@ import gym from '@gym';
 import { computed, ref, watch } from 'vue';
 import { api } from '../api';
 import { canSeeAllStores } from '../permissions';
-import { session } from '../session';
+import { session, storeLabel } from '../session';
 import { createLatest, entriesCompare, expiryText, funnelSteps, newcomerTotals, pct } from './dashboard';
 
 const data = ref<DashboardSummary | null>(null);
@@ -58,7 +58,7 @@ const funnelRows = computed<BarRow[]>(() =>
 );
 
 const allStores = computed(() => session.state.storeId === null);
-const storeNameOf = (id: string) => session.state.stores.find(s => s.id === id)?.name ?? id;
+const storeNameOf = storeLabel;
 
 // 门店对比：只给能看全部门店的人，且当前选的是「全部门店」
 const compareRows = computed(() =>

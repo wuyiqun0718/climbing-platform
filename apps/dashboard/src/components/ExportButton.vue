@@ -39,6 +39,6 @@ async function run() {
 </template>
 
 <style scoped>
-.export { padding: 6px 14px; font: inherit; font-weight: 600; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
+.export { flex: none; padding: 6px 14px; white-space: nowrap; font: inherit; font-weight: 600; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
 .export:disabled { cursor: default; opacity: 0.5; }
 </style>

@@ -146,3 +146,11 @@ export function loginErrorText(e: unknown): string {
   }
   return '连不上服务器，检查一下网络';
 }
+
+/**
+ * 展示用店名。session.state.stores 是当前账号能操作的店，店长、前台看到别家店的会员或记录时查不到，
+ * 这时显示「其他门店」，不要把 id 原样打出来。接口带上 storeName 之后优先用接口的。
+ */
+export function storeLabel(id: string): string {
+  return session.state.stores.find(s => s.id === id)?.name ?? '其他门店';
+}

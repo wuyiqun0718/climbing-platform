@@ -186,12 +186,12 @@ async function saveRules() {
 </template>
 
 <style scoped>
-.page-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.page-h { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0 16px; }
 .page-h h1 { margin: 0; font-family: var(--font-display); font-size: 34px; font-weight: 400; }
 .page-h p { margin: 4px 0 16px; font-size: 13px; color: var(--ink-muted); }
-.create { padding: 6px 14px; font: inherit; font-weight: 600; color: var(--on-brand); background: var(--brand); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; justify-self: start; }
+.create { flex: none; padding: 6px 14px; white-space: nowrap; font: inherit; font-weight: 600; color: var(--on-brand); background: var(--brand); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; justify-self: start; }
 .panel { margin-bottom: 24px; }
-.sub-h { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.sub-h { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 8px; }
 .sub-h h2 { margin: 0; font-size: 16px; }
 .sub-h p { flex: 1; margin: 0; font-size: 13px; color: var(--ink-muted); }
 .card h2 { margin: 0 0 4px; font-size: 16px; }
@@ -205,5 +205,9 @@ async function saveRules() {
 .link:disabled { cursor: default; opacity: 0.5; }
 .state { margin: 0 0 16px; font-size: 13px; color: var(--ink-muted); }
 .state.error { display: flex; align-items: center; gap: 12px; padding: 10px 14px; color: var(--ink); background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }
-.retry { padding: 2px 10px; font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
+.retry { flex: none; padding: 2px 10px; white-space: nowrap; font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
+@media (max-width: 900px) {
+  .sub-h { align-items: flex-start; }
+  .sub-h p { flex-basis: 100%; order: 3; }
+}
 </style>

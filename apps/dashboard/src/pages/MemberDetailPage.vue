@@ -13,7 +13,7 @@ import DeskCheckInModal from '../components/DeskCheckInModal.vue';
 import DeskOrderModal from '../components/DeskOrderModal.vue';
 import RefundModal from '../components/RefundModal.vue';
 import { canDo } from '../permissions';
-import { session } from '../session';
+import { session, storeLabel } from '../session';
 import { createLatest } from './dashboard';
 
 const route = useRoute();
@@ -42,7 +42,7 @@ async function load() {
 watch(() => [session.state.staff?.id, id.value], () => session.state.staff && id.value && load(), { immediate: true });
 
 const today = toDateKey(new Date());
-const storeName = (sid: string | null) => (sid ? (session.state.stores.find(s => s.id === sid)?.name ?? sid) : '—');
+const storeName = (sid: string | null) => (sid ? storeLabel(sid) : '—');
 
 // 卡的文字和状态都来自 @climb/core，跟小程序卡包一样
 const cards = computed(() =>

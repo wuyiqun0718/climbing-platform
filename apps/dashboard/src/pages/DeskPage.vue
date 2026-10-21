@@ -102,8 +102,8 @@ const unbound = computed(() => display.value.kind === 'unbound' || (state.value.
           <h1>{{ display.qr.storeName }}</h1>
           <p class="hint">微信扫码入场</p>
           <img v-if="display.qr.imageUrl" class="qr" :src="display.qr.imageUrl" alt="入场二维码" />
-          <div v-else class="qr placeholder">
-            <span>{{ display.qr.kind === 'link' ? '二维码内容' : '小程序码 scene' }}</span>
+          <div v-else class="placeholder">
+            <span>接口还没返回二维码图片，下面是{{ display.qr.kind === 'link' ? '码的内容（链接）' : '小程序码的 scene' }}</span>
             <code>{{ display.qr.content }}</code>
           </div>
           <p class="count">{{ display.secondsLeft }} 秒后换码</p>
@@ -135,8 +135,8 @@ const unbound = computed(() => display.value.kind === 'unbound' || (state.value.
 
 <style scoped>
 .desk { display: grid; min-height: 100vh; place-items: center; padding: 24px; background: var(--page); }
-.layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 32px; align-items: center; width: 100%; }
-.feed { align-self: stretch; padding: 16px; overflow-y: auto; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 32px; align-items: start; width: 100%; }
+.feed { align-self: start; max-height: calc(100vh - 48px); padding: 16px; overflow-y: auto; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
 .feed h2 { margin: 0 0 12px; font-size: 18px; }
 .feed ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .feed li { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: var(--radius-sm); }
@@ -150,7 +150,8 @@ const unbound = computed(() => display.value.kind === 'unbound' || (state.value.
 h1 { margin: 0; font-family: var(--font-display); font-size: 40px; font-weight: 400; }
 .hint { margin: 0; font-size: 18px; color: var(--ink-muted); }
 .qr { width: min(70vmin, 520px); height: min(70vmin, 520px); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
-.placeholder { display: grid; place-content: center; gap: 8px; padding: 16px; font-size: 14px; word-break: break-all; }
+.placeholder { display: grid; gap: 8px; width: 100%; max-width: 320px; padding: 16px; font-size: 14px; text-align: left; overflow-wrap: anywhere; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
+.placeholder span { color: var(--ink-muted); }
 .count { margin: 0; font-family: var(--font-number); font-size: 28px; }
 .offline { max-width: 520px; padding: 32px; background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
 .row { display: flex; gap: 8px; }

@@ -12,7 +12,7 @@ import { api } from '../api';
 import ClassRoster from './ClassRoster.vue';
 import { createLatest } from '../pages/dashboard';
 import { canDo } from '../permissions';
-import { session } from '../session';
+import { session, storeLabel } from '../session';
 
 const props = defineProps<{ types: ClassType[]; coaches: { id: string; name: string }[] }>();
 
@@ -25,7 +25,7 @@ const latest = createLatest();
 
 const canSchedule = computed(() => !!session.state.staff && canDo(session.state.staff.role, 'class.schedule'));
 const storeId = computed(() => session.state.storeId);
-const storeNameOf = (id: string) => session.state.stores.find(s => s.id === id)?.name ?? id;
+const storeNameOf = storeLabel;
 const store = () => (storeId.value ? { store: storeId.value } : {});
 
 async function load() {
@@ -192,15 +192,15 @@ async function copyLastWeek() {
 </template>
 
 <style scoped>
-.bar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 13.5px; }
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-bottom: 12px; font-size: 13.5px; }
 .grow { flex: 1; }
 .form { display: grid; gap: 14px; }
 .form input, .form select { font: inherit; }
 .off { font-size: 12px; color: var(--ink-muted); }
 .link { margin-right: 10px; padding: 0; font: inherit; font-size: 13px; color: var(--brand); background: none; border: 0; cursor: pointer; text-decoration: underline; }
-.btn { height: 32px; padding: 0 12px; font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); cursor: pointer; }
+.btn { flex: none; min-height: 32px; padding: 0 12px; font: inherit; font-size: 13px; font-weight: 600; white-space: nowrap; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
 .btn:disabled { cursor: default; opacity: 0.5; }
-.btn.primary { color: var(--on-brand); background: var(--brand); border-color: var(--brand); }
+.btn.primary { color: var(--on-brand); background: var(--brand); }
 .panel { margin-bottom: 24px; }
 .state.error { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; padding: 10px 14px; font-size: 13px; background: var(--accent-soft); border-radius: var(--radius-md); }
 </style>

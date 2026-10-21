@@ -29,6 +29,8 @@
 
 ### 1. 窄屏顶栏把后面的导航和「退出」滑出屏幕
 
+> **已修**：`after/owner-narrow-768-dashboard.png`、`after/owner-narrow-390-dashboard.png`、`after/owner-narrow-768-members.png`、`after/owner-narrow-390-members.png`。只有 `nav` 横滑，「退出」768 宽在 708–756、390 宽在 330–378。600px 以下导航另起一行占满宽度，不然 390 宽只看得见一项。
+
 - 页面：所有已登录页。路由 `/`、`/members` 等。断点是 `App.vue` 的 `@media (max-width: 900px)`。
 - 截图：`before/owner-narrow-768-dashboard.png`、`before/owner-narrow-390-dashboard.png`、`before/owner-narrow-768-members.png`。对照宽屏 `before/owner-dashboard.png`。
 - 现象：文档没有被撑出横向滚动（`documentElement.scrollWidth` 仍等于视口），但侧栏自己在横滑。768 宽时「员工」右边缘在 773px，「操作日志」777–858，「设置」862–914，「馆长」932–961，「退出」969–1017，全部在视口外面。390 宽时看得见的只有标志、数据看板、财务、会员（会员右边缘 376）。「退出」要在黑条上横滑才找得到，滚动条在 macOS 上几乎看不见。
@@ -41,6 +43,8 @@
   - 黑底上的 `#fff`、`#2b2b2b`、`#d6d6d0`、`#a3a39b` 见问题 15，这一条先把退出留在屏幕里。
 
 ### 2. 窄屏页头按钮被压成竖排，字被裁切
+
+> **已修**：`after/owner-narrow-390-members.png`、`after/owner-narrow-390-courses.png`（另有 `after/owner-narrow-768-courses.png`、`after/owner-members.png`、`after/owner-courses.png`）。390 宽「新建会员」96×38，「上一周」67×32，「复制上周课表」106×32。`.bar .btn` 改成 2px 黑框。
 
 - 页面：会员 `/members`、课程 `/courses`，同样写法的还有财务筛选旁的按钮、入场页工具条、卡种页「新建卡种」。
 - 截图：`before/owner-narrow-390-members.png`、`before/owner-narrow-390-courses.png`。宽屏对照 `before/owner-members.png`、`before/owner-courses.png`。
@@ -60,6 +64,8 @@
 
 ### 3. 团课名单弹窗比表格窄，「签到」在视口里看不到
 
+> **已修**：`after/owner-courses-roster.png`、`after/owner-courses-roster-booked.png`（10.24 已约的行，三个按钮都能看到）。弹窗 720px，表 672px，没有横滑。状态列用单元格插槽分两行（状态 / 时刻和操作人），没有改 `DataTable`。
+
 - 页面：`/courses`，点课表行里的「名单」。
 - 截图：`before/owner-courses-roster.png`。
 - 现象：弹窗实测宽 **440px**，里面的表格宽 **542px**。状态列是「到了（2026.10.20 …」这种长句子，`DataTable` 单元格 `white-space: nowrap`，把「签到 / 缺席 / 帮他取消」推到右边。弹窗默认不宽，这些按钮要在弹窗里横滑才出现。截图里只能看到会员、手机号、课包剩余、被裁开的状态。
@@ -74,6 +80,8 @@
 
 ### 4. 店长和前台看到的门店名是 `huanqiu`
 
+> **已修（临时做法）**：`after/manager-member-detail.png`、`after/desk-member-detail.png`。页面不再 `?? id`，统一用 `session.ts` 的 `storeLabel()`，查不到就显示「其他门店」。接口带 `storeName` 要改 `packages/api`，这一轮只改了 `apps/dashboard` 的界面，所以没做。
+
 - 页面：会员详情 `/members/:id`。店长、前台各看一条归属不是滨港的会员（这次是李越，`/members` 列表第一行）。
 - 截图：`before/manager-member-detail.png`、`before/desk-member-detail.png`。老板看同一类会员是中文名：`before/owner-member-detail.png`（林舟，归属「环球港店」）。
 - 现象：归属门店、首次到店、最近入场的门店列都显示英文 id `huanqiu`，不是「环球港店」。
@@ -87,6 +95,8 @@
 
 ### 5. 前台入场码是一块空白，URL 在方框中间被折断
 
+> **已修**：`after/owner-desk-bound.png`。占位块最宽 320px，用 `overflow-wrap: anywhere`，加了说明。「刚入场」跟内容一样高。
+
 - 页面：`/desk`。店长或老板登录后选滨港店，点「绑定这家店」。
 - 截图：`before/owner-desk-bound.png`。未登录是 `before/desk-anon.png`，前台登录后不能绑是 `before/desk-desk-bind-denied.png`（这两张文案正常，不用改交互）。
 - 现象：绑定成功后主区域是一个约 520px 的白框（`.qr` 的 `width/height: min(70vmin, 520px)`）。没有二维码图片时，框里只有两行小字：「二维码内容」和一长串 `https://qr.example.com/...`，URL 在单词中间断开。右边「刚入场」被拉得和二维码一样高，今天没人时就是一大块空白。
@@ -97,6 +107,8 @@
   - 真要画二维码再加库（会动 lockfile）。这一轮先把占位做小、做可读。`imageUrl` 有值时的 `<img class="qr">` 保持不变。
 
 ### 6. 设置页「不限」在 1440 宽下折成两行
+
+> **已修**：`after/owner-settings.png`。「不限」53×19，数字框 120px。卡片和保存按钮改成 2px 黑框。另外勾选框也吃到了 Field 的 `width: 100%`，一起压掉了。
 
 - 页面：`/settings`（只有老板）。
 - 截图：`before/owner-settings.png`。

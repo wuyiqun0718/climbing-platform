@@ -41,7 +41,7 @@ const columns: Column<RosterRow>[] = [
   { key: 'memberName', label: '会员', format: r => r.memberName || '（没填名字）' },
   { key: 'phoneMasked', label: '手机号', num: true },
   { key: 'cardRemaining', label: '课包剩余', num: true, format: r => (r.cardRemaining === null ? '—' : `${r.cardRemaining} 次`) },
-  { key: 'status', label: '状态', format: r => `${STATUS_TEXT[r.status]}${r.attendedAt ? `（${formatDotTime(r.attendedAt)} ${r.attendedByName ?? ''}）` : ''}` },
+  { key: 'status', label: '状态', format: r => STATUS_TEXT[r.status] },
   { key: 'actions', label: '' },
 ];
 const waitColumns: Column<RosterRow & { position: number }>[] = [{ key: 'position', label: '排第几', num: true }, ...(columns.slice(0, 3) as Column<RosterRow & { position: number }>[])];
@@ -74,11 +74,14 @@ const title = computed(() => (data.value ? `${data.value.session.name} ${formatD
 </script>
 
 <template>
-  <Modal :open="open" :title="title" @update:open="v => emit('update:open', v)">
+  <Modal :open="open" :title="title" width="720px" @update:open="v => emit('update:open', v)">
     <p v-if="error" class="err" role="alert">{{ error }}</p>
     <template v-if="data">
       <p class="note">已约 {{ data.session.booked }} / {{ data.session.capacity }}，候补 {{ data.session.waitlisted }}。开课后超过迟到宽限才到的按缺席算，次数不退。</p>
       <DataTable :columns="columns" :rows="data.booked" row-key="id" :loading="loading" empty="还没人约">
+        <template #cell-status="{ row }">
+          <span class="status">{{ STATUS_TEXT[row.status] }}<small v-if="row.attendedAt">{{ formatDotTime(row.attendedAt) }} {{ row.attendedByName ?? '' }}</small></span>
+        </template>
         <template #cell-actions="{ row }">
           <span v-if="data.session.status !== 'cancelled'" class="actions">
             <template v-if="can('class.attend')">
@@ -102,7 +105,11 @@ const title = computed(() => (data.value ? `${data.value.session.name} ${formatD
       <DataTable :columns="waitColumns" :rows="data.waitlist" row-key="id" empty="没有候补" />
       <template v-if="data.closed.length">
         <h3>取消了的</h3>
-        <DataTable :columns="columns.slice(0, 4)" :rows="data.closed" row-key="id" />
+        <DataTable :columns="columns.slice(0, 4)" :rows="data.closed" row-key="id">
+          <template #cell-status="{ row }">
+            <span class="status">{{ STATUS_TEXT[row.status] }}<small v-if="row.attendedAt">{{ formatDotTime(row.attendedAt) }} {{ row.attendedByName ?? '' }}</small></span>
+          </template>
+        </DataTable>
       </template>
     </template>
   </Modal>
@@ -111,7 +118,9 @@ const title = computed(() => (data.value ? `${data.value.session.name} ${formatD
 <style scoped>
 .note { margin: 0 0 12px; font-size: 13px; color: var(--ink-muted); }
 h3 { margin: 16px 0 8px; font-size: 14px; }
-.actions { display: inline-flex; gap: 10px; }
+.status { display: grid; white-space: normal; }
+.status small { font-size: 12px; color: var(--ink-muted); }
+.actions { display: inline-flex; gap: 10px; white-space: nowrap; }
 .link { padding: 0; font: inherit; font-size: 13px; color: var(--brand); background: none; border: 0; cursor: pointer; text-decoration: underline; }
 .link:disabled { cursor: default; opacity: 0.4; }
 .err { margin: 0 0 12px; padding: 9px 12px; font-size: 13px; background: var(--accent-soft); border-radius: var(--radius-sm); }

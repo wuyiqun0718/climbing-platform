@@ -109,14 +109,16 @@ async function submit() {
 
 <style scoped>
 .h { margin: 0; font-family: var(--font-display); font-size: 34px; font-weight: 400; }
-.card { max-width: 520px; margin-top: 20px; padding: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.card { max-width: 520px; margin-top: 20px; padding: 20px; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
 .h2 { margin: 0; font-size: 16px; }
 .sub { margin: 6px 0 16px; font-size: 13px; color: var(--ink-muted); }
 .muted { font-size: 13px; color: var(--ink-muted); }
 .form { display: grid; gap: 14px; }
 .row { display: flex; align-items: center; gap: 12px; }
-.row input[type='number'] { width: 120px; }
-.check { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; }
+/* Field 给插槽里的 input 都设了 width: 100%，这里多一个类压过去，不然「不限」会被挤成两行 */
+.form .row input[type='number'] { width: 120px; max-width: 120px; flex: 0 0 120px; }
+.form .check input[type='checkbox'] { width: auto; padding: 0; }
+.check { display: inline-flex; flex: none; align-items: center; gap: 6px; font-size: 13.5px; white-space: nowrap; }
 .err { margin: 0; padding: 9px 12px; font-size: 13px; background: var(--accent-soft); border-radius: var(--radius-sm); }
 .actions { display: flex; align-items: center; gap: 12px; }
 .btn {
@@ -132,5 +134,5 @@ async function submit() {
   cursor: pointer;
 }
 .btn:disabled { cursor: default; opacity: 0.5; }
-.btn.primary { color: var(--on-brand); background: var(--brand); border-color: var(--brand); }
+.btn.primary { color: var(--on-brand); background: var(--brand); border: var(--stroke) solid var(--ink); }
 </style>

@@ -131,9 +131,9 @@ const emptyText = () => (qFromRoute() ? `没找到「${qFromRoute()}」，换个
 </template>
 
 <style scoped>
-.page-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.actions { display: flex; gap: 8px; }
-.create { padding: 6px 14px; font: inherit; font-weight: 600; color: var(--on-brand); background: var(--brand); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
+.page-h { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0 16px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.create { flex: none; padding: 6px 14px; font: inherit; font-weight: 600; white-space: nowrap; color: var(--on-brand); background: var(--brand); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
 .page-h h1 { margin: 0; font-family: var(--font-display); font-size: 34px; font-weight: 400; }
 .page-h p { margin: 4px 0 16px; font-size: 13px; color: var(--ink-muted); }
 .search { display: flex; gap: 8px; max-width: 420px; margin-bottom: 16px; }

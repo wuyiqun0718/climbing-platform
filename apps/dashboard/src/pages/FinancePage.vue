@@ -6,7 +6,7 @@ import { formatDot, formatYuan, toDateKey } from '@climb/utils';
 import { computed, ref, watch } from 'vue';
 import { api } from '../api';
 import ExportButton from '../components/ExportButton.vue';
-import { session } from '../session';
+import { session, storeLabel } from '../session';
 import { createLatest, pct } from './dashboard';
 import { RANGE_PRESETS, presetRange, type RangePreset } from './finance';
 
@@ -24,7 +24,7 @@ const rangeError = computed(() => financeRangeError(from.value, to.value));
 const storeName = computed(() =>
   session.state.storeId === null ? '全部门店' : (session.state.stores.find(s => s.id === session.state.storeId)?.name ?? ''),
 );
-const storeNameOf = (id: string) => session.state.stores.find(s => s.id === id)?.name ?? id;
+const storeNameOf = storeLabel;
 
 async function load() {
   if (rangeError.value) return;

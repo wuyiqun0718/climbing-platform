@@ -12,7 +12,7 @@ import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { api } from '../api';
 import { createLatest } from '../pages/dashboard';
-import { session } from '../session';
+import { session, storeLabel } from '../session';
 
 const kind = ref<Share['kind'] | ''>('');
 const data = ref<ShareList | null>(null);
@@ -21,7 +21,7 @@ const error = ref('');
 const latest = createLatest();
 const router = useRouter();
 
-const storeNameOf = (id: string) => session.state.stores.find(s => s.id === id)?.name ?? id;
+const storeNameOf = storeLabel;
 
 async function load() {
   const storeId = session.state.storeId;

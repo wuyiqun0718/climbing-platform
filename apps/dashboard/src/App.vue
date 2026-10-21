@@ -79,11 +79,17 @@ nav { display: grid; gap: 4px; }
 .store select { padding: 7px 10px; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); }
 @media (max-width: 900px) {
   .shell { grid-template-columns: 1fr; }
-  .side { position: static; height: auto; flex-direction: row; align-items: center; overflow-x: auto; }
-  .brand { border: 0; padding: 0; }
-  nav { display: flex; }
+  .side { position: static; height: auto; min-width: 0; flex-direction: row; align-items: center; gap: 12px; }
+  .brand { flex: none; border: 0; padding: 0; }
+  nav { display: flex; flex: 1 1 auto; min-width: 0; overflow-x: auto; }
   .nav-item { white-space: nowrap; }
-  .me { margin: 0 0 0 auto; padding: 0; border: 0; white-space: nowrap; }
+  .me { flex: none; margin: 0 0 0 8px; padding: 0; border: 0; white-space: nowrap; }
   .main { padding: 18px 16px 48px; }
+}
+/* 手机宽度：标志和退出一行，导航单独一行横滑 */
+@media (max-width: 600px) {
+  .side { flex-wrap: wrap; row-gap: 10px; padding-bottom: 10px; }
+  nav { order: 1; flex-basis: 100%; }
+  .me { margin-left: auto; }
 }
 </style>
