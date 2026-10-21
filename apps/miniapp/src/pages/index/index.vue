@@ -1,22 +1,19 @@
 <script setup lang="ts">
-import { entryOptions, type Card, type EntryOption } from '@climb/core';
+import { entryOptions, type EntryOption } from '@climb/core';
 // 小程序组件要按 .vue 路径引入，uni-app 才会生成 usingComponents
 import MemberCard from '@climb/ui-mp/MemberCard.vue';
-import { addDays, daysBetween, formatDot, toDateKey } from '@climb/utils';
+import { daysBetween, formatDot, toDateKey } from '@climb/utils';
 import { onLoad } from '@dcloudio/uni-app';
 import gym from '@gym';
+import { computed } from 'vue';
 import DevPanel from '../../mock/dev-panel.vue';
+import { member } from '../../stores';
 
 const today = toDateKey(new Date());
 
-// 示例数据：后端接好之前，先用本地数据把页面和共享逻辑跑通
-const cards: Card[] = [
-  { id: 'c1', kind: 'count', memberId: 'me', productId: 'c10', name: '10 次卡', total: 10, remaining: 6, expiresOn: addDays(today, 118) },
-  { id: 'p1', kind: 'period', memberId: 'me', productId: 'y1', name: '年卡', startsOn: addDays(today, -209), expiresOn: addDays(today, 155) },
-];
-
+// 卡包来自会员 store，入场、领取后自动跟着变；首页按原型的完整实现在任务 9
 // 入场规则来自 @climb/core，和后台、后端用的是同一份
-const options = entryOptions(cards, { today, rules: gym.rules, hasCheckedIn: () => false });
+const options = computed(() => entryOptions([...member.state.cards], { today, rules: gym.rules, hasCheckedIn: () => false }));
 const logo = `/static/gym/${gym.logo}`;
 
 function cardView(o: EntryOption) {
@@ -33,6 +30,7 @@ function cardView(o: EntryOption) {
 // 导航栏颜色在 pages.json 里（按主题生成），这里只设标题
 onLoad(() => {
   uni.setNavigationBarTitle({ title: gym.shortName });
+  member.ensureLoaded().catch(() => {});
 });
 </script>
 

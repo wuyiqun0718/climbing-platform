@@ -4,9 +4,10 @@
 import type { Card, Share } from '@climb/core';
 import { computed, ref } from 'vue';
 import { api, mock, run } from '../api';
+import { member } from '../stores';
 
 const open = ref(false);
-const cards = ref<Card[]>([]);
+const cards = computed(() => member.state.cards);
 const current = ref(mock?.currentMember() ?? '');
 
 const members = computed(() => mock?.db.members ?? []);
@@ -26,14 +27,14 @@ function shareText(s: Share) {
 }
 
 async function refresh() {
-  cards.value = await api.me.cards();
+  await member.ensureLoaded().catch(() => {});
   claimable.value = (mock?.db.shares ?? []).filter(s => s.status === 'pending' && s.fromMemberId !== current.value);
 }
 
-/** 出错的中文提示由 run 统一弹 */
+/** 出错的中文提示由 run 统一弹；成功后卡包经 store 刷新，打开的页面跟着变 */
 async function act(task: () => Promise<unknown>, done: string) {
   try {
-    await run(task);
+    await member.changeCards(() => run(task));
     uni.showToast({ title: done, icon: 'none' });
   } catch {
     // run 已经提示过了
@@ -57,6 +58,7 @@ function switchTo(id: string) {
   if (!mock || id === current.value) return;
   mock.switchMember(id);
   current.value = id;
+  member.reset().catch(() => {});
   reloadPage();
 }
 
@@ -67,6 +69,7 @@ function reset() {
     success: r => {
       if (!r.confirm || !mock) return;
       mock.reset();
+      member.reset().catch(() => {});
       reloadPage();
     },
   });

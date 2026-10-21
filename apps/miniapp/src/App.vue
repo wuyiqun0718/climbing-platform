@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { onLaunch } from '@dcloudio/uni-app';
+import { run } from './api';
+import { member } from './stores';
 // #ifdef MP-WEIXIN
 import { FONT_BASE, MP_FONTS } from './config/fonts';
 // #endif
 
 onLaunch(() => {
-  // 登录、拉取会员信息等启动逻辑放这里
+  // 登录（任务 7）做好后先登录再拉。失败只提示，页面 onLoad 里 ensureLoaded 会再试
+  run(() => member.load(), { loading: false }).catch(() => {});
 
   // #ifdef MP-WEIXIN
   // 标题和数字字体；加载失败就用系统字体，不影响使用
