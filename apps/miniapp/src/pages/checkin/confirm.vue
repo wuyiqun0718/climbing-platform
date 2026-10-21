@@ -1,43 +1,129 @@
 <script setup lang="ts">
-import type { CheckInPreview } from '@climb/api';
+import { ApiError, type CheckInResult, type CreateOrderResult, type EntryQrBody } from '@climb/api';
+import { entryBlockedText, entrySheet, pickEntryCard, POLICY_STATUS_TEXT, type EntryOption, type EntrySheet } from '@climb/core';
+import { formatDot, formatYuan } from '@climb/utils';
 import { onLoad } from '@dcloudio/uni-app';
 import gym from '@gym';
-import { ref } from 'vue';
-import { api, run } from '../../api';
-import { errorMessage } from '../../lib/errors';
+import { computed, ref } from 'vue';
+import { api, pay, run } from '../../api';
+import { errorCode, errorMessage } from '../../lib/errors';
 import { requireLogin } from '../../lib/use-login';
 import { member } from '../../stores';
 import { CHECKIN_PAGE, fromPageQuery, NOT_OURS_MESSAGE } from './scan';
 import { startScan } from './start-scan';
 
 // 签到页：微信扫前台的码直接打开，或者小程序里扫码后跳过来。
-// 这里先解析码、确认登录、预览（验码，不作废）；选卡、保险、确认入场在任务 19。
-const status = ref<'loading' | 'bad' | 'ready'>('loading');
+// 解析码、确认登录、预览（验码，不作废）→ 选卡（没卡就买单次票）→ 确认入场。
+// 选哪张、能不能用、保险怎么标都按 @climb/core 的 entrySheet，这里只显示。告知书在任务 20，成功页在任务 22。
+const status = ref<'loading' | 'bad' | 'ready' | 'done'>('loading');
 const message = ref('');
-const preview = ref<CheckInPreview | null>(null);
+const qr = ref<EntryQrBody | null>(null);
+const storeName = ref('');
+const reentry = ref(false);
+const sheet = ref<EntrySheet | null>(null);
+const selected = ref<string | null>(null);
+const submitting = ref(false);
+const result = ref<{ checkIn: CheckInResult; cardName: string } | null>(null);
+/** 进页面时生成一次，重试、连点都带同一个，后端只入场一次 */
+const idempotencyKey = `ci-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+/** 买单次票时取消没付的订单，再点接着付 */
+let pendingOrder: CreateOrderResult | null = null;
+
+const bad = (text: string) => {
+  status.value = 'bad';
+  message.value = text;
+};
 
 onLoad(async q => {
   const r = fromPageQuery(gym.entryQrLink, (q ?? {}) as Record<string, string | undefined>);
-  if (!r.ok) {
-    status.value = 'bad';
-    message.value = r.reason === 'none' ? '没扫到码，对准前台平板上的码扫一下' : NOT_OURS_MESSAGE;
-    return;
-  }
+  if (!r.ok) return bad(r.reason === 'none' ? '没扫到码，对准前台平板上的码扫一下' : NOT_OURS_MESSAGE);
   // 没登录：登录页替换掉这一页，登录完带着解析好的码回来
   if (!(await requireLogin({ route: CHECKIN_PAGE, query: { s: r.qr.storeId, t: r.qr.qrToken } }))) return;
   member.ensureLoaded().catch(() => {});
+  qr.value = r.qr;
   try {
-    preview.value = await run(() => api.checkIns.preview(r.qr), { silent: true });
+    const [preview, products] = await run(() => Promise.all([api.checkIns.preview(r.qr), api.products.list()]), { silent: true, loading: '加载中' });
+    storeName.value = preview.store.name;
+    reentry.value = preview.reentry;
+    sheet.value = entrySheet({ options: preview.options, products, todayPolicy: preview.todayPolicy });
+    selected.value = sheet.value.selected;
     status.value = 'ready';
-    uni.setNavigationBarTitle({ title: preview.value.store.name });
+    uni.setNavigationBarTitle({ title: preview.store.name });
   } catch (e) {
     // 码过期、用过、不是本馆的：后端的原因翻成中文，让会员重新扫
-    status.value = 'bad';
-    message.value = errorMessage(e);
+    bad(errorMessage(e));
   }
 });
 
 const rescan = () => startScan('redirectTo');
+const pick = (cardId: string) => { if (sheet.value) selected.value = pickEntryCard({ options: sheet.value.options, selected: selected.value }, cardId); };
+
+function optionSub(o: EntryOption): string {
+  const blocked = entryBlockedText(o);
+  if (blocked) return `${blocked}，等 TA 入场后再扫一次就能用`;
+  const c = o.card;
+  if (c.kind === 'period') return `${formatDot(c.expiresOn)} 到期，不扣次`;
+  if (c.kind === 'referral') return `免费入场一次，${formatDot(c.expiresOn)} 前有效`;
+  return o.deducts ? `扣 ${o.deducts} 次，还剩 ${c.remaining} 次` : `今天再入场不扣次，还剩 ${c.remaining} 次`;
+}
+
+const single = computed(() => sheet.value?.singleTicket ?? null);
+const confirmText = computed(() => (sheet.value?.mustBuy && single.value ? `微信支付 ${formatYuan(single.value.priceCents)} 并入场` : '确认入场'));
+const canSubmit = computed(() => !!sheet.value && (sheet.value.mustBuy ? !!single.value : !!selected.value));
+
+const modal = (title: string, content: string) => uni.showModal({ title, content, showCancel: false, confirmText: '知道了' });
+
+/** 用某张卡入场。码在买票时过期了就让会员重新扫，卡已经在卡包里了 */
+async function enter(cardId: string, cardName: string, bought: boolean) {
+  try {
+    const checkIn = await run(() => api.checkIns.create({ ...qr.value!, cardId, idempotencyKey }), { loading: '入场中', silent: true });
+    result.value = { checkIn, cardName };
+    status.value = 'done';
+  } catch (e) {
+    const code = errorCode(e);
+    if (code === 'qr-expired' || code === 'qr-used') {
+      bad(bought ? `${cardName}已经买好，放进卡包了。${errorMessage(e)}` : errorMessage(e));
+    } else {
+      uni.showToast({ title: errorMessage(e), icon: 'none' });
+    }
+  } finally {
+    member.refreshCards().catch(() => {});
+  }
+}
+
+/** 没卡：买单次票，付完用新发的卡入场 */
+async function buyAndEnter() {
+  const p = single.value!;
+  const order = await run(() => pay.order(p.id, pendingOrder), { loading: '下单中' }).catch(() => null);
+  if (!order) return;
+  pendingOrder = order;
+  const outcome = await pay.pay(order).catch(e => {
+    uni.showToast({ title: e instanceof ApiError ? errorMessage(e) : '支付没成功，再试一次', icon: 'none' });
+    return null;
+  });
+  if (!outcome) return;
+  if (outcome.status === 'cancelled') return modal('还没付款', '订单还在，再点一次接着付，或者去订单里付。');
+  pendingOrder = null;
+  member.refreshCards().catch(() => {});
+  if (outcome.status === 'closed') return modal('订单已关闭', '超过付款时间了，再点一次重新下单。扣了款的话找前台退。');
+  if (outcome.status === 'waiting' || !outcome.order.cardId) return modal('付款结果还没回来', '扣了款的话票会自动到账，稍等一会儿再扫一次码；一直没到找前台。');
+  await enter(outcome.order.cardId, p.name, true);
+}
+
+async function submit() {
+  const s = sheet.value;
+  if (!s || !canSubmit.value || submitting.value) return;
+  submitting.value = true;
+  try {
+    if (s.mustBuy) await buyAndEnter();
+    else await enter(selected.value!, s.options.find(o => o.card.id === selected.value)!.card.name, false);
+  } finally {
+    submitting.value = false;
+  }
+}
+
+const goHome = () => uni.switchTab({ url: '/pages/index/index' });
+const goShop = () => uni.navigateTo({ url: '/pages/shop/index' });
 </script>
 
 <template>
@@ -48,20 +134,68 @@ const rescan = () => startScan('redirectTo');
       <button class="btn primary" @tap="rescan">重新扫码</button>
     </view>
 
-    <view v-else-if="status === 'ready' && preview" class="panel">
-      <text class="h">{{ preview.store.name }}</text>
-      <text v-if="preview.reentry" class="p">今天已经入过场了，这次不扣次</text>
-      <text class="p">能用的卡 {{ preview.options.filter(o => o.usable).length }} 张</text>
-      <!-- 选卡、当日保险、确认入场：任务 19 -->
+    <template v-else-if="status === 'ready' && sheet">
+      <text class="h">{{ storeName }}</text>
+      <text v-if="reentry" class="p">今天已经入过场了，这次不扣次</text>
+
+      <text class="label">用哪张卡</text>
+      <view v-if="sheet.mustBuy" class="panel">
+        <text class="p first">{{ sheet.waitingInviter ? '老带新体验券要在邀请人到馆的当天用。可以等 TA 入场后再扫，或者先买单次票进。' : '还没有能用的入场卡，买一张单次票就能进。' }}</text>
+      </view>
+      <view v-for="o in sheet.options" :key="o.card.id" class="opt" :class="{ on: o.card.id === selected, off: !o.usable }" @tap="pick(o.card.id)">
+        <view class="radio" />
+        <view class="opt-t"><text class="b">{{ o.card.name }}</text><text class="small">{{ optionSub(o) }}</text></view>
+      </view>
+      <view v-if="sheet.mustBuy && single" class="opt on">
+        <view class="radio" />
+        <view class="opt-t"><text class="b">{{ single.name }} {{ formatYuan(single.priceCents) }}</text><text class="small">今天有效，含当日保险</text></view>
+      </view>
+      <view v-if="sheet.mustBuy && !single" class="panel">
+        <text class="p first">现在没在卖单次票，去看看其他卡，或者找前台。</text>
+        <button class="btn" @tap="goShop">看看其他卡</button>
+      </view>
+
+      <text class="label">当日保险</text>
+      <view class="panel ins">
+        <text class="b">入场当日保险</text>
+        <text class="tag">{{ sheet.insurance.tag }}</text>
+      </view>
+      <text class="fine">{{ sheet.insurance.note }}</text>
+
+      <button class="btn primary block" :disabled="!canSubmit || submitting" @tap="submit">{{ confirmText }}</button>
+      <button v-if="sheet.mustBuy && sheet.waitingInviter" class="btn block" @tap="goHome">我等等再扫</button>
+    </template>
+
+    <!-- 入场结果先在这里简单显示，成功页在任务 22 -->
+    <view v-else-if="status === 'done' && result" class="panel">
+      <text class="h">{{ result.checkIn.reentry ? '今天已入场，不再扣次' : '入场成功' }}</text>
+      <text class="p">{{ result.checkIn.storeName }} · {{ result.cardName }}</text>
+      <text class="p">{{ result.checkIn.deducted ? `扣了 ${result.checkIn.deducted} 次` : '没扣次' }}</text>
+      <text class="p">当日保险：{{ POLICY_STATUS_TEXT[result.checkIn.policy.status] }}</text>
+      <button class="btn primary" @tap="goHome">好的</button>
     </view>
   </view>
 </template>
 
 <style scoped>
-.page { padding: 16px; }
-.panel { display: flex; flex-direction: column; padding: 16px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); background: var(--surface); }
-.h { font-family: var(--font-display); font-size: 24px; }
-.p { margin-top: 6px; font-size: 14px; color: var(--ink-muted); }
+.page { padding: 16px 16px 40px; }
+.panel { display: flex; flex-direction: column; margin-bottom: 10px; padding: 16px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); background: var(--surface); }
+.h { display: block; font-family: var(--font-display); font-size: 24px; }
+.p { display: block; margin-top: 6px; font-size: 14px; color: var(--ink-muted); }
+.p.first { margin-top: 0; }
+.label { display: block; margin: 18px 0 8px; font-size: 13px; font-weight: 600; }
+.opt { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; padding: 12px 14px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); background: var(--surface); }
+.opt.on { background: var(--brand); }
+.opt.off { opacity: 0.5; }
+.radio { width: 16px; height: 16px; border: var(--stroke) solid var(--ink); border-radius: 50%; background: var(--surface); }
+.opt.on .radio { background: var(--ink); }
+.opt-t { display: flex; flex-direction: column; gap: 2px; }
+.b { font-size: 15px; font-weight: 600; }
+.small { font-size: 12px; color: var(--ink-muted); }
+.ins { flex-direction: row; align-items: center; justify-content: space-between; }
+.tag { padding: 2px 8px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; }
+.fine { display: block; margin-bottom: 16px; font-size: 12px; line-height: 1.6; color: var(--ink-muted); }
 .btn { margin: 14px 0 0; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font-size: 15px; font-weight: 600; }
+.btn.block { width: 100%; margin-top: 10px; }
 .btn.primary { background: var(--brand); }
 </style>

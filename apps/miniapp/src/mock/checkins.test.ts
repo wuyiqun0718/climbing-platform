@@ -1,5 +1,5 @@
 import { ApiError, createApi } from '@climb/api';
-import { defaultRules, ENTRY_QR_TTL_SECONDS } from '@climb/core';
+import { defaultRules, ENTRY_QR_TTL_SECONDS, entrySheet } from '@climb/core';
 import { describe, expect, it } from 'vitest';
 import { createMock, MOCK_MEMBERS, mockToken } from './index';
 
@@ -87,5 +87,17 @@ describe('mock 扫码入场', () => {
     expect(await codeOf(xiaolu.checkIns.create({ ...qr, cardId: card.id, idempotencyKey: 'k1' }))).toBe('inviter-not-checked-in');
     expect(mock.db.entryQrs.find(q => q.token === qr.qrToken)?.usedAt).toBeUndefined();
     expect(mock.db.policies.filter(p => p.on === TODAY)).toEqual([]);
+  });
+
+  it('没卡的新客：确认页只能买单次票；付完用新发的票、同一个码入场，扣 1 次', async () => {
+    const { mock, xiaolu } = setup();
+    const qr = mock.issueEntryQr('huiju');
+    const preview = await xiaolu.checkIns.preview(qr);
+    const sheet = entrySheet({ options: preview.options, products: await xiaolu.products.list(), todayPolicy: preview.todayPolicy });
+    expect(sheet).toMatchObject({ mustBuy: true, selected: null, singleTicket: { id: 'single' }, insurance: { tag: '卡里含' } });
+    const { order } = await xiaolu.orders.create({ productId: sheet.singleTicket!.id });
+    await mock.simulatePayment(order.id);
+    const paid = await xiaolu.orders.get(order.id);
+    expect(await xiaolu.checkIns.create({ ...qr, cardId: paid.cardId!, idempotencyKey: 'k1' })).toMatchObject({ deducted: 1, reentry: false, policy: { status: 'pending' } });
   });
 });
