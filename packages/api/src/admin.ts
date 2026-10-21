@@ -1,4 +1,4 @@
-import { MEMBER_SOURCES, type Card, type DeskPayChannel, type LedgerEntry, type MemberSource, type PayChannel, type Product, type RevenueBucket, type RevenueCategory, type RevenueChannel } from '@climb/core';
+import { MEMBER_SOURCES, type Card, type EntryCard, type EntryOption, type DeskPayChannel, type LedgerEntry, type MemberSource, type PayChannel, type Product, type RevenueBucket, type RevenueCategory, type RevenueChannel } from '@climb/core';
 import type { Cents, DateKey } from '@climb/utils';
 import { createHttp, type ClientOptions } from './client';
 
@@ -292,6 +292,45 @@ export interface DeskOrderResult {
   card: Card;
 }
 
+/**
+ * 手动登记入场（会员手机没电时前台代登记）。规则都在 @climb/core 的 checkIn.ts（checkInPlan / checkInWith），等馆方的占位也集中在那里。
+ * - POST /admin/check-ins/preview：列出这次能用的卡和各扣几次，不改数据。
+ * - POST /admin/check-ins：用选的卡入场。requestId 由弹窗每次打开时生成，同一个 requestId 重复提交只入场一次，返回第一次的结果。
+ * 同一天再次入场（撤销的不算）不扣次；没签告知书先不拦，返回 waiverSigned = false，页面提示前台让会员在小程序里补签。
+ * 卡三店通用，门店是这次入场的门店，必须是员工能操作的店，否则 403；会员、门店、卡没有 404；卡现在不能用 422（data.code 是 @climb/core 的 RuleErrorCode）。
+ * 成功后：写入场记录（method = desk），次卡扣次并记一笔 check_in 流水（操作人是员工），体验券记下用掉的日期；
+ * 会员还没来过店的记下第一次到店（日期、门店）。保单见任务 33。
+ */
+export interface CheckInPreviewBody {
+  memberId: string;
+  storeId: string;
+}
+
+export interface CheckInPreview {
+  memberId: string;
+  memberName: string;
+  storeId: string;
+  /** 今天已经入过场，这次不扣次 */
+  reentry: boolean;
+  waiverSigned: boolean;
+  /** 能用的在前，规则见 @climb/core 的 checkInPlan；没有能用的卡为空数组（先去收款开卡，比如买单次票） */
+  options: EntryOption[];
+}
+
+export interface CreateDeskCheckInBody extends CheckInPreviewBody {
+  requestId: string;
+  cardId: string;
+}
+
+export interface DeskCheckInResult {
+  checkIn: MemberEntryRow;
+  /** 入场后的卡 */
+  card: EntryCard;
+  deducted: number;
+  reentry: boolean;
+  waiverSigned: boolean;
+}
+
 export const PAY_CHANNEL_TEXT: Record<PayChannel, string> = {
   wechat: '微信支付',
   desk_cash: '现金',
@@ -345,6 +384,10 @@ export function createAdminApi(opts: ClientOptions) {
     },
     orders: {
       create: (body: CreateDeskOrderBody) => http<DeskOrderResult>('POST', '/admin/orders', body),
+    },
+    checkIns: {
+      preview: (body: CheckInPreviewBody) => http<CheckInPreview>('POST', '/admin/check-ins/preview', body),
+      create: (body: CreateDeskCheckInBody) => http<DeskCheckInResult>('POST', '/admin/check-ins', body),
     },
     cards: {
       ledger: (id: string) => http<CardLedger>('GET', `/admin/cards/${encodeURIComponent(id)}/ledger`),

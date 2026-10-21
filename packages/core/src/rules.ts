@@ -12,7 +12,8 @@ export type RuleErrorCode =
   | 'already-claimed'
   | 'share-expired'
   | 'referral-quota-used'
-  | 'no-period-card';
+  | 'no-period-card'
+  | 'waiver-required';
 
 export class RuleError extends Error {
   constructor(public code: RuleErrorCode, message: string) {
@@ -38,11 +39,12 @@ export interface EntryOption {
   blockedBy?: 'inviter-not-checked-in';
 }
 
-/** 扫码入场时，列出卡包里能用来入场的卡。可用的排前面，期限卡优先。 */
+/** 扫码入场时，列出卡包里能用来入场的卡。可用的排前面，期限卡优先。冻结、作废、已退款的卡不列。 */
 export function entryOptions(cards: Card[], ctx: EntryContext): EntryOption[] {
   const { today } = ctx;
   const opts: EntryOption[] = [];
   for (const card of cards) {
+    if ((card.status ?? 'normal') !== 'normal') continue;
     if (card.kind === 'period' && isPeriodActive(card, today)) opts.push({ card, usable: true, deducts: 0 });
     if ((card.kind === 'count' || card.kind === 'gift') && card.remaining > 0 && card.expiresOn >= today) {
       opts.push({ card, usable: true, deducts: 1 });

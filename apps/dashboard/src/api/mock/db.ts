@@ -1,4 +1,4 @@
-import { MEMBER_SOURCES, type DeskOrderResult, type EntryMethod, type MemberSource, type Staff, type Store } from '@climb/api';
+import { MEMBER_SOURCES, type DeskCheckInResult, type DeskOrderResult, type EntryMethod, type MemberSource, type Staff, type Store } from '@climb/api';
 import { defaultRules, type Card, type CountCard, type GymRules, type LedgerEntry, type Product, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
 import { addDays, addMonths, daysBetween, monthOf, type DateKey } from '@climb/utils';
 
@@ -15,7 +15,7 @@ export interface MockMember {
   firstVisitStoreId: string | null;
   /** 第一次买期限卡或次卡的日期，没买过为 null */
   firstCardOn: DateKey | null;
-  /** 最近一次入场，跟 checkIns 里最晚的一条一致（mock 里由入场记录生成时对齐）。等任务 15 再改成从入场记录算 */
+  /** 最近一次入场（撤销的不算），跟 checkIns 里最晚的一条一致：示例数据生成时对齐，前台登记入场时更新 */
   lastEntryOn: DateKey | null;
   /** 签风险告知书的日期（第一次入场时签），没签为 null */
   waiverSignedOn: DateKey | null;
@@ -79,6 +79,8 @@ export interface MockDb {
   products: Product[];
   /** 前台开单的幂等记录：requestId → 第一次的结果 */
   deskOrderRequests: Record<string, DeskOrderResult>;
+  /** 前台登记入场的幂等记录：requestId → 第一次的结果 */
+  deskCheckInRequests: Record<string, DeskCheckInResult>;
   /** 订单和退款（财务页用；看板的营收目前还是 storeStats 里的示例数字） */
   orders: MockOrder[];
   refunds: MockRefund[];
@@ -113,6 +115,7 @@ export function createMockDb(today: DateKey, rules: GymRules = defaultRules): Mo
     ...sampleOrders(today),
     products: sampleProducts(),
     deskOrderRequests: {},
+    deskCheckInRequests: {},
     waiverVersion: '2026-01',
     storeStats: {
       bingang: { monthRevenueCents: 6_194_200, todayEntries: 45, lastWeekSameTimeEntries: 41, todayBookings: 9, activeMembers: 138 },

@@ -6,9 +6,12 @@ import {
   type ApiResponse,
   type CardLedger,
   type CardLedgerRow,
+  type CheckInPreview,
+  type CreateDeskCheckInBody,
   type CreateDeskOrderBody,
   type CreateMemberBody,
   type DashboardSummary,
+  type DeskCheckInResult,
   type DeskOrderResult,
   type ExpiringCardRow,
   type FinanceRefundRow,
@@ -28,6 +31,10 @@ import {
 } from '@climb/api';
 import {
   PRODUCT_REVENUE_CATEGORY,
+  RuleError,
+  checkInLedgerEntry,
+  checkInPlan,
+  checkInWith,
   countsAsCardPurchase,
   deskOrderErrors,
   expiringPeriodCards,
@@ -40,12 +47,14 @@ import {
   purchaseLedgerEntry,
   summarizeRevenue,
   type Card,
+  type CheckInArgs,
+  type EntryCard,
   type MemberSource,
   type RevenueChannel,
 } from '@climb/core';
 import { formatYuan, maskPhone, monthOf } from '@climb/utils';
 import { MEMBERS_VISIBLE_ACROSS_STORES, canDo, canSeePage, canSeeStore } from '../../permissions';
-import type { MockDb, MockMember, MockOrder } from './db';
+import type { MockCheckIn, MockDb, MockMember, MockOrder } from './db';
 
 /**
  * 后端没好之前用的假后端：实现 @climb/api 里后台接口的契约，数据放在内存里。
@@ -312,6 +321,90 @@ function createDeskOrder(db: MockDb, staff: Staff, body: Partial<CreateDeskOrder
   return ok(res);
 }
 
+/** 前台登记入场的会员、门店校验；通过返回 @climb/core 判断要的参数 */
+function checkInScope(db: MockDb, staff: Staff, body: { memberId?: unknown; storeId?: unknown } | null): { m: MockMember; args: CheckInArgs } | ApiResponse {
+  if (!canDo(staff.role, 'checkIn.create')) return fail(403, 'forbidden', '没有登记入场的权限');
+  const m = db.members.find(x => x.id === body?.memberId);
+  if (!m) return fail(404, 'member-not-found', '没有这个会员');
+  if (!MEMBERS_VISIBLE_ACROSS_STORES && !canSeeStore(staff, m.homeStoreId)) return fail(403, 'forbidden', '没有这家店的权限');
+  const storeId = String(body?.storeId ?? '');
+  if (!db.stores.some(st => st.id === storeId)) return fail(404, 'store-not-found', '没有这家店');
+  if (!canSeeStore(staff, storeId)) return fail(403, 'forbidden', '没有这家店的权限');
+  const hasCheckedIn = (memberId: string, on: string) => db.checkIns.some(c => c.memberId === memberId && c.on === on && !c.voided);
+  const args: CheckInArgs = {
+    memberId: m.id,
+    storeId,
+    cards: db.cards.filter(c => c.memberId === m.id),
+    past: db.checkIns.filter(c => c.memberId === m.id),
+    ctx: { today: db.today, rules: db.rules, hasCheckedIn },
+  };
+  return { m, args };
+}
+
+/** 登记入场前列出能用的卡：口径见 @climb/api 的 CheckInPreview */
+function checkInPreview(db: MockDb, staff: Staff, body: Partial<CreateDeskCheckInBody> | null): ApiResponse {
+  const scope = checkInScope(db, staff, body);
+  if ('status' in scope) return scope;
+  const { m, args } = scope;
+  const plan = checkInPlan(args);
+  const res: CheckInPreview = { memberId: m.id, memberName: m.name, storeId: args.storeId, reentry: plan.reentry, waiverSigned: !!m.waiverSignedOn, options: plan.options };
+  return ok(res);
+}
+
+/** 前台登记入场：口径见 @climb/api 的 CreateDeskCheckInBody，规则都在 @climb/core 的 checkIn.ts */
+function createDeskCheckIn(db: MockDb, staff: Staff, body: Partial<CreateDeskCheckInBody> | null): ApiResponse {
+  if (!canDo(staff.role, 'checkIn.create')) return fail(403, 'forbidden', '没有登记入场的权限');
+  const requestId = String(body?.requestId ?? '');
+  if (!requestId) return badInput('requestId', '缺少 requestId');
+  const done = db.deskCheckInRequests[requestId];
+  if (done) return ok(done);
+
+  const scope = checkInScope(db, staff, body);
+  if ('status' in scope) return scope;
+  const { m, args } = scope;
+  const cardId = String(body?.cardId ?? '');
+  const idx = db.cards.findIndex(c => c.id === cardId && c.memberId === m.id);
+  if (idx < 0) return fail(404, 'card-not-found', '这个会员没有这张卡');
+
+  let used: { card: EntryCard; deducted: number; reentry: boolean };
+  try {
+    used = checkInWith({ ...args, cardId, waiverSigned: !!m.waiverSignedOn });
+  } catch (e) {
+    if (e instanceof RuleError) return fail(422, e.code, e.message);
+    throw e;
+  }
+  const { card, deducted, reentry } = used;
+  const checkIn: MockCheckIn = {
+    id: nextId('ci-', db.checkIns),
+    memberId: m.id,
+    storeId: args.storeId,
+    on: db.today,
+    cardId: card.id,
+    cardName: card.name,
+    deducted,
+    method: 'desk',
+    voided: false,
+  };
+  const entry = checkInLedgerEntry({ id: nextId('l-', db.ledger), card, deducted, at: nowAt(db), checkInId: checkIn.id, operator: { operatorType: 'staff', operatorId: staff.id } });
+
+  db.checkIns.push(checkIn);
+  db.cards[idx] = card;
+  if (entry) db.ledger.push(entry);
+  if (card.kind === 'referral') {
+    const r = db.referrals.find(x => x.id === card.shareId);
+    if (r && !r.usedOn) r.usedOn = card.usedOn ?? db.today;
+  }
+  if (!m.lastEntryOn || m.lastEntryOn < db.today) m.lastEntryOn = db.today;
+  if (!m.firstVisitOn) {
+    m.firstVisitOn = db.today;
+    m.firstVisitStoreId = args.storeId;
+  }
+  const { memberId: _m, ...row } = checkIn;
+  const res: DeskCheckInResult = { checkIn: row, card, deducted, reentry, waiverSigned: !!m.waiverSignedOn };
+  db.deskCheckInRequests[requestId] = res;
+  return ok(res);
+}
+
 /** 卡流水：口径见 @climb/api 的 CardLedger */
 function cardLedger(db: MockDb, staff: Staff, id: string): ApiResponse {
   const card = db.cards.find(c => c.id === id);
@@ -448,6 +541,18 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
     path: /^\/admin\/orders$/,
     auth: true,
     handle: ({ db, body, staff }) => createDeskOrder(db, staff!, body),
+  },
+  {
+    method: 'POST',
+    path: /^\/admin\/check-ins\/preview$/,
+    auth: true,
+    handle: ({ db, body, staff }) => checkInPreview(db, staff!, body),
+  },
+  {
+    method: 'POST',
+    path: /^\/admin\/check-ins$/,
+    auth: true,
+    handle: ({ db, body, staff }) => createDeskCheckIn(db, staff!, body),
   },
   {
     method: 'GET',

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ApiError, ENTRY_METHOD_TEXT, type DeskOrderResult, MEMBER_SOURCE_TEXT, PAY_CHANNEL_TEXT, REVENUE_CATEGORY_TEXT, type MemberDetail, type MemberEntryRow, type MemberOrderRow } from '@climb/api';
+import { ApiError, ENTRY_METHOD_TEXT, type DeskCheckInResult, type DeskOrderResult, MEMBER_SOURCE_TEXT, PAY_CHANNEL_TEXT, REVENUE_CATEGORY_TEXT, type MemberDetail, type MemberEntryRow, type MemberOrderRow } from '@climb/api';
 import { CARD_STATE_TEXT, cardState, cardText, type Card } from '@climb/core';
 import { DataTable, errorText, useToast, type Column } from '@climb/ui-web';
 import { formatDot, formatYuan, toDateKey } from '@climb/utils';
@@ -7,6 +7,7 @@ import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from '../api';
 import CardLedgerDrawer from '../components/CardLedgerDrawer.vue';
+import DeskCheckInModal from '../components/DeskCheckInModal.vue';
 import DeskOrderModal from '../components/DeskOrderModal.vue';
 import { canDo } from '../permissions';
 import { session } from '../session';
@@ -79,6 +80,15 @@ function onOrdered(r: DeskOrderResult) {
   load();
 }
 
+// 手动登记入场：登记好重新拉详情，剩余次数和最近入场马上更新
+const checkInOpen = ref(false);
+const canCheckIn = computed(() => !!session.state.staff && canDo(session.state.staff.role, 'checkIn.create'));
+function onCheckedIn(r: DeskCheckInResult) {
+  toast.success(r.deducted ? `已入场：${r.card.name}扣 ${r.deducted} 次` : `已入场：${r.card.name}，不扣次`);
+  if (!r.waiverSigned) toast.info('还没签风险告知书，记得让会员在小程序里补签');
+  load();
+}
+
 const back = () => (window.history.state?.back ? router.back() : router.push({ name: 'members' }));
 </script>
 
@@ -87,9 +97,13 @@ const back = () => (window.history.state?.back ? router.back() : router.push({ n
     <button type="button" class="back" @click="back">← 返回</button>
     <div class="title">
       <h1>{{ data?.name ?? '会员详情' }}</h1>
-      <button v-if="data && canOrder" type="button" class="primary" @click="orderOpen = true">收款开卡</button>
+      <span class="actions">
+        <button v-if="data && canCheckIn" type="button" class="primary" @click="checkInOpen = true">登记入场</button>
+        <button v-if="data && canOrder" type="button" class="primary" @click="orderOpen = true">收款开卡</button>
+      </span>
     </div>
   </header>
+  <DeskCheckInModal v-if="data" v-model:open="checkInOpen" :member="{ id: data.id, name: data.name }" @created="onCheckedIn" />
   <DeskOrderModal v-if="data" v-model:open="orderOpen" :member="{ id: data.id, name: data.name }" @created="onOrdered" />
 
   <p v-if="notFound" class="state" role="alert">没有这个会员，可能已经被合并或删除了。</p>
@@ -151,6 +165,7 @@ const back = () => (window.history.state?.back ? router.back() : router.push({ n
 <style scoped>
 .page-h h1 { margin: 4px 0 16px; font-family: var(--font-display); font-size: 34px; font-weight: 400; }
 .title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.actions { display: flex; gap: 8px; }
 .primary { padding: 6px 14px; font: inherit; font-weight: 600; color: var(--on-brand); background: var(--brand); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
 .back { padding: 0; font: inherit; font-size: 13px; color: var(--ink-muted); background: none; border: 0; cursor: pointer; }
 h2 { margin: 22px 0 10px; font-family: var(--font-display); font-size: 22px; font-weight: 400; }

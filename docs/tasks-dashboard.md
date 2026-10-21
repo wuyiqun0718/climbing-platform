@@ -110,7 +110,7 @@
 - 完成标准：mock 里生成订单、卡和一笔 `purchase` 流水；会员详情马上能看到。
 - 补（2026-10-21）：次卡、课包到期日跟小程序对齐，含开卡当天（`addMonths(今天, validMonths)` 前一天）；没填 validMonths 的单次票（quantity 1）当天有效，`DEFAULT_VALID_MONTHS` 只给 quantity > 1 的用。谁能改价仍是占位（`order.create`）。
 
-**15. 手动登记入场**
+**15. 手动登记入场** ✅
 - 依赖：11
 - 涉及文件：`src/components/DeskCheckInModal.vue`、契约 `POST /admin/check-ins/preview`、`POST /admin/check-ins`、mock
 - 内容：给手机没电的会员登记：选门店、列出能用的卡（mock 用 `@climb/core` 判断）、确认；同日再次入场不扣次；没签告知书的提示前台让会员补签。

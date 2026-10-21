@@ -515,3 +515,76 @@ describe('后台 mock：线下收款开卡', () => {
     expect(await status(api.orders.create(body({ requestId: '' })))).toBe(400);
   });
 });
+
+describe('后台 mock：手动登记入场', () => {
+  // 新建一个会员，前台给他开一张 10 次卡
+  async function withCard(productId = 'p-10x', amountCents = 128_000) {
+    const s = setup();
+    await s.login('13800000003');
+    const m = await s.api.members.create({ phone: '13912345678', name: '没电的人', source: 'walkin', storeId: 'bingang' });
+    const { card } = await s.api.orders.create({ requestId: 'o1', memberId: m.id, productId, storeId: 'bingang', channel: 'desk_cash', amountCents, priceReason: '' });
+    const body = (over: Record<string, unknown> = {}) => ({ requestId: 'ci-req-1', memberId: m.id, storeId: 'bingang', cardId: card.id, ...over });
+    return { ...s, m, card, body };
+  }
+
+  it('列出能用的卡和扣几次；没签告知书照样能列，带上 waiverSigned = false', async () => {
+    const { api, m, card } = await withCard();
+    const p = await api.checkIns.preview({ memberId: m.id, storeId: 'bingang' });
+    expect(p).toMatchObject({ memberName: '没电的人', reentry: false, waiverSigned: false });
+    expect(p.options.map(o => [o.card.id, o.usable, o.deducts])).toEqual([[card.id, true, 1]]);
+  });
+
+  it('扣 1 次，记入场记录和 check_in 流水，会员详情能看到；同一天第二次 deducted = 0', async () => {
+    const { api, m, card, body, db } = await withCard();
+    const first = await api.checkIns.create(body());
+    expect(first).toMatchObject({ deducted: 1, reentry: false, waiverSigned: false, card: { remaining: 9 }, checkIn: { method: 'desk', on: '2026-10-21', storeId: 'bingang', deducted: 1, voided: false } });
+    const ledger = await api.cards.ledger(card.id);
+    expect(ledger.entries.at(-1)).toMatchObject({ reason: 'check_in', delta: -1, remainingAfter: 9, ref: { type: 'check_in', id: first.checkIn.id }, operatorName: '前台小葵' });
+    expect(ledgerMismatch(ledger.card, ledger.entries)).toBeNull();
+    const detail = await api.members.get(m.id);
+    expect(detail.recentEntries[0]!.id).toBe(first.checkIn.id);
+    expect(detail).toMatchObject({ firstVisitOn: '2026-10-21', firstVisitStoreId: 'bingang' });
+    expect(db.members.find(x => x.id === m.id)!.lastEntryOn).toBe('2026-10-21');
+
+    expect(await api.checkIns.preview({ memberId: m.id, storeId: 'bingang' })).toMatchObject({ reentry: true, options: [{ deducts: 0 }] });
+    const second = await api.checkIns.create(body({ requestId: 'ci-req-2' }));
+    expect(second).toMatchObject({ deducted: 0, reentry: true, card: { remaining: 9 } });
+    expect((await api.cards.ledger(card.id)).entries).toHaveLength(2);
+  });
+
+  it('带同一个幂等键重复提交不重复扣', async () => {
+    const { api, body, db, card } = await withCard();
+    const before = { checkIns: db.checkIns.length, ledger: db.ledger.length };
+    const a = await api.checkIns.create(body());
+    const b = await api.checkIns.create(body());
+    expect(b).toEqual(a);
+    expect({ checkIns: db.checkIns.length, ledger: db.ledger.length }).toEqual({ checkIns: before.checkIns + 1, ledger: before.ledger + 1 });
+    expect(db.cards.find(c => c.id === card.id)).toMatchObject({ remaining: 9 });
+  });
+
+  it('单次票今天用掉后再进还能用，不扣', async () => {
+    const { api, db, m, body } = await withCard();
+    db.products.push({ id: 'p-1x', category: 'count', name: '单次票', priceCents: 9_900, quantity: 1, perks: [], onSale: true });
+    const ticket = await api.orders.create({ requestId: 'o2', memberId: m.id, productId: 'p-1x', storeId: 'bingang', channel: 'desk_cash', amountCents: 9_900, priceReason: '' });
+    expect(await api.checkIns.create(body({ cardId: ticket.card.id }))).toMatchObject({ deducted: 1, card: { remaining: 0 } });
+    const again = await api.checkIns.preview({ memberId: m.id, storeId: 'bingang' });
+    expect(again.options[0]).toMatchObject({ card: { id: ticket.card.id }, deducts: 0 });
+    expect(await api.checkIns.create(body({ requestId: 'ci-req-2', cardId: ticket.card.id }))).toMatchObject({ deducted: 0 });
+  });
+
+  it('冻结的卡 422；别人的卡、没这个会员、没这家店 404；别的店 403；没有 requestId 400', async () => {
+    const { api, db, body, card } = await withCard();
+    const other = db.cards.find(c => c.memberId !== body().memberId)!;
+    expect(await status(api.checkIns.create(body({ cardId: other.id })))).toBe(404);
+    expect(await status(api.checkIns.create(body({ memberId: 'nobody' })))).toBe(404);
+    expect(await status(api.checkIns.create(body({ storeId: 'nope' })))).toBe(404);
+    expect(await status(api.checkIns.create(body({ storeId: 'huiju' })))).toBe(403);
+    expect(await status(api.checkIns.preview({ memberId: body().memberId, storeId: 'huiju' }))).toBe(403);
+    expect(await status(api.checkIns.create(body({ requestId: '' })))).toBe(400);
+    const i = db.cards.findIndex(c => c.id === card.id);
+    db.cards[i] = { ...db.cards[i]!, status: 'frozen' };
+    const err = await api.checkIns.create(body()).catch((e: ApiError) => e);
+    expect(err).toMatchObject({ status: 422, data: { code: 'card-not-usable' } });
+    expect((await api.checkIns.preview({ memberId: body().memberId, storeId: 'bingang' })).options).toEqual([]);
+  });
+});
