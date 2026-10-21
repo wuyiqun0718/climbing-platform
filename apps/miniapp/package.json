@@ -9,7 +9,8 @@
     "build:mp-weixin": "node scripts/uni.mjs build mp-weixin",
     "build:h5": "node scripts/uni.mjs build h5",
     "build": "node scripts/uni.mjs build mp-weixin",
-    "typecheck": "node scripts/prepare-gym.mjs && vue-tsc --noEmit -p tsconfig.json"
+    "typecheck": "node scripts/prepare-gym.mjs && vue-tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
   },
   "dependencies": {
     "@climb/api": "workspace:*",
