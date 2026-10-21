@@ -13,7 +13,9 @@ export type RuleErrorCode =
   | 'share-expired'
   | 'referral-quota-used'
   | 'no-period-card'
-  | 'waiver-required';
+  | 'waiver-required'
+  | 'already-voided'
+  | 'reason-required';
 
 export class RuleError extends Error {
   constructor(public code: RuleErrorCode, message: string) {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ApiError, ENTRY_METHOD_TEXT, type DeskCheckInResult, type DeskOrderResult, MEMBER_SOURCE_TEXT, PAY_CHANNEL_TEXT, REVENUE_CATEGORY_TEXT, type MemberDetail, type MemberEntryRow, type MemberOrderRow } from '@climb/api';
+import { ApiError, ENTRY_METHOD_TEXT, type DeskCheckInResult, type DeskOrderResult, type VoidCheckInResult, MEMBER_SOURCE_TEXT, PAY_CHANNEL_TEXT, REVENUE_CATEGORY_TEXT, type MemberDetail, type MemberEntryRow, type MemberOrderRow } from '@climb/api';
 import { CARD_STATE_TEXT, cardState, cardText, type Card } from '@climb/core';
-import { DataTable, errorText, useToast, type Column } from '@climb/ui-web';
+import { ConfirmButton, DataTable, errorText, useToast, type Column } from '@climb/ui-web';
 import { formatDot, formatYuan, toDateKey } from '@climb/utils';
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -62,13 +62,14 @@ const orderColumns: Column<MemberOrderRow>[] = [
   { key: 'refundedCents', label: '已退', num: true, format: r => (r.refundedCents ? formatYuan(r.refundedCents) : '—') },
 ];
 
+const voidText = (r: MemberEntryRow) => (r.voidInfo ? `已撤销（${r.voidInfo.byName}：${r.voidInfo.reason}）` : r.voided ? '已撤销' : '');
 const entryColumns: Column<MemberEntryRow>[] = [
   { key: 'on', label: '日期', format: r => formatDot(r.on) },
   { key: 'storeId', label: '门店', format: r => storeName(r.storeId) },
   { key: 'cardName', label: '用的卡' },
   { key: 'deducted', label: '扣次', num: true, format: r => (r.deducted ? `${r.deducted} 次` : '不扣') },
   { key: 'method', label: '方式', format: r => ENTRY_METHOD_TEXT[r.method] },
-  { key: 'voided', label: '', format: r => (r.voided ? '已撤销' : '') },
+  { key: 'voided', label: '', format: r => voidText(r) },
 ];
 
 // 收款开卡：开好重新拉详情，新卡和订单马上出现
@@ -86,6 +87,25 @@ const canCheckIn = computed(() => !!session.state.staff && canDo(session.state.s
 function onCheckedIn(r: DeskCheckInResult) {
   toast.success(r.deducted ? `已入场：${r.card.name}扣 ${r.deducted} 次` : `已入场：${r.card.name}，不扣次`);
   if (!r.waiverSigned) toast.info('还没签风险告知书，记得让会员在小程序里补签');
+  load();
+}
+
+// 撤销入场：退几次、体验券、保险都按接口返回的说，撤完重新拉详情
+const canVoid = computed(() => !!session.state.staff && canDo(session.state.staff.role, 'checkIn.void'));
+let lastVoid: VoidCheckInResult | null = null;
+const voidAction = (r: MemberEntryRow) => async (reason: string) => {
+  lastVoid = await api.checkIns.void(r.id, { reason });
+};
+const voidMessage = (r: MemberEntryRow) =>
+  r.deducted ? `${r.cardName}会退回 ${r.deducted} 次。` : r.cardId ? '这次没扣次，撤销不退次数。' : '这次没用卡。';
+function onVoided() {
+  const r = lastVoid;
+  if (!r) return;
+  const parts = ['已撤销'];
+  if (r.restored) parts.push(`退回 ${r.restored} 次`);
+  if (r.voucherRestored) parts.push('体验券恢复可用');
+  if (r.insurance?.status === 'refund_pending') parts.push('保单待退保');
+  toast.success(parts.join('，'));
   load();
 }
 
@@ -157,7 +177,21 @@ const back = () => (window.history.state?.back ? router.back() : router.push({ n
 
     <h2>最近入场</h2>
     <section class="panel">
-      <DataTable :columns="entryColumns" :rows="data.recentEntries" row-key="id" empty="还没入过场" />
+      <DataTable :columns="entryColumns" :rows="data.recentEntries" row-key="id" empty="还没入过场">
+        <template #cell-voided="{ row }">
+          <span v-if="row.voided" class="voided">{{ voidText(row) }}</span>
+          <ConfirmButton
+            v-else-if="canVoid"
+            label="撤销"
+            title="撤销这次入场"
+            variant="link"
+            danger
+            :message="voidMessage(row)"
+            :action="voidAction(row)"
+            @done="onVoided"
+          />
+        </template>
+      </DataTable>
     </section>
   </template>
 </template>
@@ -177,6 +211,7 @@ h2 { margin: 22px 0 10px; font-family: var(--font-display); font-size: 22px; fon
 .info dt { font-size: 12px; color: var(--ink-muted); }
 .info dd { margin: 2px 0 0; font-weight: 600; }
 .info dd.warn { color: var(--ink); background: var(--accent-soft); padding: 2px 6px; border-radius: var(--radius-sm); }
+.voided { font-size: 12px; color: var(--ink-muted); }
 .num { font-family: var(--font-number); font-variant-numeric: tabular-nums; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
 .cards li { display: flex; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }

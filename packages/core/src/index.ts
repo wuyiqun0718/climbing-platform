@@ -8,3 +8,4 @@ export * from './member';
 export * from './order';
 export * from './checkIn';
 export * from './insurance';
+export * from './voidCheckIn';

@@ -1,4 +1,4 @@
-import { MEMBER_SOURCES, type DeskCheckInResult, type DeskOrderResult, type EntryMethod, type MemberSource, type Staff, type Store } from '@climb/api';
+import { MEMBER_SOURCES, type DeskCheckInResult, type DeskOrderResult, type EntryMethod, type VoidCheckInResult, type MemberSource, type Staff, type Store } from '@climb/api';
 import { defaultRules, type Card, type InsurancePolicy, type CountCard, type GymRules, type LedgerEntry, type Product, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
 import { addDays, addMonths, daysBetween, monthOf, type DateKey } from '@climb/utils';
 
@@ -15,7 +15,7 @@ export interface MockMember {
   firstVisitStoreId: string | null;
   /** 第一次买期限卡或次卡的日期，没买过为 null */
   firstCardOn: DateKey | null;
-  /** 最近一次入场（撤销的不算），跟 checkIns 里最晚的一条一致：示例数据生成时对齐，前台登记入场时更新 */
+  /** 最近一次入场（撤销的不算），跟 checkIns 里最晚的一条一致：示例数据生成时对齐，前台登记入场、撤销入场时更新 */
   lastEntryOn: DateKey | null;
   /** 签风险告知书的日期（第一次入场时签），没签为 null */
   waiverSignedOn: DateKey | null;
@@ -33,6 +33,8 @@ export interface MockCheckIn {
   deducted: number;
   method: EntryMethod;
   voided: boolean;
+  /** 撤销的才有（对应 voided_at、voided_by_staff_id、void_reason） */
+  void: { at: string; staffId: string; reason: string } | null;
 }
 
 /** 老带新邀请（对应 shares 表 kind = referral） */
@@ -81,6 +83,8 @@ export interface MockDb {
   deskOrderRequests: Record<string, DeskOrderResult>;
   /** 前台登记入场的幂等记录：requestId → 第一次的结果 */
   deskCheckInRequests: Record<string, DeskCheckInResult>;
+  /** 撤销入场的结果：入场 ID → 第一次撤销的结果，重复撤销原样返回 */
+  checkInVoids: Record<string, VoidCheckInResult>;
   /** 订单和退款（财务页用；看板的营收目前还是 storeStats 里的示例数字） */
   orders: MockOrder[];
   refunds: MockRefund[];
@@ -113,11 +117,12 @@ export function createMockDb(today: DateKey, rules: GymRules = defaultRules): Mo
       { id: 'huanqiu', name: '环球港店' },
     ],
     staff,
-    ...withLedger(withCheckIns(sampleMembers(today), today), staff, today),
+    ...withLedger(withCheckIns(sampleMembers(today), staff, today), staff, today),
     ...sampleOrders(today),
     products: sampleProducts(),
     deskOrderRequests: {},
     deskCheckInRequests: {},
+    checkInVoids: {},
     policies: [],
     waiverVersion: '2026-01',
     storeStats: {
@@ -238,7 +243,7 @@ function newcomerCountCards(members: SeedMember[]): CountCard[] {
  * 用当天能用的卡（期限卡优先，其次次卡），没有就记单次票（美团来的记美团券）；
  * 大约十分之一是前台登记，有一条撤销了的（撤销的那条不是最晚的那次，lastEntryOn 不受影响）。
  */
-function withCheckIns<T extends Pick<MockDb, 'members' | 'cards'>>(data: T, today: DateKey): T & Pick<MockDb, 'checkIns'> {
+function withCheckIns<T extends Pick<MockDb, 'members' | 'cards'>>(data: T, staff: MockDb['staff'], today: DateKey): T & Pick<MockDb, 'checkIns'> {
   let seed = 31;
   const rand = (n: number) => {
     seed = (seed * 1103515245 + 12345) % 2147483648;
@@ -267,12 +272,17 @@ function withCheckIns<T extends Pick<MockDb, 'members' | 'cards'>>(data: T, toda
         deducted: card?.kind === 'count' ? 1 : 0,
         method: rand(10) === 0 ? 'desk' : 'scan',
         voided: false,
+        void: null,
       });
     }
   }
   // 撤销一条：找一个入场两次以上的老会员，撤销其中较早的一次
   const twice = checkIns.find((c, i) => c.memberId.startsWith('m-old-') && checkIns[i + 1]?.memberId === c.memberId);
-  if (twice) twice.voided = true;
+  if (twice) {
+    const desk = (staff.find(s => s.role === 'desk' && s.storeIds.includes(twice.storeId)) ?? staff.find(s => s.role === 'owner')!).id;
+    twice.voided = true;
+    twice.void = { at: `${twice.on}T22:00:00+08:00`, staffId: desk, reason: '扫错了卡' };
+  }
   return { ...data, checkIns };
 }
 
@@ -315,7 +325,8 @@ function withLedger<T extends Pick<MockDb, 'members' | 'cards' | 'checkIns'>>(da
       if (ci.voided) {
         remaining += ci.deducted;
         const ref = { type: 'check_in' as const, id: ci.id };
-        add({ at: at(ci.on, 22), delta: ci.deducted, remainingAfter: remaining, reason: 'check_in_void', ref, operatorType: 'staff', operatorId: deskStaff(ci.storeId), note: '扫错了卡' });
+        const v = ci.void!;
+        add({ at: v.at, delta: ci.deducted, remainingAfter: remaining, reason: 'check_in_void', ref, operatorType: 'staff', operatorId: v.staffId, note: v.reason });
       }
       lastOn = ci.on;
     }

@@ -28,6 +28,8 @@ import {
   type RequestAdapter,
   type Staff,
   type StoreCompareRow,
+  type VoidCheckInBody,
+  type VoidCheckInResult,
 } from '@climb/api';
 import {
   PRODUCT_REVENUE_CATEGORY,
@@ -35,6 +37,8 @@ import {
   checkInLedgerEntry,
   checkInPlan,
   checkInWith,
+  checkInVoidLedgerEntry,
+  voidCheckIn,
   insuranceForEntry,
   newPolicy,
   countsAsCardPurchase,
@@ -189,7 +193,7 @@ function memberDetail(db: MockDb, staff: Staff, id: string): ApiResponse {
     .filter(c => c.memberId === id)
     .sort((a, b) => b.on.localeCompare(a.on) || b.id.localeCompare(a.id, undefined, { numeric: true }))
     .slice(0, MEMBER_RECENT_LIMIT)
-    .map(({ memberId: _m, ...c }): MemberEntryRow => c);
+    .map(c => entryRow(db, c));
   const res: MemberDetail = {
     id: m.id,
     name: m.name,
@@ -240,6 +244,11 @@ function createMember(db: MockDb, staff: Staff, body: Partial<CreateMemberBody> 
   };
   db.members.push(m);
   return memberDetail(db, staff, m.id);
+}
+
+/** 会员详情、登记和撤销结果里的入场行：撤销人换成员工名字 */
+function entryRow(db: MockDb, { memberId: _m, void: v, ...c }: MockCheckIn): MemberEntryRow {
+  return { ...c, voidInfo: v ? { at: v.at, byName: db.staff.find(s => s.id === v.staffId)?.name ?? '', reason: v.reason } : null };
 }
 
 /** 会员详情、开卡结果里的订单行；已退只算退成功的 */
@@ -395,6 +404,7 @@ function createDeskCheckIn(db: MockDb, staff: Staff, body: Partial<CreateDeskChe
     deducted,
     method: 'desk',
     voided: false,
+    void: null,
   };
   const ins = insuranceForEntry(db.policies, m.id, db.today);
   const policy = ins.policy ?? newPolicy({ id: nextId('ip-', db.policies), memberId: m.id, storeId: args.storeId, on: db.today, checkInId: checkIn.id });
@@ -413,9 +423,8 @@ function createDeskCheckIn(db: MockDb, staff: Staff, body: Partial<CreateDeskChe
     m.firstVisitOn = db.today;
     m.firstVisitStoreId = args.storeId;
   }
-  const { memberId: _m, ...row } = checkIn;
   const res: DeskCheckInResult = {
-    checkIn: row,
+    checkIn: entryRow(db, checkIn),
     card,
     deducted,
     reentry,
@@ -423,6 +432,64 @@ function createDeskCheckIn(db: MockDb, staff: Staff, body: Partial<CreateDeskChe
     insurance: { needed: ins.needed, policyId: policy.id, status: policy.status },
   };
   db.deskCheckInRequests[requestId] = res;
+  return ok(res);
+}
+
+/** 撤销入场：口径见 @climb/api 的 VoidCheckInBody，规则都在 @climb/core 的 voidCheckIn.ts */
+function voidDeskCheckIn(db: MockDb, staff: Staff, id: string, body: Partial<VoidCheckInBody> | null): ApiResponse {
+  if (!canDo(staff.role, 'checkIn.void')) return fail(403, 'forbidden', '没有撤销入场的权限');
+  const checkIn = db.checkIns.find(c => c.id === id);
+  if (!checkIn) return fail(404, 'check-in-not-found', '没有这条入场记录');
+  if (!canSeeStore(staff, checkIn.storeId)) return fail(403, 'forbidden', '没有这家店的权限');
+  if (checkIn.voided) {
+    const done = db.checkInVoids[id];
+    if (done) return ok(done);
+    // 示例数据里本来就撤销了的：没有第一次的结果，按现在的样子返回
+    const card = db.cards.find(c => c.id === checkIn.cardId) ?? null;
+    const res: VoidCheckInResult = { checkIn: entryRow(db, checkIn), card, restored: checkIn.deducted, voucherRestored: false, insurance: null };
+    return ok(res);
+  }
+
+  const reason = String(body?.reason ?? '').trim();
+  const cardIdx = db.cards.findIndex(c => c.id === checkIn.cardId);
+  const mine = db.checkIns.filter(c => c.memberId === checkIn.memberId);
+  let r: ReturnType<typeof voidCheckIn<Card, MockDb['policies'][number]>>;
+  try {
+    r = voidCheckIn({ checkIn, card: db.cards[cardIdx] ?? null, past: mine, policies: db.policies.filter(p => p.memberId === checkIn.memberId), reason });
+  } catch (e) {
+    if (e instanceof RuleError && e.code === 'reason-required') return badInput('reason', e.message);
+    if (e instanceof RuleError) return fail(422, e.code, e.message);
+    throw e;
+  }
+
+  const at = nowAt(db);
+  checkIn.voided = true;
+  checkIn.void = { at, staffId: staff.id, reason };
+  const card = r.card;
+  if (card) {
+    db.cards[cardIdx] = card;
+    const entry = checkInVoidLedgerEntry({ id: nextId('l-', db.ledger), card, restored: r.restored, at, checkInId: checkIn.id, operator: { operatorType: 'staff', operatorId: staff.id }, note: reason });
+    if (entry) db.ledger.push(entry);
+    if (r.voucherRestored && card.kind === 'referral') {
+      const ref = db.referrals.find(x => x.id === card.shareId);
+      if (ref && ref.usedOn === checkIn.on) ref.usedOn = null;
+    }
+  }
+  if (r.policy) {
+    const i = db.policies.findIndex(p => p.id === r.policy!.id);
+    db.policies[i] = r.policy;
+  }
+  const m = db.members.find(x => x.id === checkIn.memberId);
+  if (m) m.lastEntryOn = mine.filter(c => !c.voided).reduce<string | null>((last, c) => (!last || c.on > last ? c.on : last), null);
+
+  const res: VoidCheckInResult = {
+    checkIn: entryRow(db, checkIn),
+    card: r.card,
+    restored: r.restored,
+    voucherRestored: r.voucherRestored,
+    insurance: r.policy ? { policyId: r.policy.id, status: r.policy.status, checkInId: r.policy.checkInId } : null,
+  };
+  db.checkInVoids[id] = res;
   return ok(res);
 }
 
@@ -574,6 +641,12 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
     path: /^\/admin\/check-ins$/,
     auth: true,
     handle: ({ db, body, staff }) => createDeskCheckIn(db, staff!, body),
+  },
+  {
+    method: 'POST',
+    path: /^\/admin\/check-ins\/([^/]+)\/void$/,
+    auth: true,
+    handle: ({ db, params, body, staff }) => voidDeskCheckIn(db, staff!, decodeURIComponent(params[0]!), body),
   },
   {
     method: 'GET',

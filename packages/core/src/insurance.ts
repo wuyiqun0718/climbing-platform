@@ -6,7 +6,7 @@ import type { DateKey } from '@climb/utils';
  * 扫码入场、前台登记、mock 和后端都按这里。
  *
  * 状态：pending 投保中（刚入场，等保险公司结果）→ insured 成功 / failed 失败（失败的在原保单上重试，见任务 34，不另投）；
- * 撤销入场后标记 refund_pending 待退保 → refunded 已退保（任务 16、33 来做）。
+ * 撤销入场后标记 refund_pending 待退保 → refunded 已退保（同一天还有别的入场时改挂过去，见 voidCheckIn.ts；退保收尾见任务 33）。
  * 待退保、已退保的保单不再算当天的保单：撤销后同一天又入场，会新投一张。
  * 保费、保险公司接口还是每天交名单等馆方（第 9 节「要问馆方」14），这里不管。
  */
