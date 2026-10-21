@@ -21,6 +21,12 @@
 - 内容：`createAdminApi` 先放员工登录、当前员工、门店列表、看板汇总；mock adapter（路径匹配、内存数据、模拟延迟、401/4xx）；后台的 `api` 实例按 `VITE_API_BASE` 选真后端或 mock。
 - 完成标准：mock 单测覆盖登录成功/失败、没 token 返回 401、看板按门店过滤；typecheck、test 通过。
 
+**1.5 字体加载和 favicon**
+- 依赖：无
+- 涉及文件：`packages/theme/src/fonts.css`、`packages/theme/src/index.ts`（`FONT_FAMILY`）、`packages/theme/package.json`、`gyms/benchmark/src/index.ts`、`gyms/benchmark/assets/favicon.png`、`apps/dashboard/src/main.ts`、`apps/dashboard/index.html`
+- 内容：原型用 Google Fonts 加载 ZCOOL QingKe HuangYou（标题）和 Bricolage Grotesque（数字），应用里只写了字体名没加载，全部回退成系统字体。改用 `@fontsource/zcool-qingke-huangyou` 和 `@fontsource-variable/bricolage-grotesque`（opsz + wght），由 Vite 打包，不依赖 Google；ZCOOL 按 unicode-range 分片按需下载。字体模块放在 `@climb/theme/fonts.css`，两端共用 family 名；小程序不引这个 CSS。favicon 跟着岩馆走：`gyms/<岩馆>/assets/favicon.png`，由 prepare-gym 复制到 `/gym/`。
+- 完成标准：dev 页面 `document.fonts` 里两个字体都是 loaded，标题和数字跟原型一致；`/gym/favicon.png` 返回 200，没有 favicon 404；typecheck、test 通过。
+
 **2. 登录和会话**
 - 依赖：1
 - 涉及文件：`src/pages/LoginPage.vue`、`src/session.ts`、`src/router.ts`、`src/App.vue`

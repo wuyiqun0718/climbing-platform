@@ -1,0 +1,8 @@
+/*
+ * 网页端字体（后台用；小程序不走这里）。用 npm 包随 Vite 一起打包，不依赖 Google Fonts。
+ * ZCOOL QingKe HuangYou 按 unicode-range 切成约 90 片，页面用到哪些字才下载哪片。
+ * family 名见 index.ts 的 FONT_FAMILY。
+ */
+@import '@fontsource/zcool-qingke-huangyou/400.css';
+/* opsz + wght 两个轴，跟原型的 Bricolage Grotesque:opsz,wght 一致 */
+@import '@fontsource-variable/bricolage-grotesque/opsz.css';

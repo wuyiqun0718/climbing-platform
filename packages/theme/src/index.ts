@@ -29,6 +29,14 @@ export interface Theme {
   stroke: number;
 }
 
+/** fonts.css 里加载的字体的 family 名，岩馆主题的 fontDisplay / fontNumber 里引用它们 */
+export const FONT_FAMILY = {
+  /** 标题：站酷庆科黄油体 */
+  display: 'ZCOOL QingKe HuangYou',
+  /** 数字：可变字体版本的 family 名带 Variable 后缀 */
+  number: 'Bricolage Grotesque Variable',
+} as const;
+
 /** 没有专门设计的岩馆先用这一套 */
 export const defaultTheme: Theme = {
   brand: '#2f6f5e',
