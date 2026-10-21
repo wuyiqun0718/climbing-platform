@@ -45,6 +45,12 @@
       }
     },
     {
+      "path": "pages/me/insurance",
+      "style": {
+        "navigationBarTitleText": "保险与告知书"
+      }
+    },
+    {
       "path": "pages/checkin/confirm",
       "style": {
         "navigationBarTitleText": "扫码入场"

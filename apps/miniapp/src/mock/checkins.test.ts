@@ -163,4 +163,28 @@ describe('mock 扫码入场', () => {
     await xiaolu.checkIns.create({ ...mock.issueEntryQr('binggang'), cardId: card.id, idempotencyKey: 'k1' });
     expect(await xiaolu.checkIns.referralWait()).toBeNull();
   });
+
+  it('保险与告知书：每次入场都能找到对应的保单，同日再次入场挂在当天那张下面；告知书换版后显示要重签', async () => {
+    const { mock, ajie, xiaolu } = setup();
+    const before = await ajie.me.insurance();
+    expect(before.policies.map(p => p.checkIns.map(c => c.id))).toEqual([['ci-seed-4'], ['ci-seed-3'], ['ci-seed-2'], ['ci-seed-1']]);
+    expect(before.waiver).toMatchObject({ current: { id: MOCK_WAIVER.id }, signedCurrent: true, signed: [{ current: true }] });
+
+    const first = await ajie.checkIns.create({ ...mock.issueEntryQr('binggang'), cardId: C10, idempotencyKey: 'k1' });
+    const again = await ajie.checkIns.create({ ...mock.issueEntryQr('huiju'), cardId: YEAR, idempotencyKey: 'k2' });
+    const { policies } = await ajie.me.insurance();
+    expect(policies).toHaveLength(5);
+    expect(policies[0]).toMatchObject({ id: first.policy.id, on: TODAY, storeName: '滨港店', status: 'pending' });
+    expect(policies[0].checkIns).toEqual([
+      { id: first.id, on: TODAY, storeName: '滨港店', cardName: '10 次卡', first: true },
+      { id: again.id, on: TODAY, storeName: '汇聚店', cardName: '年卡', first: false },
+    ]);
+    // 每次入场（种子数据加今天两次）都挂在某张保单下
+    const covered = policies.flatMap(p => p.checkIns.map(c => c.id));
+    expect(mock.db.checkIns.filter(c => c.memberId === MOCK_MEMBERS.ajie).map(c => c.id).sort()).toEqual(covered.sort());
+
+    expect(await xiaolu.me.insurance()).toMatchObject({ policies: [], waiver: { signedCurrent: false, signed: [] } });
+    const v2 = mock.publishWaiver();
+    expect((await ajie.me.insurance()).waiver).toMatchObject({ current: { id: v2.id }, signedCurrent: false, signed: [{ waiverVersionId: MOCK_WAIVER.id, current: false }] });
+  });
 });

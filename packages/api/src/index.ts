@@ -1,4 +1,4 @@
-import type { Card, CheckIn, EntryCard, EntryOption, InsurancePolicy, LedgerEntry, Order, Product, ReferralWait, RuleErrorCode, Share, WaiverSignature, WaiverVersion } from '@climb/core';
+import type { Card, CheckIn, EntryCard, EntryOption, InsurancePolicy, LedgerEntry, Order, Product, ReferralWait, RuleErrorCode, Share, WaiverHistory, WaiverSignature, WaiverVersion } from '@climb/core';
 import { createHttp, type ClientOptions } from './client';
 
 export * from './client';
@@ -97,6 +97,26 @@ export interface ReferralWaitInfo extends ReferralWait {
   inviterName: string;
 }
 
+/** 保单下面的一次入场 */
+export interface PolicyCheckInItem extends Pick<CheckIn, 'id' | 'on'> {
+  storeName: string;
+  cardName: string;
+  /** 是不是投这张保单的那次入场（否则是同日再次入场沿用） */
+  first: boolean;
+}
+
+/** 一张保单：投保那次入场的门店，加上它保的那几次入场（按 @climb/core policyHistory 归） */
+export interface PolicyRecord extends InsurancePolicy {
+  storeName: string;
+  checkIns: PolicyCheckInItem[];
+}
+
+/** `GET /me/insurance`：我的 → 保险与告知书。保单最近的在前；告知书是当前版本、签没签、签过的各版（@climb/core waiverHistory） */
+export interface MyInsurance {
+  policies: PolicyRecord[];
+  waiver: WaiverHistory;
+}
+
 /**
  * 接口定义（后端还没开始写，路径是约定稿）。
  * 新增接口时在这里加方法，两个端都能直接用上。
@@ -126,6 +146,8 @@ export function createApi(opts: ClientOptions) {
       unfreezeCard: (cardId: string) => http<Card>('POST', `/me/cards/${encodeURIComponent(cardId)}/unfreeze`),
       /** 自己的订单，最新的在前 */
       orders: () => http<Order[]>('GET', '/me/orders'),
+      /** 历次保单（每张挂着它保的入场）和签过的风险告知书 */
+      insurance: () => http<MyInsurance>('GET', '/me/insurance'),
     },
     orders: {
       /** 下单：后端建待支付订单。卡要等微信支付回调（`POST /pay/wechat/notify`，微信调后端）验证过才发 */

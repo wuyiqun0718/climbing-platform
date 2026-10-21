@@ -5,6 +5,7 @@ import { MockHttpError, type MockContext, type MockHandler, type MockRoutes } fr
 import { createAuthRoutes } from './routes/auth';
 import { createCardRoutes, settleFrozenCards } from './routes/cards';
 import { createCheckInRoutes } from './routes/checkins';
+import { createInsuranceRoutes } from './routes/insurance';
 import { createOrderRoutes } from './routes/orders';
 import { createWaiverRoutes } from './routes/waivers';
 
@@ -46,6 +47,7 @@ export function createRoutes(db: MockDb, env: { rules: GymRules; today: () => Da
     ...createOrderRoutes(db, { ...env, nextId, requireMember, record }),
     ...createCheckInRoutes(db, { ...env, nextId, requireMember, replaceCard, record }),
     ...createWaiverRoutes(db, { ...env, nextId, requireMember }),
+    ...createInsuranceRoutes(db, { ...env, requireMember }),
 
     'GET /products': () => db.products.filter(p => p.onSale),
 
