@@ -1,6 +1,8 @@
 import { createApi, uniAdapter } from '@climb/api';
 import gym from '@gym';
+import { PRIVACY } from './config/privacy';
 import { createAuth, type Session } from './lib/auth';
+import { createPrivacy } from './lib/privacy';
 import { createRunner, withRelogin } from './lib/request';
 import { createMock, type MockStorage } from './mock';
 
@@ -18,6 +20,7 @@ const mockStorage: MockStorage = {
 export const mock = baseURL ? null : createMock({ rules: gym.rules, storage: mockStorage });
 
 const SESSION_KEY = 'session';
+const PRIVACY_KEY = 'privacy';
 
 function wxCode(): Promise<string> {
   if (mock) return Promise.resolve(mock.currentWx());
@@ -47,6 +50,21 @@ export const auth = createAuth({
     return s && typeof s.token === 'string' ? s : null;
   },
   save: s => (s ? uni.setStorageSync(SESSION_KEY, s) : uni.removeStorageSync(SESSION_KEY)),
+});
+
+/** 隐私同意，登录页用；见 src/lib/privacy.ts */
+export const privacy = createPrivacy({
+  version: PRIVACY.version,
+  load: () => (uni.getStorageSync(PRIVACY_KEY) as string) || null,
+  save: v => (v ? uni.setStorageSync(PRIVACY_KEY, v) : uni.removeStorageSync(PRIVACY_KEY)),
+  wxNeedsAuth: () => {
+    // #ifdef MP-WEIXIN
+    return new Promise((resolve, reject) => {
+      uni.getPrivacySetting({ success: r => resolve(r.needAuthorization), fail: reject });
+    });
+    // #endif
+    return Promise.resolve(false);
+  },
 });
 
 /** 页面里调接口包一层，统一转圈和中文错误提示：await run(() => api.me.cards(), { loading: '加载中' }) */

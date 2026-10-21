@@ -3,7 +3,7 @@
 // 只在走 mock 时显示；真后端下 mock 为 null，这个组件什么都不渲染。
 import type { Card, Share } from '@climb/core';
 import { computed, ref } from 'vue';
-import { api, auth, mock, run } from '../api';
+import { api, auth, mock, privacy, run } from '../api';
 import { member } from '../stores';
 
 const open = ref(false);
@@ -73,6 +73,8 @@ function switchTo(id: string) {
 /** 没登录过的新微信：去卡包会跳登录页，输入老周的手机号 13800000003 能认领老卡 */
 function newWx() {
   mock?.switchToNewWx();
+  // 新微信也没同意过隐私指引
+  privacy.clear();
   relogin();
 }
 
