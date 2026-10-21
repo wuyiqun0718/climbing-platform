@@ -13,6 +13,8 @@ const RULE_MESSAGES: Record<RuleErrorCode, string> = {
   'own-share': '这是你自己发出的，发给朋友让 TA 来领',
   'already-claimed': '已经被人领走了',
   'share-expired': '这个链接已经过期了',
+  'share-returned': '这个分享过期没人领，次数已经退回去了',
+  'referral-not-newcomer': '老带新体验券只给第一次来的新朋友，你可以直接买票来玩',
   'referral-quota-used': '这个月的老带新名额用完了',
   'no-period-card': '有期限卡才能发老带新邀请',
   'referral-card-frozen': '期限卡冻结中，解冻后才能发老带新邀请',

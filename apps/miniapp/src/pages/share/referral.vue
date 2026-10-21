@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { MyReferrals, ReferralRecordView } from '@climb/api';
-import type { ReferralRecordState } from '@climb/core';
+import { SHARE_STATUS_TEXT } from '@climb/core';
 import { formatDot } from '@climb/utils';
 import gym from '@gym';
 import { onShareAppMessage } from '@dcloudio/uni-app';
@@ -48,16 +48,10 @@ const message = computed(() => sendToken.value && shareMessage({ kind: 'referral
 onShareAppMessage(() => message.value || { title: '一起来攀岩', path: '/pages/index/index' });
 const copyPath = () => sendToken.value && uni.setClipboardData({ data: claimPath(sendToken.value) });
 
-const STATE_TEXT: Record<ReferralRecordState, string> = {
-  pending: '等朋友领取',
-  expired: '过期了，没人领',
-  claimed: '朋友领了，还没来',
-  used: '朋友来过了',
-};
 const recordText = (r: ReferralRecordView) => {
   if (r.state === 'used') return `${r.claimerName} ${formatDot(r.usedOn!)} 来过了`;
   if (r.state === 'claimed') return `${r.claimerName} 领了，${formatDot(r.expiresOn)} 前有效`;
-  return STATE_TEXT[r.state];
+  return SHARE_STATUS_TEXT[r.state];
 };
 const sameDay = gym.rules.referralRequiresInviterSameDay;
 </script>

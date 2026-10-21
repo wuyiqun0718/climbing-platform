@@ -1,6 +1,7 @@
 import { endOfMonth, monthOf, type DateKey } from '@climb/utils';
 import type { GymRules } from './gym';
 import { checkToken, isPeriodActive, RuleError, type RuleErrorCode } from './rules';
+import { shareDisplayStatus, type ShareDisplayStatus } from './share';
 import type { Card, PeriodCard, ReferralVoucher, Share } from './types';
 
 export type ReferralBlockedBy = Extract<RuleErrorCode, 'no-period-card' | 'referral-card-frozen' | 'referral-quota-used'>;
@@ -52,8 +53,8 @@ export function createReferral(args: { id: string; token: string; cards: Card[];
   return { id: args.id, kind: 'referral', token: checkToken(args.token), fromMemberId: memberId, createdOn: today, expiresOn: endOfMonth(today), status: 'pending' };
 }
 
-/** 已发记录的状态：等朋友领、过期没人领、朋友领了还没来、朋友来过了 */
-export type ReferralRecordState = 'pending' | 'expired' | 'claimed' | 'used';
+/** 已发记录的状态：待领取、已过期、已领取（还没来）、已使用；文字用 SHARE_STATUS_TEXT */
+export type ReferralRecordState = ShareDisplayStatus;
 
 export interface ReferralRecord {
   share: Share;
@@ -63,16 +64,16 @@ export interface ReferralRecord {
   usedOn?: DateKey;
 }
 
-/** 我发过的老带新邀请，最近的在前。用没用过看领取人那张体验券（share.status 不会变成 used） */
+/** 我发过的老带新邀请，最近的在前。用没用过看领取人那张体验券（shareDisplayStatus） */
 export function referralRecords(args: { sent: Share[]; cards: Card[]; memberId: string; today: DateKey }): ReferralRecord[] {
   const { sent, cards, memberId, today } = args;
   return sent
     .filter(s => s.kind === 'referral' && s.fromMemberId === memberId)
     .sort((a, b) => (a.createdOn < b.createdOn ? 1 : a.createdOn > b.createdOn ? -1 : 0))
     .map(share => {
-      if (share.status === 'pending') return { share, state: share.expiresOn < today ? 'expired' : 'pending' };
       const voucher = cards.find((c): c is ReferralVoucher => c.kind === 'referral' && c.shareId === share.id);
-      const usedOn = voucher?.usedOn;
-      return { share, state: usedOn || share.status === 'used' ? 'used' : 'claimed', claimerId: share.claimedBy, ...(usedOn ? { usedOn } : {}) };
+      const state = shareDisplayStatus(share, today, voucher);
+      if (state === 'pending' || state === 'expired') return { share, state };
+      return { share, state, claimerId: share.claimedBy, ...(voucher?.usedOn ? { usedOn: voucher.usedOn } : {}) };
     });
 }

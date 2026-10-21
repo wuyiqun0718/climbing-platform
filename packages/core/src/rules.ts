@@ -1,7 +1,7 @@
 import type { DateKey } from '@climb/utils';
 import type { GymRules } from './gym';
 import { isShareToken } from './shareToken';
-import type { Card, CountCard, EntryCard, GiftCard, PeriodCard, ReferralVoucher, Share } from './types';
+import type { Card, CountCard, EntryCard, PeriodCard, Share } from './types';
 
 export type RuleErrorCode =
   | 'card-not-usable'
@@ -14,6 +14,8 @@ export type RuleErrorCode =
   | 'own-share'
   | 'already-claimed'
   | 'share-expired'
+  | 'share-returned'
+  | 'referral-not-newcomer'
   | 'referral-quota-used'
   | 'no-period-card'
   | 'referral-card-frozen'
@@ -145,18 +147,4 @@ export function shareFromCountCard(args: { id: string; token: string; card: Card
       quantity, createdOn: today, expiresOn: count.expiresOn, status: 'pending',
     },
   };
-}
-
-/** 朋友点开链接领取：次卡变成 GiftCard，老带新变成 ReferralVoucher */
-export function claimShare(args: { share: Share; claimerId: string; cardId: string; today: DateKey }): { share: Share; card: GiftCard | ReferralVoucher } {
-  const { share, claimerId, cardId, today } = args;
-  if (share.fromMemberId === claimerId) throw new RuleError('own-share', '这是你自己发出的，发给朋友让 TA 来领');
-  if (share.status !== 'pending') throw new RuleError('already-claimed', '已经被领取了');
-  if (share.expiresOn < today) throw new RuleError('share-expired', '这个链接已经过期');
-  const claimed: Share = { ...share, status: 'claimed', claimedBy: claimerId };
-  const base = { id: cardId, memberId: claimerId, fromMemberId: share.fromMemberId, shareId: share.id, expiresOn: share.expiresOn };
-  const card: GiftCard | ReferralVoucher = share.kind === 'count'
-    ? { ...base, kind: 'gift', name: '好友送的次卡', total: share.quantity!, remaining: share.quantity! }
-    : { ...base, kind: 'referral', name: '老带新体验券' };
-  return { share: claimed, card };
 }

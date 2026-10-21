@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { defaultRules } from './gym';
 import { createReferral, referralRecords, referralStatus } from './referral';
-import { claimShare, RuleError } from './rules';
+import { RuleError } from './rules';
+import { claimShare } from './share';
 import { newShareToken } from './shareToken';
 import type { PeriodCard, Share } from './types';
 
@@ -62,8 +63,8 @@ describe('老带新已发记录', () => {
     const sep = send('r1', '2026-09-03');
     const aug = send('r0', '2026-08-03');
     const oct = send('r2', '2026-10-05');
-    const claimed = claimShare({ share: aug, claimerId: 'lu', cardId: 'v0', today: '2026-08-04' });
-    const used = claimShare({ share: oct, claimerId: 'xia', cardId: 'v2', today });
+    const claimed = claimShare({ share: aug, claimerId: 'lu', claimerCards: [], cardId: 'v0', today: '2026-08-04' });
+    const used = claimShare({ share: oct, claimerId: 'xia', claimerCards: [], cardId: 'v2', today });
     const cards = [claimed.card, { ...used.card, usedOn: today }];
     const records = referralRecords({ sent: [aug.id, sep.id, oct.id].map(id => [claimed.share, sep, used.share].find(s => s.id === id)!), cards, memberId: 'jie', today });
     expect(records.map(r => [r.share.id, r.state, r.claimerId, r.usedOn])).toEqual([

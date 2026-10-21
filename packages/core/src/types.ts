@@ -77,7 +77,8 @@ export interface LessonCard extends CardBase {
 export type Card = PeriodCard | CountCard | GiftCard | ReferralVoucher | LessonCard;
 export type EntryCard = PeriodCard | CountCard | GiftCard | ReferralVoucher;
 
-export type ShareStatus = 'pending' | 'claimed' | 'used';
+/** returned：次卡转赠过期没人领，次数退回原卡（退不退等馆方定，见 mvp-plan 第 9 节问题 4） */
+export type ShareStatus = 'pending' | 'claimed' | 'used' | 'returned';
 
 /** 发到微信里的分享：次卡转赠或老带新邀请 */
 export interface Share {

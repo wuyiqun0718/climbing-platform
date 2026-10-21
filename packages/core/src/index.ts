@@ -3,6 +3,7 @@ export * from './gym';
 export * from './ledger';
 export * from './rules';
 export * from './referral';
+export * from './share';
 export * from './summary';
 export * from './wallet';
 export * from './shop';

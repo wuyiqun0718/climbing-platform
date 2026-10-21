@@ -68,7 +68,7 @@
 |---|---|---|---|---|
 | 24 ✅ | 次卡转赠：选次数 → 生成分享 → `onShareAppMessage` 带 token 的路径；契约里分享改用 token（`GET /shares/:token`） | 3, 10 | `src/pages/share/count.vue`、`packages/api` | 转赠后原卡立刻少次；分享卡片标题和图片正确 |
 | 25 ✅ | 老带新：本月名额、发邀请、已发记录 | 3, 9 | `src/pages/share/referral.vue` | 没期限卡或名额用完时说明原因 |
-| 26 | 领取页：朋友点开 → 登录 → 领取；已领、过期、自己发的分别提示 | 7, 24 | `src/pages/share/claim.vue` | H5 下用两位示例会员能走通转赠和老带新 |
+| 26 ✅ | 领取页：朋友点开 → 登录 → 领取；已领、过期、自己发的分别提示 | 7, 24 | `src/pages/share/claim.vue` | H5 下用两位示例会员能走通转赠和老带新 |
 | 27 | ⏸ 转赠到期没人领：退回原卡（`@climb/core` 加规则和单测）；已发的分享可以撤回 | 24 | `packages/core/src/rules.ts`、`src/mock/routes/shares.ts`、`src/pages/me/shares.vue` | 退回在流水里记 `share_return` |
 
 ## G. 团课

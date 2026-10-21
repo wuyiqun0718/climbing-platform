@@ -12,7 +12,7 @@ function setup() {
   const entry = (storeId: string, cardId: string) => ({ ...mock.issueEntryQr(storeId), cardId, idempotencyKey: `key-${Math.random()}` });
   const as = (memberId: string | null) =>
     createApi({ baseURL: '', gymId: 'benchmark', adapter: mock.adapter, getToken: () => (memberId ? mockToken(memberId) : null) });
-  return { mock, entry, db: mock.db, ajie: as(MOCK_MEMBERS.ajie), xiaolu: as(MOCK_MEMBERS.xiaolu), guest: as(null) };
+  return { mock, entry, db: mock.db, ajie: as(MOCK_MEMBERS.ajie), xiaolu: as(MOCK_MEMBERS.xiaolu), laozhou: as(MOCK_MEMBERS.laozhou), guest: as(null) };
 }
 
 const codeOf = async (p: Promise<unknown>) => {
@@ -52,16 +52,19 @@ describe('mock 接口', () => {
     expect(db.checkIns.filter(c => c.memberId === MOCK_MEMBERS.ajie && c.on === TODAY)).toEqual([]);
   });
 
-  it('次卡转赠：送出立即扣次，朋友领到好友送的次卡，自己不能领、不能重复领', async () => {
-    const { ajie, xiaolu } = setup();
+  it('次卡转赠：送出立即扣次，朋友领到好友送的次卡，自己不能领；重复领返回第一次的卡，别人不能再领', async () => {
+    const { ajie, xiaolu, laozhou, db } = setup();
     const share = await ajie.shares.createCount({ cardId: 'card-ajie-c10', quantity: 2 });
     expect((await ajie.me.cards()).find(c => c.id === 'card-ajie-c10')).toMatchObject({ remaining: 4 });
 
     expect(await codeOf(ajie.shares.claim(share.token))).toEqual({ status: 409, code: 'own-share' });
     const { card } = await xiaolu.shares.claim(share.token);
     expect(card).toMatchObject({ kind: 'gift', remaining: 2, memberId: MOCK_MEMBERS.xiaolu });
-    expect(await codeOf(xiaolu.shares.claim(share.token))).toEqual({ status: 409, code: 'already-claimed' });
-    expect(await xiaolu.shares.get(share.token)).toMatchObject({ status: 'claimed', fromName: '阿杰', mine: false });
+    expect(await xiaolu.shares.claim(share.token)).toMatchObject({ again: true, card: { id: card.id } });
+    expect(await codeOf(laozhou.shares.claim(share.token))).toEqual({ status: 409, code: 'already-claimed' });
+    expect(db.cards.filter(c => c.kind === 'gift')).toHaveLength(1);
+    expect(await xiaolu.shares.get(share.token)).toMatchObject({ status: 'claimed', display: 'claimed', claimedByMe: true, blockedBy: null, fromName: '阿杰', mine: false });
+    expect(await laozhou.shares.get(share.token)).toMatchObject({ claimedByMe: false, blockedBy: 'already-claimed' });
   });
 
   it('送的次数超过剩余次数被拒', async () => {
@@ -80,7 +83,7 @@ describe('mock 接口', () => {
     expect(await codeOf(xiaolu.shares.claim(a.id))).toEqual({ status: 404, code: 'share-not-found' });
     // 没登录也能看（朋友点开先看到是谁送的），只返回会员要看的字段
     const seen = await guest.shares.get(a.token);
-    expect(seen).toEqual({ token: a.token, kind: 'count', quantity: 1, createdOn: TODAY, expiresOn: a.expiresOn, status: 'pending', fromName: '阿杰', mine: false });
+    expect(seen).toEqual({ token: a.token, kind: 'count', quantity: 1, createdOn: TODAY, expiresOn: a.expiresOn, status: 'pending', fromName: '阿杰', mine: false, display: 'pending', claimedByMe: false, blockedBy: null });
     expect(await ajie.shares.get(a.token)).toMatchObject({ mine: true });
     expect(db.shares.find(s => s.id === a.id)).toMatchObject({ fromCardId: 'card-ajie-c10', token: a.token });
   });
@@ -96,6 +99,33 @@ describe('mock 接口', () => {
     expect(db.cards.find(c => c.id === gift.id)).toMatchObject({ remaining: 2 });
     expect(db.ledger.filter(l => l.reason === 'share_out')).toHaveLength(1);
     expect(db.shares).toHaveLength(1);
+  });
+
+  it('领取幂等：同时点两次只领到一张；两个人同时领只有一个成功', async () => {
+    const { ajie, xiaolu, laozhou, db } = setup();
+    const share = await ajie.shares.createCount({ cardId: 'card-ajie-c10', quantity: 1 });
+    const [a, b] = await Promise.all([xiaolu.shares.claim(share.token), xiaolu.shares.claim(share.token)]);
+    expect(a.card.id).toBe(b.card.id);
+    expect([a.again, b.again].sort()).toEqual([false, true]);
+    expect(db.ledger.filter(l => l.reason === 'claim')).toHaveLength(1);
+
+    const other = await ajie.shares.createCount({ cardId: 'card-ajie-c10', quantity: 1 });
+    const results = await Promise.allSettled([xiaolu.shares.claim(other.token), laozhou.shares.claim(other.token)]);
+    expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1);
+    expect(db.cards.filter(c => c.kind === 'gift')).toHaveLength(2);
+  });
+
+  it('老带新体验券只给新客：买过卡的看到原因、领不了；领过一张的不能再领', async () => {
+    const { ajie, xiaolu, laozhou, mock, guest } = setup();
+    const share = await ajie.shares.createReferral();
+    expect(await guest.shares.get(share.token)).toMatchObject({ blockedBy: null });
+    expect(await laozhou.shares.get(share.token)).toMatchObject({ blockedBy: 'referral-not-newcomer' });
+    expect(await codeOf(laozhou.shares.claim(share.token))).toEqual({ status: 409, code: 'referral-not-newcomer' });
+    await xiaolu.shares.claim(share.token);
+
+    mock.db.cards.push({ id: 'card-zhou-year', kind: 'period', memberId: MOCK_MEMBERS.laozhou, productId: 'year', name: '年卡', startsOn: '2026-01-01', expiresOn: '2026-12-31' });
+    const again = await laozhou.shares.createReferral();
+    expect(await codeOf(xiaolu.shares.claim(again.token))).toEqual({ status: 409, code: 'referral-not-newcomer' });
   });
 
   it('老带新页：本月名额、已发记录跟着领取和入场变', async () => {

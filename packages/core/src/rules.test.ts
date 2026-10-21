@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { defaultRules } from './gym';
 import { createReferral, referralQuotaLeft } from './referral';
-import { applyEntry, claimShare, entryOptions, isCardValid, isPeriodActive, RuleError, shareBlockedBy, shareFromCountCard, type EntryContext } from './rules';
+import { claimShare } from './share';
+import { applyEntry, entryOptions, isCardValid, isPeriodActive, RuleError, shareBlockedBy, shareFromCountCard, type EntryContext } from './rules';
 import { newShareToken } from './shareToken';
 import type { CountCard, GiftCard, PeriodCard, Share } from './types';
 
@@ -34,7 +35,7 @@ describe('次卡转赠', () => {
   it('送出的次数从原卡扣掉，朋友领取后得到同样有效期的次卡', () => {
     const { card, share } = shareFromCountCard({ id: 's1', token: T, card: tenTimes, quantity: 2, today });
     expect(card.remaining).toBe(4);
-    const claimed = claimShare({ share, claimerId: 'lu', cardId: 'g1', today });
+    const claimed = claimShare({ share, claimerId: 'lu', claimerCards: [], cardId: 'g1', today });
     expect(claimed.share).toMatchObject({ status: 'claimed', claimedBy: 'lu' });
     expect(claimed.card).toMatchObject({ kind: 'gift', memberId: 'lu', remaining: 2, expiresOn: '2027-02-06' });
   });
@@ -43,8 +44,8 @@ describe('次卡转赠', () => {
     expect(code(() => shareFromCountCard({ id: 's1', token: T, card: tenTimes, quantity: 7, today }))).toBe('not-enough-remaining');
     expect(code(() => shareFromCountCard({ id: 's1', token: T, card: tenTimes, quantity: 0, today }))).toBe('invalid-quantity');
     const { share } = shareFromCountCard({ id: 's1', token: T, card: tenTimes, quantity: 1, today });
-    expect(code(() => claimShare({ share, claimerId: 'jie', cardId: 'g1', today }))).toBe('own-share');
-    expect(code(() => claimShare({ share: { ...share, status: 'claimed' }, claimerId: 'lu', cardId: 'g1', today }))).toBe('already-claimed');
+    expect(code(() => claimShare({ share, claimerId: 'jie', claimerCards: [], cardId: 'g1', today }))).toBe('own-share');
+    expect(code(() => claimShare({ share: { ...share, status: 'claimed' }, claimerId: 'lu', claimerCards: [], cardId: 'g1', today }))).toBe('already-claimed');
   });
 
   it('分享带 token 和原卡，有效期跟原卡一致', () => {
@@ -83,13 +84,13 @@ describe('老带新', () => {
   it('体验券当月底前有效，邀请人当天入场前不能用', () => {
     const share = invite();
     expect(share.expiresOn).toBe('2026-10-31');
-    const { card } = claimShare({ share, claimerId: 'lu', cardId: 'v1', today });
+    const { card } = claimShare({ share, claimerId: 'lu', claimerCards: [], cardId: 'v1', today });
     expect(entryOptions([card], ctx())[0]).toMatchObject({ usable: false, blockedBy: 'inviter-not-checked-in' });
     expect(code(() => applyEntry(card, ctx()))).toBe('inviter-not-checked-in');
   });
 
   it('邀请人入场后，朋友当天可以免费入场一次', () => {
-    const { card } = claimShare({ share: invite(), claimerId: 'lu', cardId: 'v1', today });
+    const { card } = claimShare({ share: invite(), claimerId: 'lu', claimerCards: [], cardId: 'v1', today });
     const res = applyEntry(card, ctx(['jie']));
     expect(res).toMatchObject({ deducted: 0, card: { usedOn: today } });
     expect(entryOptions([res.card], ctx(['jie']))).toEqual([]);

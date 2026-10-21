@@ -75,6 +75,12 @@
       }
     },
     {
+      "path": "pages/share/claim",
+      "style": {
+        "navigationBarTitleText": "领取"
+      }
+    },
+    {
       "path": "pages/login/index",
       "style": {
         "navigationBarTitleText": "登录"

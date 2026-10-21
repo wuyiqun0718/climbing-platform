@@ -1,5 +1,7 @@
-import type { MyReferrals, ShareView } from '@climb/api';
-import { claimShare, createReferral, isShareToken, referralRecords, referralStatus, newShareToken, shareFromCountCard, type Card, type LedgerEntry, type Share } from '@climb/core';
+import type { ClaimResult, MyReferrals, ShareView } from '@climb/api';
+import {
+  claimBlockedBy, claimShare, createReferral, isRepeatClaim, isShareToken, referralRecords, referralStatus, newShareToken, shareDisplayStatus, shareFromCountCard, type Card, type LedgerEntry, type Share,
+} from '@climb/core';
 import type { DateKey } from '@climb/utils';
 import type { MockDb } from '../db';
 import { MockHttpError, type MockContext, type MockRoutes } from '../router';
@@ -40,16 +42,25 @@ export function createShareRoutes(
     return share;
   };
 
-  const view = (s: Share, viewer: string | null): ShareView => ({
-    token: s.token,
-    kind: s.kind,
-    quantity: s.quantity,
-    createdOn: s.createdOn,
-    expiresOn: s.expiresOn,
-    status: s.status,
-    fromName: db.members.find(m => m.id === s.fromMemberId)?.name ?? '',
-    mine: s.fromMemberId === viewer,
-  });
+  const claimedCard = (s: Share) => db.cards.find(c => (c.kind === 'gift' || c.kind === 'referral') && c.shareId === s.id);
+  const cardsOf = (memberId: string) => db.cards.filter(c => c.memberId === memberId);
+
+  const view = (s: Share, viewer: string | null): ShareView => {
+    const claimedByMe = !!viewer && s.claimedBy === viewer;
+    return {
+      token: s.token,
+      kind: s.kind,
+      quantity: s.quantity,
+      createdOn: s.createdOn,
+      expiresOn: s.expiresOn,
+      status: s.status,
+      fromName: db.members.find(m => m.id === s.fromMemberId)?.name ?? '',
+      mine: s.fromMemberId === viewer,
+      display: shareDisplayStatus(s, h.today(), claimedCard(s)),
+      claimedByMe,
+      blockedBy: claimedByMe ? null : claimBlockedBy({ share: s, claimerId: viewer, claimerCards: viewer ? cardsOf(viewer) : [], today: h.today() }),
+    };
+  };
 
   return {
     'POST /shares/count': ctx => {
@@ -85,15 +96,18 @@ export function createShareRoutes(
 
     'GET /shares/:token': ctx => view(byToken(ctx.params.token), ctx.memberId),
 
-    'POST /shares/:token/claim': ctx => {
+    'POST /shares/:token/claim': (ctx): ClaimResult => {
       const me = h.requireMember(ctx);
       const share = byToken(ctx.params.token);
-      const result = claimShare({ share, claimerId: me, cardId: h.nextId('card'), today: h.today() });
+      // 重复领：返回第一次领到的卡。后端在同一个事务里锁住分享再判断，并发的第二个请求会走到这里或被 already-claimed 拦下
+      const first = isRepeatClaim(share, me) ? claimedCard(share) : undefined;
+      if (first) return { share: view(share, me), card: first, again: true };
+      const result = claimShare({ share, claimerId: me, claimerCards: cardsOf(me), cardId: h.nextId('card'), today: h.today() });
       db.shares = db.shares.map(s => (s.id === share.id ? result.share : s));
       db.cards.push(result.card);
       // 好友送的次卡记 +N，跟原卡的 share_out -N 对得上；体验券算 1 次
       h.record(result.card, result.card.kind === 'gift' ? result.card.total : 1, 'claim', { type: 'share', id: share.id });
-      return { share: view(result.share, me), card: result.card };
+      return { share: view(result.share, me), card: result.card, again: false };
     },
   };
 }

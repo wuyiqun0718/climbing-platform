@@ -1,4 +1,4 @@
-import type { Card, CheckIn, EntryCard, EntryOption, InsurancePolicy, LedgerEntry, Order, Product, ReferralRecordState, ReferralStatus, ReferralWait, RuleErrorCode, Share, WaiverHistory, WaiverSignature, WaiverVersion } from '@climb/core';
+import type { Card, CheckIn, EntryCard, EntryOption, InsurancePolicy, LedgerEntry, Order, Product, ReferralRecordState, ReferralStatus, ReferralWait, RuleErrorCode, Share, ShareDisplayStatus, WaiverHistory, WaiverSignature, WaiverVersion } from '@climb/core';
 import { createHttp, type ClientOptions } from './client';
 
 export * from './client';
@@ -138,6 +138,19 @@ export interface MyReferrals {
 export interface ShareView extends Pick<Share, 'token' | 'kind' | 'quantity' | 'createdOn' | 'expiresOn' | 'status'> {
   fromName: string;
   mine: boolean;
+  /** 显示用的状态（@climb/core shareDisplayStatus），文字用 SHARE_STATUS_TEXT */
+  display: ShareDisplayStatus;
+  /** 当前登录的会员就是领取人 */
+  claimedByMe: boolean;
+  /** 当前的人能不能领（@climb/core claimBlockedBy）；没登录只看分享本身；自己领过的为 null，看 claimedByMe */
+  blockedBy: RuleErrorCode | null;
+}
+
+/** `POST /shares/:token/claim` 的返回。again：同一个人重复领（重试、连点），返回第一次领到的卡，不会多一张 */
+export interface ClaimResult {
+  share: ShareView;
+  card: Card;
+  again: boolean;
 }
 
 /**
@@ -209,7 +222,11 @@ export function createApi(opts: ClientOptions) {
       createReferral: () => http<Share>('POST', '/shares/referral'),
       /** token 是分享路径里带的；查不到返回 404 share-not-found */
       get: (token: string) => http<ShareView>('GET', `/shares/${encodeURIComponent(token)}`),
-      claim: (token: string) => http<{ share: ShareView; card: Card }>('POST', `/shares/${encodeURIComponent(token)}/claim`),
+      /**
+       * 领取。自己发的、已被别人领、过期、退回、老带新领取人不是新客返回 409（@climb/core claimBlockedBy）。
+       * 幂等：同一个人重复领返回第一次的结果（again 为 true）；并发领只有一个成功，后端靠事务和 status 条件更新兜底
+       */
+      claim: (token: string) => http<ClaimResult>('POST', `/shares/${encodeURIComponent(token)}/claim`),
     },
   };
 }
