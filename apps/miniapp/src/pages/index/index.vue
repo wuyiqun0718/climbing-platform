@@ -63,7 +63,6 @@ const firstTime = computed(() => member.state.cards.length === 0);
 // 下面这些页面还没做，做好后把对应的 case 换成跳转
 const SOON: Record<string, string> = {
   scan: '扫码入场（任务 18）',
-  shop: '购卡（任务 13）',
   classes: '团课（任务 30）',
   pt: '私教（任务 33）',
   events: '活动（任务 36）',
@@ -71,6 +70,9 @@ const SOON: Record<string, string> = {
 };
 function open(key: string) {
   if (key === 'wallet') return uni.switchTab({ url: '/pages/cards/index' });
+  if (key === 'shop' || key === 'shop:single') {
+    return uni.navigateTo({ url: key === 'shop' ? '/pages/shop/index' : '/pages/shop/index?seg=single' });
+  }
   uni.showToast({ title: `${SOON[key] ?? key}还在做`, icon: 'none' });
 }
 
@@ -135,7 +137,7 @@ onShow(() => {
           : '续一张卡就能接着来爬。'
       }}</text>
       <view class="row">
-        <button class="btn primary" size="mini" @tap="open('shop')">{{ firstTime ? '买单次票' : '去续卡' }}</button>
+        <button class="btn primary" size="mini" @tap="open(firstTime ? 'shop:single' : 'shop')">{{ firstTime ? '买单次票' : '去续卡' }}</button>
         <button class="btn" size="mini" @tap="open('shop')">看看其他卡</button>
       </view>
     </view>

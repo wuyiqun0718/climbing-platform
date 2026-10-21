@@ -43,7 +43,7 @@
 
 | # | 任务 | 依赖 | 涉及文件 | 完成标准 |
 |---|---|---|---|---|
-| 13 | 卡种列表页：期限卡、次卡、单次票、私教课包、团课课包，按类别分组，显示卖点（含「每次入场含当日保险」） | 4 | `src/pages/shop/index.vue` | 价格用 `formatYuan` 显示，数据来自 `GET /products` |
+| 13 ✅ | 卡种列表页：期限卡、次卡、单次票、私教课包、团课课包，按类别分组，显示卖点（含「每次入场含当日保险」） | 4 | `src/pages/shop/index.vue` | 价格用 `formatYuan` 显示，数据来自 `GET /products` |
 | 14 | 契约 + mock：`POST /orders`、`GET /orders/:id`、`GET /me/orders`；mock 下单后模拟「支付回调」再发卡 | 1 | `packages/api`、`src/mock/routes/orders.ts` | 单测：没「回调」前订单是 pending、卡包里没有新卡；回调后发卡且只发一次 |
 | 15 | 下单和拉起支付：确认页 → `uni.requestPayment`；mock 下弹一个「模拟支付」确认；支付后轮询订单结果 | 13, 14 | `src/pages/shop/checkout.vue`、`src/lib/pay.ts` | 支付成功跳卡包能看到新卡；取消支付提示「订单还在，可以去订单里继续付」 |
 | 16 | 订单记录页 | 14 | `src/pages/me/orders.vue` | 显示状态（待支付、已支付、已退款）和渠道（小程序、前台） |

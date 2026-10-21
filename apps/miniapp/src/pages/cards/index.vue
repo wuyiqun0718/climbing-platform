@@ -29,11 +29,14 @@ const SOON: Record<string, string> = {
   share: '次卡转赠（任务 24）',
   classes: '团课（任务 30）',
   pt: '私教（任务 33）',
-  shop: '购卡（任务 13）',
 };
 function open(key: string, cardId?: string) {
   if (key === 'ledger' && cardId) {
     uni.navigateTo({ url: `/pages/cards/detail?id=${encodeURIComponent(cardId)}` });
+    return;
+  }
+  if (key === 'shop') {
+    uni.navigateTo({ url: '/pages/shop/index' });
     return;
   }
   uni.showToast({ title: `${SOON[key] ?? key}还在做`, icon: 'none' });
