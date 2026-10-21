@@ -20,6 +20,8 @@ export interface MockStore {
 /** 入场记录：后端 check_ins 表里多存的是不是再次入场、幂等键、当天保单 */
 export interface MockCheckIn extends CheckIn {
   reentry: boolean;
+  /** 被前台撤销了（后台撤销入场，跟后台分支的 voided 同名）；攀爬日历不算，同日再次入场也不算 */
+  voided?: boolean;
   idempotencyKey?: string;
   policyId: string;
 }

@@ -93,6 +93,12 @@
       }
     },
     {
+      "path": "pages/me/calendar",
+      "style": {
+        "navigationBarTitleText": "攀爬日历"
+      }
+    },
+    {
       "path": "pages/login/index",
       "style": {
         "navigationBarTitleText": "登录"

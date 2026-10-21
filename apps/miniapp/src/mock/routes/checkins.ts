@@ -1,9 +1,9 @@
-import type { CheckInPreview, CheckInResult, EntryQrBody, ReferralWaitInfo } from '@climb/api';
+import type { CheckInPreview, CheckInResult, ClimbCalendar, EntryQrBody, ReferralWaitInfo } from '@climb/api';
 import {
-  checkEntryQr, checkInPlan, checkInWith, referralWait, currentWaiver, entryLedgerDelta, hasSignedWaiver, insuranceForEntry, newEntryQr, newPolicy, useEntryQr,
+  checkEntryQr, checkInPlan, climbCalendar, isMonthKey, checkInWith, referralWait, currentWaiver, entryLedgerDelta, hasSignedWaiver, insuranceForEntry, newEntryQr, newPolicy, useEntryQr,
   type Card, type CheckInArgs, type EntryCard, type EntryContext, type GymRules, type LedgerEntry,
 } from '@climb/core';
-import type { DateKey } from '@climb/utils';
+import { monthOf, type DateKey } from '@climb/utils';
 import type { MockCheckIn, MockDb } from '../db';
 import { MockHttpError, type MockContext, type MockRoutes } from '../router';
 
@@ -57,7 +57,7 @@ export function createCheckInRoutes(
     memberId,
     storeId,
     cards: db.cards.filter(c => c.memberId === memberId),
-    past: db.checkIns.filter(c => c.memberId === memberId).map(c => ({ ...c, voided: false })),
+    past: db.checkIns.filter(c => c.memberId === memberId).map(c => ({ ...c, voided: !!c.voided })),
     ctx: entryContext(h.today()),
   });
 
@@ -69,6 +69,15 @@ export function createCheckInRoutes(
   };
 
   return {
+    'GET /me/check-ins': (ctx): ClimbCalendar => {
+      const me = h.requireMember(ctx);
+      const month = ctx.query.month || monthOf(h.today());
+      if (!isMonthKey(month)) throw new MockHttpError(400, 'bad-request', '月份格式是 YYYY-MM');
+      // db.checkIns 按入场先后追加
+      const days = climbCalendar(db.checkIns.map(c => ({ ...c, voided: !!c.voided })), me, month);
+      return { month, days: days.map(d => ({ ...d, stores: d.storeIds.map(id => storeOf(id)) })) };
+    },
+
     // 放在 /check-ins/:id 前面，免得 referral-wait 被当成 id
     'GET /check-ins/referral-wait': (ctx): ReferralWaitInfo | null => {
       const me = h.requireMember(ctx);

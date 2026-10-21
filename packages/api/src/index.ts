@@ -1,4 +1,4 @@
-import type { Card, CheckIn, ClassBooking, ClassBookingStatus, ClassSession, PtBooking, PtBookingStatus, PtSlot, PtSlotMark, EntryCard, EntryOption, InsurancePolicy, LedgerEntry, Order, Product, ReferralRecordState, ReferralStatus, ReferralWait, RuleErrorCode, Share, ShareDisplayStatus, WaiverHistory, WaiverSignature, WaiverVersion } from '@climb/core';
+import type { Card, CheckIn, ClassBooking, ClimbDay, ClassBookingStatus, ClassSession, PtBooking, PtBookingStatus, PtSlot, PtSlotMark, EntryCard, EntryOption, InsurancePolicy, LedgerEntry, Order, Product, ReferralRecordState, ReferralStatus, ReferralWait, RuleErrorCode, Share, ShareDisplayStatus, WaiverHistory, WaiverSignature, WaiverVersion } from '@climb/core';
 import { createHttp, type ClientOptions } from './client';
 
 export * from './client';
@@ -263,6 +263,15 @@ export interface CoachSchedule {
 }
 
 /**
+ * `GET /me/check-ins?month=YYYY-MM`：攀爬日历。只列入过场的日子（@climb/core climbCalendar）：
+ * 被前台撤销的入场不算，同一天多次入场只算一天，stores 是那天去过的门店（按先后）
+ */
+export interface ClimbCalendar {
+  month: string;
+  days: (ClimbDay & { stores: { id: string; name: string }[] })[];
+}
+
+/**
  * 接口定义（后端还没开始写，路径是约定稿）。
  * 新增接口时在这里加方法，两个端都能直接用上。
  */
@@ -295,6 +304,8 @@ export function createApi(opts: ClientOptions) {
       unfreezeCard: (cardId: string) => http<Card>('POST', `/me/cards/${encodeURIComponent(cardId)}/unfreeze`),
       /** 自己的订单，最新的在前 */
       orders: () => http<Order[]>('GET', '/me/orders'),
+      /** 攀爬日历：month 是本地月份 YYYY-MM，不填为这个月；格式不对返回 400 */
+      checkIns: (month?: string) => http<ClimbCalendar>('GET', month ? `/me/check-ins?month=${encodeURIComponent(month)}` : '/me/check-ins'),
       /** 历次保单（每张挂着它保的入场）和签过的风险告知书 */
       insurance: () => http<MyInsurance>('GET', '/me/insurance'),
       /** 老带新：本月名额、不能发的原因、已发记录（最近的在前） */
