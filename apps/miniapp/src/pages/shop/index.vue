@@ -6,7 +6,7 @@ import { onLoad } from '@dcloudio/uni-app';
 import { computed, ref } from 'vue';
 import { api, run } from '../../api';
 
-// 看卡种不用登录，下单时再登录（任务 15）
+// 看卡种不用登录，到确认订单页再登录
 const products = ref<Product[]>([]);
 const loaded = ref(false);
 const seg = ref<ShopSection | ''>('');
@@ -47,8 +47,7 @@ const list = computed(() => (current.value?.products ?? []).map(p => ({
 })));
 
 function buy(productId: string) {
-  // 下单和支付在任务 15 做
-  uni.showToast({ title: `下单还在做（${productId}）`, icon: 'none' });
+  uni.navigateTo({ url: `/pages/shop/checkout?id=${encodeURIComponent(productId)}` });
 }
 </script>
 

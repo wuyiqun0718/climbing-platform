@@ -1,7 +1,10 @@
-import { createApi, uniAdapter } from '@climb/api';
+import { createApi, uniAdapter, type WxPayParams } from '@climb/api';
+import type { Order } from '@climb/core';
+import { formatYuan } from '@climb/utils';
 import gym from '@gym';
 import { PRIVACY } from './config/privacy';
 import { createAuth, type Session } from './lib/auth';
+import { createPay, isPayCancel, type PromptResult } from './lib/pay';
 import { createPrivacy } from './lib/privacy';
 import { createRunner, withRelogin } from './lib/request';
 import { createMock, type MockStorage } from './mock';
@@ -73,3 +76,35 @@ export const run = createRunner({
   hideLoading: () => uni.hideLoading(),
   toast: title => uni.showToast({ title, icon: 'none', duration: 2500 }),
 });
+
+function wxPayment(payment: WxPayParams): Promise<PromptResult> {
+  return new Promise((resolve, reject) => {
+    uni.requestPayment({
+      provider: 'wxpay',
+      orderInfo: {},
+      ...payment,
+      success: () => resolve('ok'),
+      fail: err => (isPayCancel(err) ? resolve('cancel') : reject(err)),
+    });
+  });
+}
+
+/** mock 下没有微信支付：弹个确认框，点「确认支付」就模拟一次支付回调 */
+function mockPayment(_payment: WxPayParams, order: Order): Promise<PromptResult> {
+  return new Promise((resolve, reject) => {
+    uni.showModal({
+      title: '模拟支付',
+      content: `${order.product.name} ${formatYuan(order.amountCents)}\n开发环境，不会真的扣款`,
+      confirmText: '确认支付',
+      cancelText: '不付了',
+      success: r => {
+        if (!r.confirm) return resolve('cancel');
+        mock!.simulatePayment(order.id).then(() => resolve('ok'), reject);
+      },
+      fail: reject,
+    });
+  });
+}
+
+/** 下单和支付，见 src/lib/pay.ts */
+export const pay = createPay({ orders: api.orders, requestPayment: mock ? mockPayment : wxPayment });
