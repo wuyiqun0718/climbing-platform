@@ -446,7 +446,7 @@ function voidDeskCheckIn(db: MockDb, staff: Staff, id: string, body: Partial<Voi
     if (done) return ok(done);
     // 示例数据里本来就撤销了的：没有第一次的结果，按现在的样子返回
     const card = db.cards.find(c => c.id === checkIn.cardId) ?? null;
-    const res: VoidCheckInResult = { checkIn: entryRow(db, checkIn), card, restored: checkIn.deducted, voucherRestored: false, insurance: null };
+    const res: VoidCheckInResult = { checkIn: entryRow(db, checkIn), card, restored: checkIn.deducted, moved: null, voucherRestored: false, insurance: null };
     return ok(res);
   }
 
@@ -455,7 +455,7 @@ function voidDeskCheckIn(db: MockDb, staff: Staff, id: string, body: Partial<Voi
   const mine = db.checkIns.filter(c => c.memberId === checkIn.memberId);
   let r: ReturnType<typeof voidCheckIn<Card, MockDb['policies'][number]>>;
   try {
-    r = voidCheckIn({ checkIn, card: db.cards[cardIdx] ?? null, past: mine, policies: db.policies.filter(p => p.memberId === checkIn.memberId), reason });
+    r = voidCheckIn({ checkIn, card: db.cards[cardIdx] ?? null, past: mine, cards: db.cards.filter(c => c.memberId === checkIn.memberId), policies: db.policies.filter(p => p.memberId === checkIn.memberId), reason });
   } catch (e) {
     if (e instanceof RuleError && e.code === 'reason-required') return badInput('reason', e.message);
     if (e instanceof RuleError) return fail(422, e.code, e.message);
@@ -465,14 +465,29 @@ function voidDeskCheckIn(db: MockDb, staff: Staff, id: string, body: Partial<Voi
   const at = nowAt(db);
   checkIn.voided = true;
   checkIn.void = { at, staffId: staff.id, reason };
+  const operator = { operatorType: 'staff' as const, operatorId: staff.id };
   const card = r.card;
+  const moved = r.moved;
   if (card) {
     db.cards[cardIdx] = card;
-    const entry = checkInVoidLedgerEntry({ id: nextId('l-', db.ledger), card, restored: r.restored, at, checkInId: checkIn.id, operator: { operatorType: 'staff', operatorId: staff.id }, note: reason });
+    const movedTo = moved && !moved.card ? moved.checkIn.id : undefined;
+    const entry = checkInVoidLedgerEntry({ id: nextId('l-', db.ledger), card, restored: r.restored, movedTo, at, checkInId: checkIn.id, operator, note: reason });
     if (entry) db.ledger.push(entry);
     if (r.voucherRestored && card.kind === 'referral') {
       const ref = db.referrals.find(x => x.id === card.shareId);
       if (ref && ref.usedOn === checkIn.on) ref.usedOn = null;
+    }
+  }
+  let movedRow: MockCheckIn | undefined;
+  if (moved) {
+    movedRow = db.checkIns.find(c => c.id === moved.checkIn.id)!;
+    movedRow.deducted = moved.checkIn.deducted;
+    if (moved.card) {
+      const i = db.cards.findIndex(c => c.id === moved.card!.id);
+      db.cards[i] = moved.card;
+      const note = `撤销同一天的入场 ${checkIn.id}，扣次转到这次`;
+      const entry = checkInLedgerEntry({ id: nextId('l-', db.ledger), card: moved.card, deducted: moved.checkIn.deducted, at, checkInId: movedRow.id, operator, note });
+      if (entry) db.ledger.push(entry);
     }
   }
   if (r.policy) {
@@ -486,6 +501,7 @@ function voidDeskCheckIn(db: MockDb, staff: Staff, id: string, body: Partial<Voi
     checkIn: entryRow(db, checkIn),
     card: r.card,
     restored: r.restored,
+    moved: movedRow ? { checkIn: entryRow(db, movedRow), card: moved!.card } : null,
     voucherRestored: r.voucherRestored,
     insurance: r.policy ? { policyId: r.policy.id, status: r.policy.status, checkInId: r.policy.checkInId } : null,
   };

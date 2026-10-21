@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { InsurancePolicy } from './insurance';
 import { ledgerMismatch, type LedgerEntry } from './ledger';
 import { RuleError } from './rules';
-import type { CountCard, PeriodCard, ReferralVoucher } from './types';
-import { checkInVoidLedgerEntry, voidCheckIn, type VoidableCheckIn } from './voidCheckIn';
+import type { Card, CountCard, GiftCard, PeriodCard, ReferralVoucher } from './types';
+import { checkInVoidLedgerEntry, voidCheckIn as voidWith, type VoidableCheckIn, type VoidCheckInArgs } from './voidCheckIn';
 
 const today = '2026-10-21';
 const year: PeriodCard = { id: 'p1', kind: 'period', memberId: 'jie', productId: 'y1', name: '年卡', startsOn: '2026-03-15', expiresOn: '2027-03-14' };
@@ -12,6 +12,8 @@ const voucher: ReferralVoucher = { id: 'v1', kind: 'referral', memberId: 'jie', 
 
 const entry = (id: string, over: Partial<VoidableCheckIn> = {}): VoidableCheckIn => ({ id, memberId: 'jie', storeId: 'bingang', on: today, cardId: 'c1', deducted: 0, voided: false, ...over });
 const policy = (over: Partial<InsurancePolicy> = {}): InsurancePolicy => ({ id: 'ip1', memberId: 'jie', storeId: 'bingang', on: today, checkInId: 'ci1', status: 'pending', ...over });
+// 卡默认是这个会员的三张卡
+const voidCheckIn = <C extends Card>(a: Omit<VoidCheckInArgs<C, InsurancePolicy>, 'cards'> & { cards?: Card[] }) => voidWith<C, InsurancePolicy>({ cards: [tenTimes, year, voucher], ...a });
 const code = (fn: () => unknown) => { try { fn(); } catch (e) { return (e as RuleError).code; } return null; };
 
 describe('撤销入场：次数', () => {
@@ -35,16 +37,35 @@ describe('撤销入场：次数', () => {
     expect(checkInVoidLedgerEntry({ id: 'l2', card: r.card!, restored: 0, at: '', checkInId: 'ci2', operator: { operatorType: 'staff', operatorId: 's1' }, note: '' })).toBeNull();
   });
 
-  it('撤销当天扣了次的那次，只退那 1 次；同一天扣 0 的那次留着', () => {
+  it('撤销扣了次的那次，同一天还有用同一张卡免扣再进的：不退，扣次转给最早那次，记一笔 0 的流水', () => {
     const first = entry('ci1', { deducted: 1 });
-    const r = voidCheckIn({ checkIn: first, card: tenTimes, past: [first, entry('ci2')], policies: [], reason: '扫错了' });
-    expect(r.restored).toBe(1);
-    expect(r.card).toMatchObject({ remaining: 6 });
+    const r = voidCheckIn({ checkIn: first, card: tenTimes, past: [first, entry('ci2', { voided: true }), entry('ci3'), entry('ci4')], policies: [], reason: '扫错了' });
+    expect(r).toMatchObject({ restored: 0, card: { remaining: 5 }, moved: { checkIn: { id: 'ci3', deducted: 1 }, card: null } });
+    const e = checkInVoidLedgerEntry({ id: 'l2', card: r.card!, restored: 0, movedTo: 'ci3', at: '', checkInId: 'ci1', operator: { operatorType: 'staff', operatorId: 's1' }, note: '扫错了' });
+    expect(e).toMatchObject({ delta: 0, remainingAfter: 5, reason: 'check_in_void', note: '扫错了（扣次转到同一天的入场 ci3）' });
+  });
+
+  it('免扣再进用的是另一张次卡：这张退回，那张扣掉；那张不够扣、冻结的跳过，都不行才退回', () => {
+    const gift: GiftCard = { id: 'g1', kind: 'gift', memberId: 'jie', fromMemberId: 'lu', shareId: 's2', name: '朋友送的次卡', total: 2, remaining: 2, expiresOn: '2027-01-01' };
+    const first = entry('ci1', { deducted: 1 });
+    const viaGift = entry('ci2', { cardId: 'g1' });
+    const r = voidCheckIn({ checkIn: first, card: tenTimes, cards: [tenTimes, gift], past: [first, viaGift], policies: [], reason: 'x' });
+    expect(r).toMatchObject({ restored: 1, card: { remaining: 6 }, moved: { checkIn: { id: 'ci2', deducted: 1 }, card: { id: 'g1', remaining: 1 } } });
+    for (const g of [{ ...gift, remaining: 0 }, { ...gift, status: 'frozen' as const }]) {
+      const n = voidCheckIn({ checkIn: first, card: tenTimes, cards: [tenTimes, g], past: [first, viaGift], policies: [], reason: 'x' });
+      expect(n).toMatchObject({ restored: 1, moved: null });
+    }
+  });
+
+  it('同一天别的入场扣 0 不是因为再次入场（期限卡、体验券、没卡）：照常退回', () => {
+    const first = entry('ci1', { deducted: 1 });
+    const others = [entry('ci2', { cardId: 'p1' }), entry('ci3', { cardId: 'v1' }), entry('ci4', { cardId: null })];
+    expect(voidCheckIn({ checkIn: first, card: tenTimes, past: [first, ...others], policies: [], reason: 'x' })).toMatchObject({ restored: 1, moved: null, card: { remaining: 6 } });
   });
 
   it('期限卡、没卡的入场不动卡', () => {
     const p = voidCheckIn({ checkIn: entry('ci1', { cardId: 'p1' }), card: year, past: [], policies: [], reason: 'x' });
-    expect(p).toEqual({ card: year, restored: 0, voucherRestored: false, policy: null });
+    expect(p).toEqual({ card: year, restored: 0, moved: null, voucherRestored: false, policy: null });
     expect(voidCheckIn({ checkIn: entry('ci1', { cardId: null }), card: null, past: [], policies: [], reason: 'x' }).card).toBeNull();
   });
 });
@@ -58,10 +79,12 @@ describe('撤销入场：体验券', () => {
     expect(r.restored).toBe(0);
   });
 
-  it('同一天还有别的没撤销的入场也用这张券，券还算用过', () => {
+  it('同一天还有别的没撤销的入场（不管用哪张卡），券还算用过；别的都撤销了才恢复', () => {
     const ci = entry('ci1', { cardId: 'v1' });
-    const r = voidCheckIn({ checkIn: ci, card: voucher, past: [ci, entry('ci2', { cardId: 'v1' })], policies: [], reason: 'x' });
-    expect(r).toMatchObject({ voucherRestored: false, card: { usedOn: today } });
+    for (const other of [entry('ci2', { cardId: 'v1' }), entry('ci2', { cardId: 'p1' })]) {
+      const r = voidCheckIn({ checkIn: ci, card: voucher, past: [ci, other], policies: [], reason: 'x' });
+      expect(r).toMatchObject({ voucherRestored: false, card: { usedOn: today } });
+    }
     const other = voidCheckIn({ checkIn: ci, card: voucher, past: [ci, entry('ci2', { cardId: 'v1', voided: true })], policies: [], reason: 'x' });
     expect(other.voucherRestored).toBe(true);
   });

@@ -343,7 +343,8 @@ export interface DeskCheckInResult {
  * 前台、店长、老板都能撤（权限 checkIn.void），扫码和前台登记的都能撤；入场的门店必须是员工能操作的店，否则 403；没有这条入场 404；
  * reason 必填，空的 400（data.field = reason）。
  * 成功后：入场记录标记撤销（时间、撤销人、原因）；次卡只退这次实际扣的次数（同日再次入场扣 0 的不退），退了就记一笔 check_in_void 流水（备注是原因）；
- * 用掉的体验券恢复成没用过；保单按 core 的规则改挂到同一天别的入场或标记待退保；会员的最近入场按没撤销的重新算。
+ * 同一天还有免扣再进的入场时，扣次转给最早那次（那条的 deducted 改掉，返回在 moved 里；同一张卡不退，记一笔 0 的流水；另一张卡就这张退、那张扣）；
+ * 用掉的体验券在同一天没有别的入场时恢复成没用过；保单按 core 的规则改挂到同一天别的入场或标记待退保；会员的最近入场按没撤销的重新算。
  * 同一条入场重复撤销返回第一次的结果，不再退次。
  * 操作日志等任务 23 做了再写。
  */
@@ -355,8 +356,10 @@ export interface VoidCheckInResult {
   checkIn: MemberEntryRow;
   /** 撤销后的卡；没卡的入场为 null */
   card: Card | null;
-  /** 退回了几次 */
+  /** 这张卡退回了几次；扣次转给同一张卡的另一次入场时为 0 */
   restored: number;
+  /** 扣次转给了同一天的哪次入场（改后的那条）；转到另一张卡时带上扣过的那张卡。没转为 null */
+  moved: { checkIn: MemberEntryRow; card: Card | null } | null;
   voucherRestored: boolean;
   /** 这次撤销改过的保单：改挂到别的入场后的、或者待退保的；保单不受影响为 null */
   insurance: { policyId: string; status: PolicyStatus; checkInId: string } | null;

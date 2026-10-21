@@ -646,7 +646,7 @@ describe('后台 mock：撤销入场', () => {
     expect(db.members.find(x => x.id === m.id)!.lastEntryOn).toBeNull();
   });
 
-  it('同日再次入场扣 0 的撤销不退；撤销扣次的那次退 1 次，保单改挂到没撤销的那次', async () => {
+  it('同日再次入场扣 0 的撤销不退；撤销扣次的那次时还有免扣再进的：不退，扣次转给那次，保单改挂过去', async () => {
     const { api, db, m, card, enter, first } = await entered();
     const again = await enter('ci-req-2');
     expect(again.deducted).toBe(0);
@@ -654,9 +654,19 @@ describe('后台 mock：撤销入场', () => {
     const third = await enter('ci-req-3');
     expect(third.deducted).toBe(0);
     const r = await api.checkIns.void(first.checkIn.id, { reason: '扫错了' });
-    expect(r).toMatchObject({ restored: 1, card: { remaining: 10 }, insurance: { policyId: first.insurance.policyId, status: 'pending', checkInId: third.checkIn.id } });
+    expect(r).toMatchObject({
+      restored: 0,
+      card: { remaining: 9 },
+      moved: { checkIn: { id: third.checkIn.id, deducted: 1, voided: false }, card: null },
+      insurance: { policyId: first.insurance.policyId, status: 'pending', checkInId: third.checkIn.id },
+    });
+    expect(db.checkIns.find(c => c.id === third.checkIn.id)!.deducted).toBe(1);
+    expect(db.ledger.at(-1)).toMatchObject({ cardId: card.id, reason: 'check_in_void', delta: 0, remainingAfter: 9 });
     expect(db.policies).toHaveLength(1);
     expect(db.members.find(x => x.id === m.id)!.lastEntryOn).toBe('2026-10-21');
+    expect(ledgerMismatch(db.cards.find(c => c.id === card.id)!, db.ledger)).toBeNull();
+    // 转过去的那次再撤销，当天没有别的入场了，才退回
+    expect(await api.checkIns.void(third.checkIn.id, { reason: '人走了' })).toMatchObject({ restored: 1, moved: null, card: { remaining: 10 }, insurance: { status: 'refund_pending' } });
     expect(ledgerMismatch(db.cards.find(c => c.id === card.id)!, db.ledger)).toBeNull();
   });
 
@@ -679,14 +689,17 @@ describe('后台 mock：撤销入场', () => {
   });
 
   it('体验券撤销后恢复成没用过，老带新记录也清掉到店日', async () => {
-    const { api, db, m, enter } = await entered();
+    const { api, db, m, enter, first } = await entered();
     db.rules = { ...db.rules, referralRequiresInviterSameDay: false };
     const ref = db.referrals.find(r => r.claimedByMemberId && !r.usedOn) ?? db.referrals[0]!;
     db.cards.push({ id: 'v-test', kind: 'referral', memberId: m.id, fromMemberId: ref.fromMemberId, shareId: ref.id, name: '老带新体验券', expiresOn: '2026-10-31' });
     ref.usedOn = null;
-    // 当天已经用次卡进过一次，再用体验券登记一次（体验券照样记用掉）；撤销体验券这次，同一天没有别的入场用这张券
+    // 当天已经用次卡进过一次，再用体验券登记一次（体验券照样记用掉）
     const used = await enter('ci-req-2', 'v-test');
     expect(db.cards.find(c => c.id === 'v-test')).toMatchObject({ usedOn: '2026-10-21' });
+    // 先撤次卡那次：体验券那次不是次卡，不接扣次，次卡照常退回
+    expect(await api.checkIns.void(first.checkIn.id, { reason: '扫错了卡' })).toMatchObject({ restored: 1, moved: null });
+    // 当天只剩体验券这次，撤销后体验券恢复（同一天还有别的入场时不恢复，见 core 单测）
     const r = await api.checkIns.void(used.checkIn.id, { reason: '邀请人没来' });
     expect(r).toMatchObject({ restored: 0, voucherRestored: true });
     expect(db.cards.find(c => c.id === 'v-test')).not.toHaveProperty('usedOn');

@@ -97,12 +97,17 @@ const voidAction = (r: MemberEntryRow) => async (reason: string) => {
   lastVoid = await api.checkIns.void(r.id, { reason });
 };
 const voidMessage = (r: MemberEntryRow) =>
-  r.deducted ? `${r.cardName}会退回 ${r.deducted} 次。` : r.cardId ? '这次没扣次，撤销不退次数。' : '这次没用卡。';
+  r.deducted
+    ? `${r.cardName}会退回 ${r.deducted} 次；同一天还有免扣次的入场的话，扣次转到那次，不退。`
+    : r.cardId
+      ? '这次没扣次，撤销不退次数。'
+      : '这次没用卡。';
 function onVoided() {
   const r = lastVoid;
   if (!r) return;
   const parts = ['已撤销'];
-  if (r.restored) parts.push(`退回 ${r.restored} 次`);
+  if (r.moved) parts.push(`同一天还有一次入场，扣次转到那次${r.moved.card ? `（${r.moved.card.name}）` : ''}`);
+  if (r.restored) parts.push(`${r.card?.name ?? ''}退回 ${r.restored} 次`);
   if (r.voucherRestored) parts.push('体验券恢复可用');
   if (r.insurance?.status === 'refund_pending') parts.push('保单待退保');
   toast.success(parts.join('，'));
