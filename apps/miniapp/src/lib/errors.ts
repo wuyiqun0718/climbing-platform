@@ -15,6 +15,7 @@ const RULE_MESSAGES: Record<RuleErrorCode, string> = {
   'share-expired': '这个链接已经过期了',
   'referral-quota-used': '这个月的老带新名额用完了',
   'no-period-card': '有期限卡才能发老带新邀请',
+  'referral-card-frozen': '期限卡冻结中，解冻后才能发老带新邀请',
   'product-off-sale': '这个已经不卖了，换一个看看',
   'order-closed': '订单超时关闭了，重新下一单吧',
   'order-not-pending': '这个订单已经付过了，刷新看看',

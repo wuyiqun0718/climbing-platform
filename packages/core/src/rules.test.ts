@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { defaultRules } from './gym';
-import { applyEntry, claimShare, createReferral, entryOptions, isCardValid, isPeriodActive, referralQuotaLeft, RuleError, shareBlockedBy, shareFromCountCard, type EntryContext } from './rules';
+import { createReferral, referralQuotaLeft } from './referral';
+import { applyEntry, claimShare, entryOptions, isCardValid, isPeriodActive, RuleError, shareBlockedBy, shareFromCountCard, type EntryContext } from './rules';
 import { newShareToken } from './shareToken';
 import type { CountCard, GiftCard, PeriodCard, Share } from './types';
 
@@ -119,7 +120,7 @@ describe('卡的状态', () => {
       const cards = [{ ...year, status }];
       expect(isPeriodActive(cards[0], today)).toBe(false);
       expect(referralQuotaLeft(cards, [], 'jie', today, defaultRules)).toBe(0);
-      expect(code(() => createReferral({ id: 'r1', token: T, cards, sent: [], memberId: 'jie', today, rules: defaultRules }))).toBe('no-period-card');
+      expect(code(() => createReferral({ id: 'r1', token: T, cards, sent: [], memberId: 'jie', today, rules: defaultRules }))).toBe(status === 'frozen' ? 'referral-card-frozen' : 'no-period-card');
     }
   });
 

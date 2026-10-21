@@ -1,4 +1,4 @@
-import type { Card, CheckIn, EntryCard, EntryOption, InsurancePolicy, LedgerEntry, Order, Product, ReferralWait, RuleErrorCode, Share, WaiverHistory, WaiverSignature, WaiverVersion } from '@climb/core';
+import type { Card, CheckIn, EntryCard, EntryOption, InsurancePolicy, LedgerEntry, Order, Product, ReferralRecordState, ReferralStatus, ReferralWait, RuleErrorCode, Share, WaiverHistory, WaiverSignature, WaiverVersion } from '@climb/core';
 import { createHttp, type ClientOptions } from './client';
 
 export * from './client';
@@ -117,6 +117,20 @@ export interface MyInsurance {
   waiver: WaiverHistory;
 }
 
+/** 老带新的一条已发记录。还在等领取的带 token，可以再发一次给朋友 */
+export interface ReferralRecordView extends Pick<Share, 'token' | 'createdOn' | 'expiresOn'> {
+  state: ReferralRecordState;
+  /** 领取人的名字；没人领为 null */
+  claimerName: string | null;
+  usedOn: string | null;
+}
+
+/** `GET /me/referrals`：老带新页。本月名额和不能发的原因（@climb/core referralStatus），加上发过的邀请（referralRecords） */
+export interface MyReferrals {
+  status: ReferralStatus;
+  records: ReferralRecordView[];
+}
+
 /**
  * `GET /shares/:token`：朋友点开分享看到的内容。按 token 查，不返回分享 id、原卡、领取人。
  * 没登录也能看；mine 是当前登录的会员自己发的（没登录为 false）。
@@ -157,6 +171,8 @@ export function createApi(opts: ClientOptions) {
       orders: () => http<Order[]>('GET', '/me/orders'),
       /** 历次保单（每张挂着它保的入场）和签过的风险告知书 */
       insurance: () => http<MyInsurance>('GET', '/me/insurance'),
+      /** 老带新：本月名额、不能发的原因、已发记录（最近的在前） */
+      referrals: () => http<MyReferrals>('GET', '/me/referrals'),
     },
     orders: {
       /** 下单：后端建待支付订单。卡要等微信支付回调（`POST /pay/wechat/notify`，微信调后端）验证过才发 */
@@ -189,6 +205,7 @@ export function createApi(opts: ClientOptions) {
        * 小程序在 onShareAppMessage 里把领取页路径带上 token 发出去（不用 id）。不能转赠的卡返回 409 + 原因（@climb/core shareBlockedBy）
        */
       createCount: (body: { cardId: string; quantity: number }) => http<Share>('POST', '/shares/count', body),
+      /** 发老带新邀请。没有正在用的期限卡、期限卡冻结中、本月名额用完返回 409（no-period-card / referral-card-frozen / referral-quota-used） */
       createReferral: () => http<Share>('POST', '/shares/referral'),
       /** token 是分享路径里带的；查不到返回 404 share-not-found */
       get: (token: string) => http<ShareView>('GET', `/shares/${encodeURIComponent(token)}`),

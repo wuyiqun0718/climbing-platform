@@ -98,6 +98,24 @@ describe('mock 接口', () => {
     expect(db.shares).toHaveLength(1);
   });
 
+  it('老带新页：本月名额、已发记录跟着领取和入场变', async () => {
+    const { entry, ajie, xiaolu } = setup();
+    expect(await ajie.me.referrals()).toEqual({ status: { perMonth: 1, used: 0, left: 1, blockedBy: null }, records: [] });
+    expect((await xiaolu.me.referrals()).status).toMatchObject({ left: 0, blockedBy: 'no-period-card' });
+
+    const share = await ajie.shares.createReferral();
+    let mine = await ajie.me.referrals();
+    expect(mine.status).toMatchObject({ used: 1, left: 0, blockedBy: 'referral-quota-used' });
+    expect(mine.records).toEqual([{ token: share.token, createdOn: TODAY, expiresOn: '2026-10-31', state: 'pending', claimerName: null, usedOn: null }]);
+
+    const { card } = await xiaolu.shares.claim(share.token);
+    expect((await ajie.me.referrals()).records[0]).toMatchObject({ state: 'claimed', claimerName: '小鹿' });
+    await ajie.checkIns.create(entry('huiju', 'card-ajie-year'));
+    await xiaolu.checkIns.create(entry('huiju', card.id));
+    expect((await ajie.me.referrals()).records[0]).toMatchObject({ state: 'used', usedOn: TODAY });
+    expect((await xiaolu.me.referrals()).records).toEqual([]);
+  });
+
   it('老带新：每月 1 次；邀请人当天先入场，体验券才能用', async () => {
     const { entry, ajie, xiaolu } = setup();
     const share = await ajie.shares.createReferral();

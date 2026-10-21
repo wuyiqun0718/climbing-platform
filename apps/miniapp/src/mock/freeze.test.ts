@@ -30,7 +30,7 @@ describe('mock 期限卡自助冻结', () => {
     const card = await ajie.me.freezeCard(YEAR, { days: 10 });
     expect(card).toMatchObject({ status: 'frozen', frozenFrom: TODAY, frozenUntil: '2026-10-30', expiresOn: YEAR_EXPIRES });
     expect(await codeOf(ajie.checkIns.create(entry('binggang', YEAR)))).toBe('card-not-usable');
-    expect(await codeOf(ajie.shares.createReferral())).toBe('no-period-card');
+    expect(await codeOf(ajie.shares.createReferral())).toBe('referral-card-frozen');
     expect((await ajie.me.cardLedger(YEAR))[0]).toMatchObject({ reason: 'freeze', delta: 0 });
     expect(await ajie.me.freezeOptions(YEAR)).toMatchObject({ blockedBy: 'freeze-card-not-active' });
   });

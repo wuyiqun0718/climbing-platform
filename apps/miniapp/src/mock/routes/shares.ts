@@ -1,5 +1,5 @@
-import type { ShareView } from '@climb/api';
-import { claimShare, createReferral, isShareToken, newShareToken, shareFromCountCard, type Card, type LedgerEntry, type Share } from '@climb/core';
+import type { MyReferrals, ShareView } from '@climb/api';
+import { claimShare, createReferral, isShareToken, referralRecords, referralStatus, newShareToken, shareFromCountCard, type Card, type LedgerEntry, type Share } from '@climb/core';
 import type { DateKey } from '@climb/utils';
 import type { MockDb } from '../db';
 import { MockHttpError, type MockContext, type MockRoutes } from '../router';
@@ -68,6 +68,19 @@ export function createShareRoutes(
       const share = createReferral({ id: h.nextId('share'), token: newToken(), cards: db.cards, sent: db.shares, memberId: me, today: h.today(), rules: h.rules });
       db.shares.push(share);
       return share;
+    },
+
+    'GET /me/referrals': (ctx): MyReferrals => {
+      const me = h.requireMember(ctx);
+      const args = { cards: db.cards, sent: db.shares, memberId: me, today: h.today() };
+      const nameOf = (id?: string) => (id ? db.members.find(m => m.id === id)?.name ?? '' : null);
+      return {
+        status: referralStatus({ ...args, rules: h.rules }),
+        records: referralRecords(args).map(r => ({
+          token: r.share.token, createdOn: r.share.createdOn, expiresOn: r.share.expiresOn,
+          state: r.state, claimerName: nameOf(r.claimerId), usedOn: r.usedOn ?? null,
+        })),
+      };
     },
 
     'GET /shares/:token': ctx => view(byToken(ctx.params.token), ctx.memberId),

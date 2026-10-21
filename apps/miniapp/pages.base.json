@@ -69,6 +69,12 @@
       }
     },
     {
+      "path": "pages/share/referral",
+      "style": {
+        "navigationBarTitleText": "老带新"
+      }
+    },
+    {
       "path": "pages/login/index",
       "style": {
         "navigationBarTitleText": "登录"

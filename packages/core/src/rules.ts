@@ -1,4 +1,4 @@
-import { endOfMonth, monthOf, type DateKey } from '@climb/utils';
+import type { DateKey } from '@climb/utils';
 import type { GymRules } from './gym';
 import { isShareToken } from './shareToken';
 import type { Card, CountCard, EntryCard, GiftCard, PeriodCard, ReferralVoucher, Share } from './types';
@@ -16,6 +16,7 @@ export type RuleErrorCode =
   | 'share-expired'
   | 'referral-quota-used'
   | 'no-period-card'
+  | 'referral-card-frozen'
   | 'product-off-sale'
   | 'order-closed'
   | 'order-not-pending'
@@ -104,24 +105,8 @@ export function applyEntry<C extends EntryCard>(card: C, ctx: EntryContext, reen
   return { card, deducted: 0 };
 }
 
-/** 本月还能不能发老带新邀请 */
-export function referralQuotaLeft(cards: Card[], sent: Share[], memberId: string, today: DateKey, rules: GymRules): number {
-  const hasPeriod = cards.some(c => c.kind === 'period' && c.memberId === memberId && isPeriodActive(c, today));
-  if (!hasPeriod) return 0;
-  const used = sent.filter(s => s.kind === 'referral' && s.fromMemberId === memberId && monthOf(s.createdOn) === monthOf(today)).length;
-  return Math.max(0, rules.referralsPerMonth - used);
-}
-
-/** 发老带新邀请。体验券当月底前有效。token 用 newShareToken 生成 */
-export function createReferral(args: { id: string; token: string; cards: Card[]; sent: Share[]; memberId: string; today: DateKey; rules: GymRules }): Share {
-  const { cards, sent, memberId, today, rules } = args;
-  const hasPeriod = cards.some(c => c.kind === 'period' && c.memberId === memberId && isPeriodActive(c, today));
-  if (!hasPeriod) throw new RuleError('no-period-card', '只有期限卡会员可以发老带新邀请');
-  if (referralQuotaLeft(cards, sent, memberId, today, rules) <= 0) throw new RuleError('referral-quota-used', '本月的老带新名额已经用完');
-  return { id: args.id, kind: 'referral', token: checkToken(args.token), fromMemberId: memberId, createdOn: today, expiresOn: endOfMonth(today), status: 'pending' };
-}
-
-function checkToken(token: string) {
+/** 分享 token 必须是 newShareToken 生成的；转赠和老带新共用 */
+export function checkToken(token: string) {
   if (!isShareToken(token)) throw new Error('分享 token 要用 newShareToken 生成');
   return token;
 }

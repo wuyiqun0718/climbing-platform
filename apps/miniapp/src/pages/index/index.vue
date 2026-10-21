@@ -49,7 +49,6 @@ const board = computed(() => {
   if (!me.value) return null;
   const s = summary.value;
   if (s.period && gym.features.referral) {
-    // 本月还剩几个名额要「已发记录」接口，任务 25 接上
     return { kind: 'referral' as const, title: '老带新', text: `期限卡会员每个月可以带 ${gym.rules.referralsPerMonth} 位新朋友免费来爬一次`, btn: '去邀请' };
   }
   if (s.voucher) {
@@ -66,10 +65,10 @@ const SOON: Record<string, string> = {
   classes: '团课（任务 30）',
   pt: '私教（任务 33）',
   events: '活动（任务 36）',
-  referral: '老带新（任务 25）',
 };
 function open(key: string) {
   if (key === 'wallet') return uni.switchTab({ url: '/pages/cards/index' });
+  if (key === 'referral') return uni.navigateTo({ url: '/pages/share/referral' });
   if (key === 'shop' || key === 'shop:single') {
     return uni.navigateTo({ url: key === 'shop' ? '/pages/shop/index' : '/pages/shop/index?seg=single' });
   }

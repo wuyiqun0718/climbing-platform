@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { freezeBlockedBy, freezePeriodCard, freezeQuotaLeft, periodEndOn, settleFreeze, unfreezePeriodCard } from './freeze';
 import { defaultFreezeRules, defaultRules, type FreezeRules } from './gym';
 import { periodStartsOn } from './orders';
-import { applyEntry, createReferral, entryOptions, RuleError } from './rules';
+import { createReferral } from './referral';
+import { applyEntry, entryOptions, RuleError } from './rules';
 import type { PeriodCard } from './types';
 import { newShareToken } from './shareToken';
 import { cardBalance, isCardLive } from './wallet';
@@ -56,7 +57,7 @@ describe('冻结和解冻', () => {
     const ctx = { today, rules: defaultRules, hasCheckedIn: () => false };
     expect(entryOptions([card], ctx)).toEqual([]);
     expect(code(() => applyEntry(card, ctx))).toBe('card-inactive');
-    expect(code(() => createReferral({ id: 'r1', token: T, cards: [card], sent: [], memberId: 'jie', today, rules: defaultRules }))).toBe('no-period-card');
+    expect(code(() => createReferral({ id: 'r1', token: T, cards: [card], sent: [], memberId: 'jie', today, rules: defaultRules }))).toBe('referral-card-frozen');
   });
 
   it('提前解冻按实际冻结天数顺延，解冻当天就能用', () => {
