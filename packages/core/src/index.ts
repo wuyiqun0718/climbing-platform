@@ -14,3 +14,4 @@ export * from './entryQr';
 export * from './entrySheet';
 export * from './checkInDone';
 export * from './insuranceHistory';
+export * from './shareToken';

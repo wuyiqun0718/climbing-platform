@@ -57,16 +57,45 @@ describe('mock 接口', () => {
     const share = await ajie.shares.createCount({ cardId: 'card-ajie-c10', quantity: 2 });
     expect((await ajie.me.cards()).find(c => c.id === 'card-ajie-c10')).toMatchObject({ remaining: 4 });
 
-    expect(await codeOf(ajie.shares.claim(share.id))).toEqual({ status: 409, code: 'own-share' });
-    const { card } = await xiaolu.shares.claim(share.id);
+    expect(await codeOf(ajie.shares.claim(share.token))).toEqual({ status: 409, code: 'own-share' });
+    const { card } = await xiaolu.shares.claim(share.token);
     expect(card).toMatchObject({ kind: 'gift', remaining: 2, memberId: MOCK_MEMBERS.xiaolu });
-    expect(await codeOf(xiaolu.shares.claim(share.id))).toEqual({ status: 409, code: 'already-claimed' });
-    expect(await xiaolu.shares.get(share.id)).toMatchObject({ status: 'claimed', claimedBy: MOCK_MEMBERS.xiaolu });
+    expect(await codeOf(xiaolu.shares.claim(share.token))).toEqual({ status: 409, code: 'already-claimed' });
+    expect(await xiaolu.shares.get(share.token)).toMatchObject({ status: 'claimed', fromName: '阿杰', mine: false });
   });
 
   it('送的次数超过剩余次数被拒', async () => {
     const { ajie } = setup();
     expect(await codeOf(ajie.shares.createCount({ cardId: 'card-ajie-c10', quantity: 7 }))).toEqual({ status: 409, code: 'not-enough-remaining' });
+  });
+
+  it('分享只能按 token 查和领：token 是随机的，跟 id 无关；用 id 查不到', async () => {
+    const { ajie, xiaolu, guest, db } = setup();
+    const a = await ajie.shares.createCount({ cardId: 'card-ajie-c10', quantity: 1 });
+    const b = await ajie.shares.createCount({ cardId: 'card-ajie-c10', quantity: 1 });
+    expect(a.token).toMatch(/^[A-Za-z0-9_-]{22}$/);
+    expect(a.token).not.toBe(b.token);
+    expect(a.token).not.toContain(a.id);
+    expect(await codeOf(xiaolu.shares.get(a.id))).toEqual({ status: 404, code: 'share-not-found' });
+    expect(await codeOf(xiaolu.shares.claim(a.id))).toEqual({ status: 404, code: 'share-not-found' });
+    // 没登录也能看（朋友点开先看到是谁送的），只返回会员要看的字段
+    const seen = await guest.shares.get(a.token);
+    expect(seen).toEqual({ token: a.token, kind: 'count', quantity: 1, createdOn: TODAY, expiresOn: a.expiresOn, status: 'pending', fromName: '阿杰', mine: false });
+    expect(await ajie.shares.get(a.token)).toMatchObject({ mine: true });
+    expect(db.shares.find(s => s.id === a.id)).toMatchObject({ fromCardId: 'card-ajie-c10', token: a.token });
+  });
+
+  it('期限卡、好友送的次卡不能转赠；被拒时原卡不扣、不记流水', async () => {
+    const { ajie, xiaolu, db } = setup();
+    expect(await codeOf(ajie.shares.createCount({ cardId: 'card-ajie-year', quantity: 1 }))).toEqual({ status: 409, code: 'card-not-shareable' });
+    const { card: gift } = await xiaolu.shares.claim((await ajie.shares.createCount({ cardId: 'card-ajie-c10', quantity: 2 })).token);
+    expect(await codeOf(xiaolu.shares.createCount({ cardId: gift.id, quantity: 1 }))).toEqual({ status: 409, code: 'card-not-shareable' });
+    expect(await codeOf(ajie.shares.createCount({ cardId: 'card-ajie-c10', quantity: 0 }))).toEqual({ status: 409, code: 'invalid-quantity' });
+    expect(await codeOf(xiaolu.shares.createCount({ cardId: 'card-ajie-c10', quantity: 1 }))).toEqual({ status: 404, code: 'card-not-found' });
+    expect(db.cards.find(c => c.id === 'card-ajie-c10')).toMatchObject({ remaining: 4 });
+    expect(db.cards.find(c => c.id === gift.id)).toMatchObject({ remaining: 2 });
+    expect(db.ledger.filter(l => l.reason === 'share_out')).toHaveLength(1);
+    expect(db.shares).toHaveLength(1);
   });
 
   it('老带新：每月 1 次；邀请人当天先入场，体验券才能用', async () => {
@@ -75,7 +104,7 @@ describe('mock 接口', () => {
     expect(await codeOf(ajie.shares.createReferral())).toEqual({ status: 409, code: 'referral-quota-used' });
     expect(await codeOf(xiaolu.shares.createReferral())).toEqual({ status: 409, code: 'no-period-card' });
 
-    const { card } = await xiaolu.shares.claim(share.id);
+    const { card } = await xiaolu.shares.claim(share.token);
     expect(await codeOf(xiaolu.checkIns.create(entry('huiju', card.id)))).toEqual({ status: 409, code: 'inviter-not-checked-in' });
     await ajie.checkIns.create(entry('huiju', 'card-ajie-year'));
     expect(await xiaolu.checkIns.create(entry('huiju', card.id))).toMatchObject({ deducted: 0, memberId: MOCK_MEMBERS.xiaolu });
@@ -115,7 +144,7 @@ describe('使用记录 GET /me/cards/:id/ledger', () => {
     const share = await ajie.shares.createCount({ cardId: 'card-ajie-c10', quantity: 2 });
     expect((await ajie.me.cardLedger('card-ajie-c10'))[0]).toMatchObject({ reason: 'share_out', delta: -2, remainingAfter: 4, refId: share.id });
 
-    const { card } = await xiaolu.shares.claim(share.id);
+    const { card } = await xiaolu.shares.claim(share.token);
     expect(await xiaolu.me.cardLedger(card.id)).toMatchObject([{ reason: 'claim', delta: 2, remainingAfter: 2, refId: share.id }]);
     await xiaolu.checkIns.create(entry('huiju', card.id));
     expect((await xiaolu.me.cardLedger(card.id)).map(l => [l.reason, l.remainingAfter])).toEqual([['check_in', 1], ['claim', 2]]);
@@ -123,7 +152,7 @@ describe('使用记录 GET /me/cards/:id/ledger', () => {
 
   it('体验券：领取记一条，用掉记一条', async () => {
     const { entry, ajie, xiaolu } = setup();
-    const { card } = await xiaolu.shares.claim((await ajie.shares.createReferral()).id);
+    const { card } = await xiaolu.shares.claim((await ajie.shares.createReferral()).token);
     await ajie.checkIns.create(entry('huiju', 'card-ajie-year'));
     await xiaolu.checkIns.create(entry('huiju', card.id));
     expect((await xiaolu.me.cardLedger(card.id)).map(l => [l.reason, l.delta, l.remainingAfter])).toEqual([['check_in', -1, 0], ['claim', 1, 1]]);
@@ -158,8 +187,8 @@ describe('mock 数据持久化、切换身份、重置', () => {
 
     const second = open(storage);
     expect(second.mock.currentMember()).toBe(MOCK_MEMBERS.xiaolu);
-    expect(await second.api.shares.get(share.id)).toMatchObject({ status: 'pending' });
-    const { card } = await second.api.shares.claim(share.id);
+    expect(await second.api.shares.get(share.token)).toMatchObject({ status: 'pending' });
+    const { card } = await second.api.shares.claim(share.token);
     expect(card).toMatchObject({ kind: 'gift', memberId: MOCK_MEMBERS.xiaolu, remaining: 2 });
 
     const third = open(storage);

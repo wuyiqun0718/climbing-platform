@@ -1,4 +1,4 @@
-import { cardBalance, type Card } from '@climb/core';
+import { cardBalance, shareBlockedBy, type Card } from '@climb/core';
 import { formatDot, formatMonthDay, type DateKey } from '@climb/utils';
 import gym from '@gym';
 
@@ -51,7 +51,7 @@ export function cardView(card: Card, today: DateKey, done: boolean): CardView {
     return { kind: '老带新', name: '免费体验券', value: b.used ? '已用' : 1, unit: b.used ? '' : '次', meta: `${hint}\n${until}`, tone: 'neutral', acts };
   }
   const lesson = card.kind === 'pt' || card.kind === 'class';
-  if (card.kind === 'count' && !done && gym.features.countCardSharing) acts.push({ key: 'share', label: '送给朋友' });
+  if (!done && gym.features.countCardSharing && !shareBlockedBy(card, today)) acts.push({ key: 'share', label: '送给朋友' });
   acts.push({ key: 'ledger', label: '记录' });
   if (!done) acts.push(lesson ? { key: card.kind === 'pt' ? 'pt' : 'classes', label: '去约课', dark: true } : { key: 'scan', label: '入场', dark: true });
   return {

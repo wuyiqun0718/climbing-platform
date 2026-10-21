@@ -26,13 +26,16 @@ const done = computed(() => groups.value.done.map(c => ({ id: c.id, ...cardView(
 // 下面这些页面还没做，做好后换成跳转
 const SOON: Record<string, string> = {
   scan: '扫码入场（任务 18）',
-  share: '次卡转赠（任务 24）',
   classes: '团课（任务 30）',
   pt: '私教（任务 33）',
 };
 function open(key: string, cardId?: string) {
   if (key === 'ledger' && cardId) {
     uni.navigateTo({ url: `/pages/cards/detail?id=${encodeURIComponent(cardId)}` });
+    return;
+  }
+  if (key === 'share' && cardId) {
+    uni.navigateTo({ url: `/pages/share/count?id=${encodeURIComponent(cardId)}` });
     return;
   }
   if (key === 'shop') {

@@ -74,7 +74,7 @@ describe('会员 store', () => {
     expect(store.state.me?.name).toBe('小鹿');
     expect(store.state.cards).toEqual([]);
 
-    await store.changeCards(() => api.shares.claim(share.id));
+    await store.changeCards(() => api.shares.claim(share.token));
     expect(store.state.cards).toHaveLength(1);
     expect(store.state.cards[0]).toMatchObject({ kind: 'gift', remaining: 2 });
   });

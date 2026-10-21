@@ -164,7 +164,7 @@ export interface MockStorage {
 const DB_KEY = 'mock:db';
 const WX_KEY = 'mock:wx';
 /** 示例数据的结构改了就加 1，存着的旧数据会被丢掉、重新生成 */
-const DB_VERSION = 7;
+const DB_VERSION = 8;
 
 /** 读存着的数据；没有或者版本不对就用示例数据重新生成 */
 export function loadDb(storage: MockStorage, today: DateKey): MockDb {

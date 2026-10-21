@@ -63,6 +63,12 @@
       }
     },
     {
+      "path": "pages/share/count",
+      "style": {
+        "navigationBarTitleText": "送给朋友"
+      }
+    },
+    {
       "path": "pages/login/index",
       "style": {
         "navigationBarTitleText": "登录"

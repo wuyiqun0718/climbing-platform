@@ -20,9 +20,9 @@ describe('错误码翻译', () => {
   it('mock 返回的规则错误翻成中文', async () => {
     const { api, xiaolu } = setup();
     const share = await api.shares.createCount({ cardId: 'card-ajie-c10', quantity: 1 });
-    expect(errorMessage(await fail(api.shares.claim(share.id)))).toBe('这是你自己发出的，发给朋友让 TA 来领');
-    await xiaolu.shares.claim(share.id);
-    expect(errorMessage(await fail(xiaolu.shares.claim(share.id)))).toBe('已经被人领走了');
+    expect(errorMessage(await fail(api.shares.claim(share.token)))).toBe('这是你自己发出的，发给朋友让 TA 来领');
+    await xiaolu.shares.claim(share.token);
+    expect(errorMessage(await fail(xiaolu.shares.claim(share.token)))).toBe('已经被人领走了');
     expect(errorMessage(await fail(api.shares.createCount({ cardId: 'card-ajie-c10', quantity: 99 })))).toBe('卡里剩的次数不够');
     expect(errorMessage(await fail(api.checkIns.create({ storeId: 'binggang', qrToken: 'nope', cardId: 'card-ajie-c10', idempotencyKey: 'k1' })))).toBe('这个码不是本馆的入场码');
   });

@@ -118,6 +118,15 @@ export interface MyInsurance {
 }
 
 /**
+ * `GET /shares/:token`：朋友点开分享看到的内容。按 token 查，不返回分享 id、原卡、领取人。
+ * 没登录也能看；mine 是当前登录的会员自己发的（没登录为 false）。
+ */
+export interface ShareView extends Pick<Share, 'token' | 'kind' | 'quantity' | 'createdOn' | 'expiresOn' | 'status'> {
+  fromName: string;
+  mine: boolean;
+}
+
+/**
  * 接口定义（后端还没开始写，路径是约定稿）。
  * 新增接口时在这里加方法，两个端都能直接用上。
  */
@@ -175,10 +184,15 @@ export function createApi(opts: ClientOptions) {
       referralWait: () => http<ReferralWaitInfo | null>('GET', '/check-ins/referral-wait'),
     },
     shares: {
+      /**
+       * 次卡转赠：从 cardId 拆出 quantity 次，原卡立刻扣次并记 share_out 流水。返回带 token 的分享，
+       * 小程序在 onShareAppMessage 里把领取页路径带上 token 发出去（不用 id）。不能转赠的卡返回 409 + 原因（@climb/core shareBlockedBy）
+       */
       createCount: (body: { cardId: string; quantity: number }) => http<Share>('POST', '/shares/count', body),
       createReferral: () => http<Share>('POST', '/shares/referral'),
-      get: (id: string) => http<Share>('GET', `/shares/${id}`),
-      claim: (id: string) => http<{ share: Share; card: Card }>('POST', `/shares/${id}/claim`),
+      /** token 是分享路径里带的；查不到返回 404 share-not-found */
+      get: (token: string) => http<ShareView>('GET', `/shares/${encodeURIComponent(token)}`),
+      claim: (token: string) => http<{ share: ShareView; card: Card }>('POST', `/shares/${encodeURIComponent(token)}/claim`),
     },
   };
 }

@@ -4,9 +4,11 @@ import { defaultFreezeRules, defaultRules, type FreezeRules } from './gym';
 import { periodStartsOn } from './orders';
 import { applyEntry, createReferral, entryOptions, RuleError } from './rules';
 import type { PeriodCard } from './types';
+import { newShareToken } from './shareToken';
 import { cardBalance, isCardLive } from './wallet';
 
 const today = '2026-10-12';
+const T = newShareToken(n => crypto.getRandomValues(new Uint8Array(n)));
 const year: PeriodCard = { id: 'p1', kind: 'period', memberId: 'jie', productId: 'y1', name: '年卡', startsOn: '2026-03-15', expiresOn: '2027-03-14' };
 const next: PeriodCard = { ...year, id: 'p2', productId: 'm1', name: '月卡', startsOn: '2027-03-15', expiresOn: '2027-04-13' };
 const rules: FreezeRules = { ...defaultFreezeRules, perMonth: 1, perYear: 2, minDays: 7, maxDays: 30 };
@@ -54,7 +56,7 @@ describe('冻结和解冻', () => {
     const ctx = { today, rules: defaultRules, hasCheckedIn: () => false };
     expect(entryOptions([card], ctx)).toEqual([]);
     expect(code(() => applyEntry(card, ctx))).toBe('card-inactive');
-    expect(code(() => createReferral({ id: 'r1', cards: [card], sent: [], memberId: 'jie', today, rules: defaultRules }))).toBe('no-period-card');
+    expect(code(() => createReferral({ id: 'r1', token: T, cards: [card], sent: [], memberId: 'jie', today, rules: defaultRules }))).toBe('no-period-card');
   });
 
   it('提前解冻按实际冻结天数顺延，解冻当天就能用', () => {

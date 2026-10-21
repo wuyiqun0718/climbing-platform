@@ -1,4 +1,4 @@
-import { claimShare, createReferral, ledgerEntry, shareFromCountCard, type Card, type GymRules, type LedgerEntry } from '@climb/core';
+import { ledgerEntry, type Card, type GymRules, type LedgerEntry } from '@climb/core';
 import type { DateKey } from '@climb/utils';
 import type { MockDb } from './db';
 import { MockHttpError, type MockContext, type MockHandler, type MockRoutes } from './router';
@@ -7,6 +7,7 @@ import { createCardRoutes, settleFrozenCards } from './routes/cards';
 import { createCheckInRoutes } from './routes/checkins';
 import { createInsuranceRoutes } from './routes/insurance';
 import { createOrderRoutes } from './routes/orders';
+import { createShareRoutes } from './routes/shares';
 import { createWaiverRoutes } from './routes/waivers';
 
 /**
@@ -48,45 +49,9 @@ export function createRoutes(db: MockDb, env: { rules: GymRules; today: () => Da
     ...createCheckInRoutes(db, { ...env, nextId, requireMember, replaceCard, record }),
     ...createWaiverRoutes(db, { ...env, nextId, requireMember }),
     ...createInsuranceRoutes(db, { ...env, requireMember }),
+    ...createShareRoutes(db, { ...env, nextId, requireMember, myCard, replaceCard, record }),
 
     'GET /products': () => db.products.filter(p => p.onSale),
-
-    'POST /shares/count': ctx => {
-      const me = requireMember(ctx);
-      const { cardId, quantity } = ctx.body as { cardId: string; quantity: number };
-      const card = myCard(me, cardId);
-      if (card.kind !== 'count') throw new MockHttpError(409, 'card-not-shareable', '只有自己买的次卡可以分给朋友');
-      const { card: updated, share } = shareFromCountCard({ id: nextId('share'), card, quantity, today: env.today() });
-      replaceCard(updated);
-      db.shares.push(share);
-      record(updated, -quantity, 'share_out', { type: 'share', id: share.id });
-      return share;
-    },
-
-    'POST /shares/referral': ctx => {
-      const me = requireMember(ctx);
-      const share = createReferral({ id: nextId('share'), cards: db.cards, sent: db.shares, memberId: me, today: env.today(), rules: env.rules });
-      db.shares.push(share);
-      return share;
-    },
-
-    'GET /shares/:id': ctx => {
-      const share = db.shares.find(s => s.id === ctx.params.id);
-      if (!share) throw new MockHttpError(404, 'share-not-found', '这个分享不存在');
-      return share;
-    },
-
-    'POST /shares/:id/claim': ctx => {
-      const me = requireMember(ctx);
-      const share = db.shares.find(s => s.id === ctx.params.id);
-      if (!share) throw new MockHttpError(404, 'share-not-found', '这个分享不存在');
-      const result = claimShare({ share, claimerId: me, cardId: nextId('card'), today: env.today() });
-      db.shares = db.shares.map(s => (s.id === share.id ? result.share : s));
-      db.cards.push(result.card);
-      // 好友送的次卡记 +N，跟原卡的 share_out -N 对得上；体验券算 1 次
-      record(result.card, result.card.kind === 'gift' ? result.card.total : 1, 'claim', { type: 'share', id: share.id });
-      return result;
-    },
   };
 
   // 冻满了的期限卡次日自动解冻：后端是每天的定时任务，mock 在每次请求前顺手做

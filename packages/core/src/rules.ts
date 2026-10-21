@@ -1,9 +1,11 @@
 import { endOfMonth, monthOf, type DateKey } from '@climb/utils';
 import type { GymRules } from './gym';
+import { isShareToken } from './shareToken';
 import type { Card, CountCard, EntryCard, GiftCard, PeriodCard, ReferralVoucher, Share } from './types';
 
 export type RuleErrorCode =
   | 'card-not-usable'
+  | 'card-not-shareable'
   | 'card-inactive'
   | 'inviter-not-checked-in'
   | 'invalid-quantity'
@@ -110,25 +112,53 @@ export function referralQuotaLeft(cards: Card[], sent: Share[], memberId: string
   return Math.max(0, rules.referralsPerMonth - used);
 }
 
-/** 发老带新邀请。体验券当月底前有效。 */
-export function createReferral(args: { id: string; cards: Card[]; sent: Share[]; memberId: string; today: DateKey; rules: GymRules }): Share {
+/** 发老带新邀请。体验券当月底前有效。token 用 newShareToken 生成 */
+export function createReferral(args: { id: string; token: string; cards: Card[]; sent: Share[]; memberId: string; today: DateKey; rules: GymRules }): Share {
   const { cards, sent, memberId, today, rules } = args;
   const hasPeriod = cards.some(c => c.kind === 'period' && c.memberId === memberId && isPeriodActive(c, today));
   if (!hasPeriod) throw new RuleError('no-period-card', '只有期限卡会员可以发老带新邀请');
   if (referralQuotaLeft(cards, sent, memberId, today, rules) <= 0) throw new RuleError('referral-quota-used', '本月的老带新名额已经用完');
-  return { id: args.id, kind: 'referral', fromMemberId: memberId, createdOn: today, expiresOn: endOfMonth(today), status: 'pending' };
+  return { id: args.id, kind: 'referral', token: checkToken(args.token), fromMemberId: memberId, createdOn: today, expiresOn: endOfMonth(today), status: 'pending' };
 }
 
-/** 从次卡里拆出几次送给朋友。送出的次数立即从原卡扣除。 */
-export function shareFromCountCard(args: { id: string; card: CountCard; quantity: number; today: DateKey }): { card: CountCard; share: Share } {
+function checkToken(token: string) {
+  if (!isShareToken(token)) throw new Error('分享 token 要用 newShareToken 生成');
+  return token;
+}
+
+/** 这张卡能不能拿来转赠（转赠页列卡、点「送给朋友」前用）；能为 null，不能给原因 */
+export function shareBlockedBy(card: Card, today: DateKey): RuleErrorCode | null {
+  // 只有自己买的次卡能拆：好友送的次卡不能再转送，期限卡、体验券、课包都不行
+  if (card.kind !== 'count') return 'card-not-shareable';
+  if (!isCardNormal(card)) return 'card-inactive';
+  if (card.expiresOn < today) return 'card-expired';
+  if (card.remaining < 1) return 'not-enough-remaining';
+  return null;
+}
+
+const SHARE_BLOCKED_TEXT: Partial<Record<RuleErrorCode, string>> = {
+  'card-not-shareable': '只有自己买的次卡可以分给朋友',
+  'card-inactive': '这张卡冻结中或已经停用，不能转赠',
+  'card-expired': '这张次卡已经过期',
+};
+
+/**
+ * 从次卡里拆出几次送给朋友。送出的次数立即从原卡扣除（调用方同一个事务里记 share_out 流水）。
+ * 分享的有效期跟原卡一致；token 用 newShareToken 生成。
+ */
+export function shareFromCountCard(args: { id: string; token: string; card: Card; quantity: number; today: DateKey }): { card: CountCard; share: Share } {
   const { card, quantity, today } = args;
-  if (!isCardNormal(card)) throw new RuleError('card-inactive', '这张卡冻结中或已经停用，不能转赠');
+  const blocked = shareBlockedBy(card, today);
+  if (blocked && blocked !== 'not-enough-remaining') throw new RuleError(blocked, SHARE_BLOCKED_TEXT[blocked]!);
+  const count = card as CountCard;
   if (!Number.isInteger(quantity) || quantity < 1) throw new RuleError('invalid-quantity', '至少送 1 次');
-  if (card.expiresOn < today) throw new RuleError('card-expired', '这张次卡已经过期');
-  if (quantity > card.remaining) throw new RuleError('not-enough-remaining', `这张卡只剩 ${card.remaining} 次`);
+  if (quantity > count.remaining) throw new RuleError('not-enough-remaining', `这张卡只剩 ${count.remaining} 次`);
   return {
-    card: { ...card, remaining: card.remaining - quantity },
-    share: { id: args.id, kind: 'count', fromMemberId: card.memberId, quantity, createdOn: today, expiresOn: card.expiresOn, status: 'pending' },
+    card: { ...count, remaining: count.remaining - quantity },
+    share: {
+      id: args.id, kind: 'count', token: checkToken(args.token), fromMemberId: count.memberId, fromCardId: count.id,
+      quantity, createdOn: today, expiresOn: count.expiresOn, status: 'pending',
+    },
   };
 }
 

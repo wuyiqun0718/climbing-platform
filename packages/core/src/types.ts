@@ -83,7 +83,11 @@ export type ShareStatus = 'pending' | 'claimed' | 'used';
 export interface Share {
   id: string;
   kind: 'count' | 'referral';
+  /** 放在分享路径里，领取和查看都按它（@climb/core shareToken.ts）；不对外暴露 id */
+  token: string;
   fromMemberId: string;
+  /** 次卡转赠：从哪张卡里拆出来的（到期退回时用） */
+  fromCardId?: string;
   /** 次卡转赠的次数 */
   quantity?: number;
   createdOn: DateKey;

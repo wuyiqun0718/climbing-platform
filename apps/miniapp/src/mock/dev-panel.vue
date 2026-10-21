@@ -106,7 +106,7 @@ function newWaiver() {
 
 const giveOne = () => countCard.value && act(() => api.shares.createCount({ cardId: countCard.value!.id, quantity: 1 }), '送出 1 次');
 const invite = () => act(() => api.shares.createReferral(), '发了一张老带新邀请');
-const claim = (s: Share) => act(() => api.shares.claim(s.id), '领到了');
+const claim = (s: Share) => act(() => api.shares.claim(s.token), '领到了');
 
 async function inviterCheckIn() {
   if (!mock || !inviter.value) return;

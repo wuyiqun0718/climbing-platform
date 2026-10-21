@@ -74,7 +74,7 @@ describe('mock 扫码入场', () => {
   it('每个人各投各的；体验券入场也含保险', async () => {
     const { mock, ajie, xiaolu } = setup();
     await xiaolu.waivers.sign({ waiverVersionId: MOCK_WAIVER.id });
-    const { card } = await xiaolu.shares.claim((await ajie.shares.createReferral()).id);
+    const { card } = await xiaolu.shares.claim((await ajie.shares.createReferral()).token);
     const a = await ajie.checkIns.create({ ...mock.issueEntryQr('huiju'), cardId: YEAR, idempotencyKey: 'k1' });
     const b = await xiaolu.checkIns.create({ ...mock.issueEntryQr('huiju'), cardId: card.id, idempotencyKey: 'k1' });
     expect(b.policy).toMatchObject({ memberId: MOCK_MEMBERS.xiaolu, status: 'pending' });
@@ -84,7 +84,7 @@ describe('mock 扫码入场', () => {
   it('规则拦下的入场不作废码、不投保', async () => {
     const { mock, ajie, xiaolu } = setup();
     await xiaolu.waivers.sign({ waiverVersionId: MOCK_WAIVER.id });
-    const { card } = await xiaolu.shares.claim((await ajie.shares.createReferral()).id);
+    const { card } = await xiaolu.shares.claim((await ajie.shares.createReferral()).token);
     const qr = mock.issueEntryQr('huiju');
     expect(await codeOf(xiaolu.checkIns.create({ ...qr, cardId: card.id, idempotencyKey: 'k1' }))).toBe('inviter-not-checked-in');
     expect(mock.db.entryQrs.find(q => q.token === qr.qrToken)?.usedAt).toBeUndefined();
@@ -155,7 +155,7 @@ describe('mock 扫码入场', () => {
     const { mock, ajie, xiaolu } = setup();
     expect(await xiaolu.checkIns.referralWait()).toBeNull();
     await xiaolu.waivers.sign({ waiverVersionId: MOCK_WAIVER.id });
-    const { card } = await xiaolu.shares.claim((await ajie.shares.createReferral()).id);
+    const { card } = await xiaolu.shares.claim((await ajie.shares.createReferral()).token);
     expect(await xiaolu.checkIns.referralWait()).toMatchObject({ cardId: card.id, inviterId: MOCK_MEMBERS.ajie, inviterName: '阿杰', inviterCheckedIn: false });
 
     await mock.checkInAs(MOCK_MEMBERS.ajie, 'binggang');
