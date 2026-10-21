@@ -6,6 +6,7 @@ import { formatDot, formatYuan, toDateKey } from '@climb/utils';
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from '../api';
+import CardAdjustModal, { type CardAdjustMode } from '../components/CardAdjustModal.vue';
 import CardLedgerDrawer from '../components/CardLedgerDrawer.vue';
 import DeskCheckInModal from '../components/DeskCheckInModal.vue';
 import DeskOrderModal from '../components/DeskOrderModal.vue';
@@ -114,6 +115,21 @@ function onVoided() {
   load();
 }
 
+// 调整、冻结、解冻：能不能做由接口按 @climb/core 判断，这里只按权限和卡的状态给入口，做完重新拉详情
+const canAdjust = computed(() => !!session.state.staff && canDo(session.state.staff.role, 'card.adjust'));
+const canFreeze = computed(() => !!session.state.staff && canDo(session.state.staff.role, 'card.freeze'));
+const adjusting = ref<{ card: Card; mode: CardAdjustMode } | null>(null);
+const adjustOpen = ref(false);
+function openAdjust(card: Card, mode: CardAdjustMode) {
+  adjusting.value = { card, mode };
+  adjustOpen.value = true;
+}
+const editable = (c: Card) => c.status !== 'void' && c.status !== 'refunded';
+function onAdjusted(msg: string) {
+  toast.success(msg);
+  load();
+}
+
 const back = () => (window.history.state?.back ? router.back() : router.push({ name: 'members' }));
 </script>
 
@@ -170,9 +186,17 @@ const back = () => (window.history.state?.back ? router.back() : router.push({ n
         <small>{{ c.text.meta }}</small>
         <span class="more">看流水 →</span>
         </button>
+        <div v-if="editable(c.card) && (canAdjust || canFreeze)" class="card-ops">
+          <button v-if="canAdjust" type="button" class="link" @click="openAdjust(c.card, 'adjust')">调整</button>
+          <template v-if="canFreeze && c.card.kind === 'period'">
+            <button v-if="c.card.status === 'frozen'" type="button" class="link" @click="openAdjust(c.card, 'unfreeze')">解冻</button>
+            <button v-else-if="c.state === 'normal'" type="button" class="link" @click="openAdjust(c.card, 'freeze')">冻结</button>
+          </template>
+        </div>
       </li>
     </ul>
 
+    <CardAdjustModal v-if="adjusting" v-model:open="adjustOpen" :mode="adjusting.mode" :card="adjusting.card" @done="onAdjusted" />
     <CardLedgerDrawer :card-id="ledgerCard?.id ?? null" :title="ledgerCard?.name ?? ''" @close="ledgerCard = null" />
 
     <h2>最近订单</h2>
@@ -219,8 +243,10 @@ h2 { margin: 22px 0 10px; font-family: var(--font-display); font-size: 22px; fon
 .voided { font-size: 12px; color: var(--ink-muted); }
 .num { font-family: var(--font-number); font-variant-numeric: tabular-nums; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
-.cards li { display: flex; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
+.cards li { display: flex; flex-direction: column; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
 .card-btn { display: flex; flex: 1; flex-direction: column; gap: 2px; padding: 12px 14px; font: inherit; color: inherit; text-align: left; background: none; border: 0; border-radius: inherit; cursor: pointer; }
+.card-ops { display: flex; gap: 14px; padding: 0 14px 10px; }
+.link { padding: 0; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--ink); text-decoration: underline; background: none; border: 0; cursor: pointer; }
 .more { margin-top: 4px; font-size: 12px; font-weight: 600; color: var(--ink-muted); }
 .cards li.dim { opacity: 0.6; }
 .card-h { display: flex; justify-content: space-between; align-items: center; }

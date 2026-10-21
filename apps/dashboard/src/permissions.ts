@@ -20,8 +20,10 @@ export type ActionKey =
   | 'checkIn.void'
   /** 调整次数、有效期（17） */
   | 'card.adjust'
-  /** 冻结、解冻（17）。等馆方：先跟调整一样只给店长以上 */
+  /** 冻结、解冻（17）。已定 manager 以上 */
   | 'card.freeze'
+  /** 后台帮冻时超了冻结规则（次数、天数），写原因破例（17）。已定店长以上 */
+  | 'card.freezeOverride'
   /** 退款（18） */
   | 'order.refund'
   /** 新建、改价、上下架卡种（19） */
@@ -56,6 +58,7 @@ export const ACTION_ROLES: Record<ActionKey, readonly StaffRole[]> = {
   'checkIn.void': ALL,
   'card.adjust': MANAGER_UP,
   'card.freeze': MANAGER_UP,
+  'card.freezeOverride': MANAGER_UP,
   'order.refund': MANAGER_UP,
   'product.edit': MANAGER_UP,
   'staff.manage': OWNER,

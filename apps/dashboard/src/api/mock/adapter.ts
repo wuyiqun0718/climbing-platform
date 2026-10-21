@@ -4,6 +4,8 @@ import {
   MEMBER_RECENT_LIMIT,
   type ApiRequest,
   type ApiResponse,
+  type CardAdjustBody,
+  type CardChangeResult,
   type CardLedger,
   type CardLedgerRow,
   type CheckInPreview,
@@ -12,6 +14,11 @@ import {
   type CreateMemberBody,
   type DashboardSummary,
   type DeskCheckInResult,
+  type DeskFreezeBody,
+  type DeskFreezeOptions,
+  type DeskFreezeResult,
+  type DeskUnfreezeBody,
+  type DeskUnfreezeResult,
   type DeskOrderResult,
   type ExpiringCardRow,
   type FinanceRefundRow,
@@ -34,6 +41,14 @@ import {
 import {
   PRODUCT_REVENUE_CATEGORY,
   RuleError,
+  adjustCard,
+  cardChangeLedgerEntry,
+  deskFreezeCheck,
+  deskFreezePeriodCard,
+  freezeHistory,
+  freezeQuotaLeft,
+  settleFreeze,
+  unfreezePeriodCard,
   checkInLedgerEntry,
   checkInPlan,
   checkInWith,
@@ -58,9 +73,10 @@ import {
   type CheckInArgs,
   type EntryCard,
   type MemberSource,
+  type PeriodCard,
   type RevenueChannel,
 } from '@climb/core';
-import { formatYuan, maskPhone, monthOf } from '@climb/utils';
+import { addDays, formatYuan, maskPhone, monthOf } from '@climb/utils';
 import { MEMBERS_VISIBLE_ACROSS_STORES, canDo, canSeePage, canSeeStore } from '../../permissions';
 import type { MockCheckIn, MockDb, MockMember, MockOrder } from './db';
 
@@ -530,6 +546,113 @@ function cardLedger(db: MockDb, staff: Staff, id: string): ApiResponse {
   return ok(res);
 }
 
+type Operator = { operatorType: 'staff' | 'system'; operatorId: string | null };
+
+/** 改卡后存回去并记流水；跟着挪了日期的期限卡各记一笔 adjust */
+function saveCardChange(db: MockDb, card: Card, followers: PeriodCard[], entry: { reason: 'adjust' | 'freeze' | 'unfreeze'; delta?: number; note: string; followerNote: string }, operator: Operator, at = nowAt(db)) {
+  db.cards[db.cards.findIndex(c => c.id === card.id)] = card;
+  db.ledger.push(cardChangeLedgerEntry({ id: nextId('l-', db.ledger), card, reason: entry.reason, delta: entry.delta, at, operator, note: entry.note }));
+  for (const f of followers) {
+    db.cards[db.cards.findIndex(c => c.id === f.id)] = f;
+    db.ledger.push(cardChangeLedgerEntry({ id: nextId('l-', db.ledger), card: f, reason: 'adjust', at, operator, note: entry.followerNote }));
+  }
+}
+
+/** 冻满了还没解冻的期限卡自动解冻（core 的 settleFreeze），流水的时间记恢复能用的那天 */
+function settleFrozenCards(db: MockDb) {
+  for (const card of [...db.cards]) {
+    const cur = db.cards.find(c => c.id === card.id)!;
+    const r = settleFreeze(cur, db.cards.filter(c => c.memberId === cur.memberId), db.today);
+    if (!r) continue;
+    const on = addDays((cur as PeriodCard).frozenUntil!, 1);
+    const note = `冻满 ${r.days} 天，自动解冻，到期日顺延 ${r.days} 天`;
+    saveCardChange(db, r.card, r.followers, { reason: 'unfreeze', note, followerNote: '前一张期限卡解冻，开始日跟着调整' }, { operatorType: 'system', operatorId: null }, `${on}T00:00:00+08:00`);
+  }
+}
+
+/** 后台改卡的权限、卡和会员校验 */
+function cardScope(db: MockDb, staff: Staff, id: string, action: 'card.adjust' | 'card.freeze'): { card: Card; cards: Card[] } | ApiResponse {
+  if (!canDo(staff.role, action)) return fail(403, 'forbidden', action === 'card.adjust' ? '店长以上才能调整卡' : '店长以上才能冻结、解冻');
+  const card = db.cards.find(c => c.id === id);
+  if (!card) return fail(404, 'card-not-found', '没有这张卡');
+  const m = db.members.find(x => x.id === card.memberId);
+  if (!m) return fail(404, 'member-not-found', '没有这个会员');
+  if (!MEMBERS_VISIBLE_ACROSS_STORES && !canSeeStore(staff, m.homeStoreId)) return fail(403, 'forbidden', '没有这家店的权限');
+  return { card, cards: db.cards.filter(c => c.memberId === card.memberId) };
+}
+
+const ruleFail = (e: unknown): ApiResponse => {
+  if (e instanceof RuleError && e.code === 'reason-required') return badInput('reason', e.message);
+  if (e instanceof RuleError) return fail(422, e.code, e.message);
+  throw e;
+};
+
+/** 调次数、改到期日：口径见 @climb/api 的 CardAdjustBody，规则在 @climb/core 的 adjustCard */
+function adjustDeskCard(db: MockDb, staff: Staff, id: string, body: Partial<CardAdjustBody> | null): ApiResponse {
+  const scope = cardScope(db, staff, id, 'card.adjust');
+  if ('status' in scope) return scope;
+  const reason = String(body?.reason ?? '').trim();
+  const input = { reason, ...(body?.remaining !== undefined && { remaining: Number(body.remaining) }), ...(body?.expiresOn !== undefined && { expiresOn: body.expiresOn }) };
+  let r: ReturnType<typeof adjustCard>;
+  try {
+    r = adjustCard({ card: scope.card, cards: scope.cards, input, today: db.today });
+  } catch (e) {
+    return ruleFail(e);
+  }
+  saveCardChange(db, r.card, r.followers, { reason: 'adjust', delta: r.delta, note: reason, followerNote: '前一张期限卡改了到期日，开始日跟着调整' }, { operatorType: 'staff', operatorId: staff.id });
+  const res: CardChangeResult = { card: r.card, followers: r.followers };
+  return ok(res);
+}
+
+const memberFreezeHistory = (db: MockDb, cards: Card[]) => freezeHistory(db.ledger, cards.map(c => c.id));
+
+/** 后台帮冻前看规则和剩余次数：口径见 @climb/api 的 DeskFreezeOptions */
+function deskFreezeOptions(db: MockDb, staff: Staff, id: string): ApiResponse {
+  const scope = cardScope(db, staff, id, 'card.freeze');
+  if ('status' in scope) return scope;
+  const rules = db.rules.freezeRules;
+  const history = memberFreezeHistory(db, scope.cards);
+  const quota = freezeQuotaLeft(history, db.today, rules);
+  const res: DeskFreezeOptions = { ...deskFreezeCheck({ card: scope.card, history, today: db.today, rules }), rules, monthLeft: quota.month, yearLeft: quota.year };
+  return ok(res);
+}
+
+/** 后台帮会员冻结：口径见 @climb/api 的 DeskFreezeBody，规则在 @climb/core 的 deskFreezePeriodCard */
+function deskFreeze(db: MockDb, staff: Staff, id: string, body: Partial<DeskFreezeBody> | null): ApiResponse {
+  const scope = cardScope(db, staff, id, 'card.freeze');
+  if ('status' in scope) return scope;
+  const overrideReason = String(body?.overrideReason ?? '').trim();
+  if (overrideReason && !canDo(staff.role, 'card.freezeOverride')) return fail(403, 'forbidden', '没有破例冻结的权限');
+  const days = Number(body?.days);
+  let r: ReturnType<typeof deskFreezePeriodCard>;
+  try {
+    r = deskFreezePeriodCard({ card: scope.card, cards: scope.cards, days, history: memberFreezeHistory(db, scope.cards), today: db.today, rules: db.rules.freezeRules, overrideReason });
+  } catch (e) {
+    return ruleFail(e);
+  }
+  const extra = String(body?.note ?? '').trim();
+  const note = [`前台代办冻结 ${days} 天，到 ${r.card.frozenUntil}`, extra, r.overridden.length ? `破例：${overrideReason}` : ''].filter(Boolean).join('；');
+  saveCardChange(db, r.card, r.followers, { reason: 'freeze', note, followerNote: '前一张期限卡冻结，开始日往后挪' }, { operatorType: 'staff', operatorId: staff.id });
+  const res: DeskFreezeResult = r;
+  return ok(res);
+}
+
+/** 后台解冻（会员自助冻的也能提前解）：口径见 @climb/api 的 DeskUnfreezeBody */
+function deskUnfreeze(db: MockDb, staff: Staff, id: string, body: Partial<DeskUnfreezeBody> | null): ApiResponse {
+  const scope = cardScope(db, staff, id, 'card.freeze');
+  if ('status' in scope) return scope;
+  let r: ReturnType<typeof unfreezePeriodCard>;
+  try {
+    r = unfreezePeriodCard({ card: scope.card, cards: scope.cards, on: db.today });
+  } catch (e) {
+    return ruleFail(e);
+  }
+  const note = [`前台办理提前解冻，到期日顺延 ${r.days} 天`, String(body?.note ?? '').trim()].filter(Boolean).join('；');
+  saveCardChange(db, r.card, r.followers, { reason: 'unfreeze', note, followerNote: '前一张期限卡解冻，开始日跟着调整' }, { operatorType: 'staff', operatorId: staff.id });
+  const res: DeskUnfreezeResult = r;
+  return ok(res);
+}
+
 /** 冻结规则 PUT /admin/settings/freeze-rules；存在 db.rules 里，小程序冻结接口和后台冻结都读这一份 */
 function saveFreezeRules(db: MockDb, staff: Staff, body: any): ApiResponse {
   if (!canDo(staff.role, 'settings.freezeRules')) return fail(403, 'forbidden', '只有老板能改冻结规则');
@@ -696,6 +819,30 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
     auth: true,
     handle: ({ db, params, staff }) => cardLedger(db, staff!, decodeURIComponent(params[0]!)),
   },
+  {
+    method: 'POST',
+    path: /^\/admin\/cards\/([^/]+)\/adjust$/,
+    auth: true,
+    handle: ({ db, params, body, staff }) => adjustDeskCard(db, staff!, decodeURIComponent(params[0]!), body),
+  },
+  {
+    method: 'GET',
+    path: /^\/admin\/cards\/([^/]+)\/freeze$/,
+    auth: true,
+    handle: ({ db, params, staff }) => deskFreezeOptions(db, staff!, decodeURIComponent(params[0]!)),
+  },
+  {
+    method: 'POST',
+    path: /^\/admin\/cards\/([^/]+)\/freeze$/,
+    auth: true,
+    handle: ({ db, params, body, staff }) => deskFreeze(db, staff!, decodeURIComponent(params[0]!), body),
+  },
+  {
+    method: 'POST',
+    path: /^\/admin\/cards\/([^/]+)\/unfreeze$/,
+    auth: true,
+    handle: ({ db, params, body, staff }) => deskUnfreeze(db, staff!, decodeURIComponent(params[0]!), body),
+  },
 ];
 
 export function createMockAdapter(db: MockDb, opts: { delayMs?: number } = {}): RequestAdapter {
@@ -711,6 +858,7 @@ export function createMockAdapter(db: MockDb, opts: { delayMs?: number } = {}): 
         const s = token.startsWith(TOKEN_PREFIX) ? db.staff.find(x => x.id === token.slice(TOKEN_PREFIX.length) && x.active) : undefined;
         if (!s) return fail(401, 'unauthorized', '登录已过期，请重新登录');
         staff = toStaff(s);
+        settleFrozenCards(db);
       }
       // 返回深拷贝，避免页面改到 mock 里的数据
       const res = r.handle({ db, body: req.body, query: url.searchParams, params: m.slice(1), staff });

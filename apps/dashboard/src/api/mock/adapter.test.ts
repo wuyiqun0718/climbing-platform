@@ -741,3 +741,88 @@ describe('后台 mock：撤销入场', () => {
     expect(freezeBlockedBy({ ...args, rules: { ...db.rules.freezeRules, memberSelfService: true }, history: ['2026-10-01', '2026-10-02'] })).toBe('freeze-month-quota-used');
   });
 });
+
+describe('后台 mock：调整卡、冻结和解冻', () => {
+  async function withCards() {
+    const s = setup();
+    const m = member('m-t', 'walkin', 'bingang', '2026-03-15', '2026-03-15');
+    s.db.members.push(m);
+    const year = { id: 'p-t', kind: 'period' as const, memberId: m.id, productId: 'y', name: '年卡', startsOn: '2026-03-15', expiresOn: '2027-03-14' };
+    const next = { id: 'p-t2', kind: 'period' as const, memberId: m.id, productId: 'm', name: '月卡', startsOn: '2027-03-15', expiresOn: '2027-04-14' };
+    const count = { id: 'c-t', kind: 'count' as const, memberId: m.id, productId: 'c', name: '10 次卡', total: 10, remaining: 5, expiresOn: '2027-02-06' };
+    s.db.cards.push(year, next, count);
+    for (const c of [year, next, count]) {
+      const counted = c.kind === 'count';
+      s.db.ledger.push({ id: `l-buy-${c.id}`, cardId: c.id, at: '2026-03-15T10:00:00+08:00', delta: counted ? 5 : 0, remainingAfter: counted ? 5 : null, expiresOnAfter: c.expiresOn, reason: 'purchase', ref: null, operatorType: 'staff', operatorId: 's-owner', note: '' });
+    }
+    await s.login('13800000002');
+    return { ...s, m };
+  }
+  const card = (db: MockDb, id: string) => db.cards.find(c => c.id === id)!;
+  const reasons = (db: MockDb, id: string) => db.ledger.filter(e => e.cardId === id).map(e => e.reason);
+
+  it('调次数、改到期日：必须写原因，记 adjust 流水，对账接得上；期限卡改到期日后面的卡跟着挪', async () => {
+    const { api, db } = await withCards();
+    expect(await api.cards.adjust('c-t', { remaining: 7, reason: ' ' }).catch((e: ApiError) => e)).toMatchObject({ status: 400, data: { field: 'reason' } });
+    expect(await api.cards.adjust('c-t', { remaining: 7, expiresOn: '2027-03-01', reason: '补偿闭馆' })).toMatchObject({ card: { remaining: 7, expiresOn: '2027-03-01' } });
+    expect(db.ledger.at(-1)).toMatchObject({ cardId: 'c-t', reason: 'adjust', delta: 2, remainingAfter: 7, operatorType: 'staff', operatorId: 's-manager', note: '补偿闭馆' });
+    expect(ledgerMismatch(card(db, 'c-t'), db.ledger)).toBeNull();
+    const r = await api.cards.adjust('p-t', { expiresOn: '2027-03-21', reason: '补 7 天' });
+    expect(r.followers).toMatchObject([{ id: 'p-t2', startsOn: '2027-03-22', expiresOn: '2027-04-21' }]);
+    expect(reasons(db, 'p-t2')).toEqual(['purchase', 'adjust']);
+    for (const id of ['p-t', 'p-t2']) expect(ledgerMismatch(card(db, id), db.ledger)).toBeNull();
+    expect(await api.cards.adjust('p-t', { remaining: 3, reason: 'x' }).catch((e: ApiError) => e)).toMatchObject({ status: 422, data: { code: 'adjust-invalid' } });
+  });
+
+  it('只有店长以上能调、能冻；没有这张卡 404', async () => {
+    const { api, login } = await withCards();
+    await login('13800000003');
+    expect(await status(api.cards.adjust('c-t', { remaining: 7, reason: 'x' }))).toBe(403);
+    expect(await status(api.cards.freeze('p-t', { days: 10 }))).toBe(403);
+    expect(await status(api.cards.unfreeze('p-t'))).toBe(403);
+    await login('13800000002');
+    expect(await status(api.cards.adjust('nope', { remaining: 7, reason: 'x' }))).toBe(404);
+  });
+
+  it('后台帮冻：会员不能自助时也能办；冻结中的卡不能入场；记 freeze 流水，后面的卡跟着挪', async () => {
+    const { api, db, m } = await withCards();
+    db.rules = { ...db.rules, freezeRules: { ...db.rules.freezeRules, memberSelfService: false } };
+    expect(await api.cards.freezeOptions('p-t')).toMatchObject({ blockedBy: null, needsOverride: [], monthLeft: 1 });
+    const r = await api.cards.freeze('p-t', { days: 10, note: '出差' });
+    expect(r).toMatchObject({ card: { status: 'frozen', frozenFrom: '2026-10-21', frozenUntil: '2026-10-30' }, followers: [{ startsOn: '2027-03-25' }], overridden: [] });
+    expect(db.ledger.filter(e => e.cardId === 'p-t').at(-1)).toMatchObject({ reason: 'freeze', operatorType: 'staff', note: '前台代办冻结 10 天，到 2026-10-30；出差' });
+    const preview = await api.checkIns.preview({ memberId: m.id, storeId: 'bingang' });
+    expect(preview.options.some(o => o.card.id === 'p-t')).toBe(false);
+    expect(await api.cards.freeze('p-t', { days: 10 }).catch((e: ApiError) => e)).toMatchObject({ status: 422, data: { code: 'freeze-card-not-active' } });
+  });
+
+  it('后台代办的计入每月次数：再冻要写原因破例，破例记在流水里', async () => {
+    const { api, db } = await withCards();
+    db.cards.push({ id: 'p-t3', kind: 'period', memberId: db.members[0]!.id, productId: 'y', name: '年卡', startsOn: '2026-01-01', expiresOn: '2026-12-31' });
+    await api.cards.freeze('p-t', { days: 7 });
+    await api.cards.unfreeze('p-t');
+    expect(await api.cards.freezeOptions('p-t')).toMatchObject({ needsOverride: ['freeze-month-quota-used'], monthLeft: 0 });
+    expect(await api.cards.freeze('p-t', { days: 7 }).catch((e: ApiError) => e)).toMatchObject({ status: 422, data: { code: 'freeze-month-quota-used' } });
+    expect(await api.cards.freeze('p-t', { days: 45, overrideReason: '骨折，有医生证明' })).toMatchObject({ overridden: ['freeze-month-quota-used', 'freeze-days-out-of-range'] });
+    expect(db.ledger.at(-2)).toMatchObject({ cardId: 'p-t', reason: 'freeze', note: '前台代办冻结 45 天，到 2026-12-04；破例：骨折，有医生证明' });
+    // 别的会员不受影响
+    expect(await api.cards.freezeOptions('p-t3')).toMatchObject({ monthLeft: 1 });
+  });
+
+  it('解冻：会员自助冻的也能提前解，到期日按实际冻结天数顺延；冻满没解的自动解冻', async () => {
+    const { api, db } = await withCards();
+    const y = card(db, 'p-t') as Extract<ReturnType<typeof card>, { kind: 'period' }>;
+    Object.assign(y, { status: 'frozen', frozenFrom: '2026-10-15', frozenUntil: '2026-11-13' });
+    const r = await api.cards.unfreeze('p-t', { note: '提前回来了' });
+    expect(r).toMatchObject({ days: 6, card: { status: 'normal', expiresOn: '2027-03-20' }, followers: [{ startsOn: '2027-03-21' }] });
+    expect(r.card).not.toHaveProperty('frozenFrom');
+    expect(db.ledger.filter(e => e.cardId === 'p-t').at(-1)).toMatchObject({ reason: 'unfreeze', note: '前台办理提前解冻，到期日顺延 6 天；提前回来了' });
+    expect(await api.cards.unfreeze('p-t').catch((e: ApiError) => e)).toMatchObject({ status: 422, data: { code: 'card-not-frozen' } });
+    for (const id of ['p-t', 'p-t2']) expect(ledgerMismatch(card(db, id), db.ledger)).toBeNull();
+
+    Object.assign(card(db, 'p-t'), { status: 'frozen', frozenFrom: '2026-10-01', frozenUntil: '2026-10-10' });
+    await api.cards.freezeOptions('p-t');
+    expect(card(db, 'p-t')).toMatchObject({ status: 'normal', expiresOn: addDays('2027-03-20', 10) });
+    expect(db.ledger.find(e => e.cardId === 'p-t' && e.operatorType === 'system')).toMatchObject({ reason: 'unfreeze', at: '2026-10-11T00:00:00+08:00' });
+  });
+});

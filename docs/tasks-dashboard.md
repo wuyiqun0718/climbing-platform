@@ -124,11 +124,12 @@
 - 完成标准：撤销后剩余次数恢复（mock 单测）。
 - 补（2026-10-21）：规则在 `@climb/core` 的 `voidCheckIn`：只退这次实际扣的次数（同日再次入场扣 0 的不退）；撤销扣了次的那次而同一天还有免扣再进的（次卡），不退，扣次转给最早那次（另一张卡就这张退、那张扣）；用掉的体验券在同一天没有别的入场时才恢复；撤销的是投保那次而同一天还有没撤销的入场，保单改挂到那次，否则待退保；重复撤销返回第一次的结果。页面先放在会员详情「最近入场」，入场记录页（20）做的时候复用接口。操作日志等 23。
 
-**17. 调整次数、有效期，冻结和解冻**
+**17. 调整次数、有效期，冻结和解冻** ✅
 - 依赖：5、12
 - 涉及文件：`src/components/CardAdjustModal.vue`、契约 `POST /admin/cards/:id/adjust`、`POST /admin/cards/:id/freeze`、`/unfreeze`、mock
 - 内容：调次数、改到期日必须写原因；后台帮会员冻结、解冻期限卡，按 17.5 的冻结规则校验（超出次数或天数的拦下，店长以上可以写原因破例）；解冻后按实际冻结天数顺延到期日。只有 manager 以上能调。
 - 完成标准：每次操作有流水；冻结中的卡不能入场；会员在小程序自助冻结的卡，后台能看到并能提前解冻（规则在 `@climb/core`，如缺规则先在 core 补并加单测，跟 core 负责人对一下）。
+- 补（2026-10-21）：规则在 core 的 `cardAdjust.ts`：`adjustCard`（原因必填；作废、退款的不能改；剩余超过总数的总数跟着加；期限卡改到期日后面续的卡跟着挪，已经开始用的拦下）、`deskFreezeCheck` / `deskFreezePeriodCard`（不看 `memberSelfService`；超每月、每年次数或天数上下限的要 `overrideReason`，破例也不能超过 `FREEZE_DAYS_LIMIT`；冻结和挪卡直接调 `freezePeriodCard`）、`freezeHistory`（会员所有卡上的 freeze 流水，后台代办的也算）。解冻直接用 `unfreezePeriodCard`。`freeze.ts` 只加了导出 `followersAfter`，原有行为没动。破例权限 `card.freezeOverride`（店长以上）。接口多一个 `GET /admin/cards/:id/freeze` 给弹窗看规则和剩余次数；mock 每次请求前跑 `settleFreeze`。示例数据里那张冻结的次卡不是期限卡，解冻不了（等青橙导入时看实际有没有这种卡）。
 
 **17.5 冻结规则配置** ✅
 - 依赖：3、5

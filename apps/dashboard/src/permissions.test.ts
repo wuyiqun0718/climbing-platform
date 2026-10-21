@@ -47,6 +47,7 @@ describe('操作权限', () => {
     'checkIn.void': ['owner', 'manager', 'desk'],
     'card.adjust': ['owner', 'manager'],
     'card.freeze': ['owner', 'manager'],
+    'card.freezeOverride': ['owner', 'manager'],
     'order.refund': ['owner', 'manager'],
     'product.edit': ['owner', 'manager'],
     'staff.manage': ['owner'],

@@ -1,4 +1,4 @@
-import { MEMBER_SOURCES, type Card, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type LedgerEntry, type MemberSource, type PayChannel, type Product, type RevenueBucket, type RevenueCategory, type RevenueChannel } from '@climb/core';
+import { MEMBER_SOURCES, type Card, type CardAdjustInput, type FreezeOverridable, type PeriodCard, type RuleErrorCode, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type LedgerEntry, type MemberSource, type PayChannel, type Product, type RevenueBucket, type RevenueCategory, type RevenueChannel } from '@climb/core';
 import type { Cents, DateKey } from '@climb/utils';
 import { createHttp, type ClientOptions } from './client';
 
@@ -381,6 +381,66 @@ export interface CheckInInsurance {
  */
 export type FreezeRulesBody = FreezeRules;
 
+/**
+ * 后台改卡（任务 17），规则都在 @climb/core 的 cardAdjust.ts 和 freeze.ts（冻结、解冻跟小程序同一份）。
+ * 都要 manager 以上（权限 card.adjust / card.freeze），不是 403；没有这张卡 404；会员能不能看同会员详情；
+ * 规则不让的 422（data.code 是 @climb/core 的 RuleErrorCode）；必填的原因没填 400（data.field 指出哪一项）。
+ * 每次操作记一笔流水（操作人是员工）：调整记 adjust、冻结记 freeze、解冻记 unfreeze，备注写原因；
+ * 后面接着的期限卡跟着挪了日期的，各记一笔 adjust。
+ * 冻满了没解冻的卡每次请求前自动解冻（core 的 settleFreeze，操作人 system）。
+ *
+ * POST /admin/cards/:id/adjust：调次数、改到期日，reason 必填（core 的 adjustCard）。
+ */
+export type CardAdjustBody = CardAdjustInput;
+
+export interface CardChangeResult<C extends Card = Card> {
+  card: C;
+  /** 跟着挪了日期的期限卡（续费买的、还没开始的），没有为空数组 */
+  followers: PeriodCard[];
+}
+
+/**
+ * GET /admin/cards/:id/freeze：后台帮冻前看规则和这个会员还剩几次（core 的 deskFreezeCheck，不看天数）。
+ * blockedBy 不为 null 的破例也冻不了；needsOverride 不为空的要写原因破例（权限 card.freezeOverride）。
+ */
+export interface DeskFreezeOptions {
+  blockedBy: RuleErrorCode | null;
+  needsOverride: FreezeOverridable[];
+  rules: FreezeRules;
+  /** 本月、本年还能冻几次（会员自助和后台代办的都算），null 为不限 */
+  monthLeft: number | null;
+  yearLeft: number | null;
+}
+
+/**
+ * POST /admin/cards/:id/freeze：从今天起冻 days 天（core 的 deskFreezePeriodCard）。
+ * 超了冻结规则的要带 overrideReason，没带 422（data.code 是超的那条）；没破例权限的带了也 403。
+ * note 选填，记在流水备注；会员不能自助冻结（memberSelfService 关了）不影响后台办。这次冻结计入会员的每月、每年次数。
+ */
+export interface DeskFreezeBody {
+  days: number;
+  note?: string;
+  overrideReason?: string;
+}
+
+export interface DeskFreezeResult extends CardChangeResult<PeriodCard> {
+  /** 破例了哪几条，没破例为空数组 */
+  overridden: FreezeOverridable[];
+}
+
+/**
+ * POST /admin/cards/:id/unfreeze：今天解冻（会员自助冻的也能提前解），今天就能入场；
+ * 到期日按实际冻结天数顺延（core 的 unfreezePeriodCard）。没冻结的 422（card-not-frozen）。
+ */
+export interface DeskUnfreezeBody {
+  note?: string;
+}
+
+export interface DeskUnfreezeResult extends CardChangeResult<PeriodCard> {
+  /** 到期日顺延了几天 */
+  days: number;
+}
+
 export const PAY_CHANNEL_TEXT: Record<PayChannel, string> = {
   wechat: '微信支付',
   desk_cash: '现金',
@@ -446,6 +506,10 @@ export function createAdminApi(opts: ClientOptions) {
     },
     cards: {
       ledger: (id: string) => http<CardLedger>('GET', `/admin/cards/${encodeURIComponent(id)}/ledger`),
+      adjust: (id: string, body: CardAdjustBody) => http<CardChangeResult>('POST', `/admin/cards/${encodeURIComponent(id)}/adjust`, body),
+      freezeOptions: (id: string) => http<DeskFreezeOptions>('GET', `/admin/cards/${encodeURIComponent(id)}/freeze`),
+      freeze: (id: string, body: DeskFreezeBody) => http<DeskFreezeResult>('POST', `/admin/cards/${encodeURIComponent(id)}/freeze`, body),
+      unfreeze: (id: string, body: DeskUnfreezeBody = {}) => http<DeskUnfreezeResult>('POST', `/admin/cards/${encodeURIComponent(id)}/unfreeze`, body),
     },
   };
 }
