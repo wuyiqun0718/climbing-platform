@@ -1,4 +1,4 @@
-import { MEMBER_SOURCES, type Card, type EntryCard, type EntryOption, type PolicyStatus, type DeskPayChannel, type LedgerEntry, type MemberSource, type PayChannel, type Product, type RevenueBucket, type RevenueCategory, type RevenueChannel } from '@climb/core';
+import { MEMBER_SOURCES, type Card, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type LedgerEntry, type MemberSource, type PayChannel, type Product, type RevenueBucket, type RevenueCategory, type RevenueChannel } from '@climb/core';
 import type { Cents, DateKey } from '@climb/utils';
 import { createHttp, type ClientOptions } from './client';
 
@@ -372,6 +372,15 @@ export interface CheckInInsurance {
   status: PolicyStatus | null;
 }
 
+/**
+ * 冻结规则 GET/PUT /admin/settings/freeze-rules。字段和默认值见 @climb/core 的 FreezeRules / defaultFreezeRules，
+ * 小程序自助冻结和后台帮会员冻结都按这一份判断（core 的 freeze.ts）。
+ * GET 登录的员工都能看（前台办冻结时要知道规则）；PUT 只有老板（权限 settings.freezeRules），不是 403。
+ * PUT 要传全部字段，次数传 null 为不限；校验用 core 的 freezeRulesErrors，不对的 400（data.field 是第一个错的字段）。
+ * 改了只影响以后的冻结，正在冻结的卡按冻结时定的天数走。返回保存后的规则。
+ */
+export type FreezeRulesBody = FreezeRules;
+
 export const PAY_CHANNEL_TEXT: Record<PayChannel, string> = {
   wechat: '微信支付',
   desk_cash: '现金',
@@ -430,6 +439,10 @@ export function createAdminApi(opts: ClientOptions) {
       preview: (body: CheckInPreviewBody) => http<CheckInPreview>('POST', '/admin/check-ins/preview', body),
       create: (body: CreateDeskCheckInBody) => http<DeskCheckInResult>('POST', '/admin/check-ins', body),
       void: (id: string, body: VoidCheckInBody) => http<VoidCheckInResult>('POST', `/admin/check-ins/${encodeURIComponent(id)}/void`, body),
+    },
+    settings: {
+      freezeRules: () => http<FreezeRules>('GET', '/admin/settings/freeze-rules'),
+      saveFreezeRules: (body: FreezeRulesBody) => http<FreezeRules>('PUT', '/admin/settings/freeze-rules', body),
     },
     cards: {
       ledger: (id: string) => http<CardLedger>('GET', `/admin/cards/${encodeURIComponent(id)}/ledger`),

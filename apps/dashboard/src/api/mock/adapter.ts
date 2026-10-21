@@ -44,6 +44,8 @@ import {
   countsAsCardPurchase,
   deskOrderErrors,
   expiringPeriodCards,
+  freezeRulesErrors,
+  pickFreezeRules,
   financeRangeError,
   findMemberByPhone,
   isCardValid,
@@ -528,6 +530,18 @@ function cardLedger(db: MockDb, staff: Staff, id: string): ApiResponse {
   return ok(res);
 }
 
+/** 冻结规则 PUT /admin/settings/freeze-rules；存在 db.rules 里，小程序冻结接口和后台冻结都读这一份 */
+function saveFreezeRules(db: MockDb, staff: Staff, body: any): ApiResponse {
+  if (!canDo(staff.role, 'settings.freezeRules')) return fail(403, 'forbidden', '只有老板能改冻结规则');
+  const errs = freezeRulesErrors(body ?? {});
+  if (errs) {
+    const field = Object.keys(errs)[0] as keyof typeof errs;
+    return badInput(field, errs[field]!);
+  }
+  db.rules = { ...db.rules, freezeRules: pickFreezeRules(body) };
+  return ok(db.rules.freezeRules);
+}
+
 const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handle: Handler }[] = [
   {
     method: 'POST',
@@ -663,6 +677,18 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
     path: /^\/admin\/check-ins\/([^/]+)\/void$/,
     auth: true,
     handle: ({ db, params, body, staff }) => voidDeskCheckIn(db, staff!, decodeURIComponent(params[0]!), body),
+  },
+  {
+    method: 'GET',
+    path: /^\/admin\/settings\/freeze-rules$/,
+    auth: true,
+    handle: ({ db }) => ok(db.rules.freezeRules),
+  },
+  {
+    method: 'PUT',
+    path: /^\/admin\/settings\/freeze-rules$/,
+    auth: true,
+    handle: ({ db, body, staff }) => saveFreezeRules(db, staff!, body),
   },
   {
     method: 'GET',

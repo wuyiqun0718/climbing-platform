@@ -36,6 +36,9 @@ export interface PeriodCard extends CardBase {
   kind: 'period';
   productId: string;
   startsOn: DateKey;
+  /** 冻结中（status 为 frozen）才有：从哪天开始冻结、计划冻结到哪天（含）。到期日要到解冻时才按实际冻结天数顺延 */
+  frozenFrom?: DateKey;
+  frozenUntil?: DateKey;
 }
 
 /** 次卡：入场扣次，可以拆几次送给朋友 */

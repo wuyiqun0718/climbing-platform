@@ -130,11 +130,12 @@
 - 内容：调次数、改到期日必须写原因；后台帮会员冻结、解冻期限卡，按 17.5 的冻结规则校验（超出次数或天数的拦下，店长以上可以写原因破例）；解冻后按实际冻结天数顺延到期日。只有 manager 以上能调。
 - 完成标准：每次操作有流水；冻结中的卡不能入场；会员在小程序自助冻结的卡，后台能看到并能提前解冻（规则在 `@climb/core`，如缺规则先在 core 补并加单测，跟 core 负责人对一下）。
 
-**17.5 冻结规则配置**
+**17.5 冻结规则配置** ✅
 - 依赖：3、5
 - 涉及文件：`src/pages/SettingsPage.vue`（或卡种页的「冻结规则」tab）、`packages/core/src/gym.ts`（`GymRules` 加冻结规则）、`packages/core/src/rules.ts`（+ 单测）、`gyms/benchmark/src/index.ts`、契约 `GET/PUT /admin/settings/freeze-rules`、mock
 - 内容：已定会员可以在小程序里自己冻结期限卡，规则由岩馆在后台配：每月最多几次、每年最多几次（可不限）、每次最少/最多几天、会员能不能自助（关掉就只能前台办）。默认会员每月可自助冻结 1 次，其他先给占位值。规则判断（这次能不能冻、冻几天、解冻后到期日）只写在 `@climb/core`，小程序和后台共用。只有 owner（店长能不能改等定了权限再说）。
 - 完成标准：改了配置后小程序冻结接口按新规则拦（mock 共用一份数据）；core 单测覆盖每月次数、每年次数、天数上下限、跨月跨年。
+- 补（2026-10-21）：`FreezeRules` / `defaultFreezeRules` 和 `freeze.ts` 跟小程序分支完全一致（`isPeriodActive` 也跟着改成要求状态正常，冻结中的卡不能入场、不能发老带新）；后台设置的校验在 core 的 `freezeRules.ts`（`freezeRulesErrors`，次数 1 以上或不限、每年不少于每月、天数 1–365 且最多不少于最少）。页面放在新的「设置」页（只有老板，权限 `settings.freezeRules`）；mock 存在 `db.rules.freezeRules`，小程序 mock 合并后要读同一份。`freezeBlockedBy` 先查 `memberSelfService`，后台帮冻（17）不能直接用它，要另包一层并支持店长写原因破例。
 
 **18. 退款**
 - 依赖：5、11

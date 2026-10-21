@@ -10,6 +10,21 @@ export interface GymRules {
   sameDayReentryFree: boolean;
   /** 看板「快到期」提醒提前几天（含今天到期的）。等馆方，先按原型 7 天 */
   expiryReminderDays: number;
+  /** 期限卡冻结规则，岩馆在后台配置 */
+  freezeRules: FreezeRules;
+}
+
+/** 期限卡冻结规则；字段和后台（mvp/dashboard 任务 17.5）一致 */
+export interface FreezeRules {
+  /** 会员能不能在小程序里自己冻结；关掉就只能前台办 */
+  memberSelfService: boolean;
+  /** 每个自然月最多冻结几次；null 为不限 */
+  perMonth: number | null;
+  /** 每个自然年最多冻结几次；null 为不限 */
+  perYear: number | null;
+  /** 每次最少、最多冻结几天 */
+  minDays: number;
+  maxDays: number;
 }
 
 export interface GymFeatures {
@@ -35,11 +50,24 @@ export interface GymConfig {
   features: GymFeatures;
 }
 
+/**
+ * 冻结规则的默认值。已定：会员可以自助冻结、每月 1 次。
+ * 其余是占位，等馆方定（docs/mvp-plan.md 第 9 节「要问馆方」第 16 条）：每年不限、每次 1–30 天。
+ */
+export const defaultFreezeRules: FreezeRules = {
+  memberSelfService: true,
+  perMonth: 1,
+  perYear: null,
+  minDays: 1,
+  maxDays: 30,
+};
+
 export const defaultRules: GymRules = {
   referralsPerMonth: 1,
   referralRequiresInviterSameDay: true,
   sameDayReentryFree: true,
   expiryReminderDays: 7,
+  freezeRules: defaultFreezeRules,
 };
 
 export const defaultFeatures: GymFeatures = {
@@ -50,12 +78,13 @@ export const defaultFeatures: GymFeatures = {
   events: true,
 };
 
-type GymInput = Omit<GymConfig, 'rules' | 'features'> & { rules?: Partial<GymRules>; features?: Partial<GymFeatures> };
+type GymRulesInput = Partial<Omit<GymRules, 'freezeRules'>> & { freezeRules?: Partial<FreezeRules> };
+type GymInput = Omit<GymConfig, 'rules' | 'features'> & { rules?: GymRulesInput; features?: Partial<GymFeatures> };
 
 export function defineGym(input: GymInput): GymConfig {
   return {
     ...input,
-    rules: { ...defaultRules, ...input.rules },
+    rules: { ...defaultRules, ...input.rules, freezeRules: { ...defaultFreezeRules, ...input.rules?.freezeRules } },
     features: { ...defaultFeatures, ...input.features },
   };
 }

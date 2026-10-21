@@ -15,7 +15,13 @@ export type RuleErrorCode =
   | 'no-period-card'
   | 'waiver-required'
   | 'already-voided'
-  | 'reason-required';
+  | 'reason-required'
+  | 'freeze-not-self-service'
+  | 'freeze-card-not-active'
+  | 'freeze-days-out-of-range'
+  | 'freeze-month-quota-used'
+  | 'freeze-year-quota-used'
+  | 'card-not-frozen';
 
 export class RuleError extends Error {
   constructor(public code: RuleErrorCode, message: string) {
@@ -24,7 +30,11 @@ export class RuleError extends Error {
   }
 }
 
-export const isPeriodActive = (c: PeriodCard, today: DateKey) => c.startsOn <= today && c.expiresOn >= today;
+/** 卡的状态是不是正常（没冻结、作废、退款）；没填状态的算正常 */
+export const isCardNormal = (c: Card) => (c.status ?? 'normal') === 'normal';
+
+/** 期限卡今天能用：状态正常，且今天在有效期内 */
+export const isPeriodActive = (c: PeriodCard, today: DateKey) => isCardNormal(c) && c.startsOn <= today && c.expiresOn >= today;
 
 export interface EntryContext {
   today: DateKey;

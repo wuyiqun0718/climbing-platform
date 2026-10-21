@@ -1,5 +1,5 @@
 import { ApiError, createAdminApi } from '@climb/api';
-import { ledgerMismatch } from '@climb/core';
+import { defaultFreezeRules, freezeBlockedBy, ledgerMismatch } from '@climb/core';
 import { addDays } from '@climb/utils';
 import { describe, expect, it } from 'vitest';
 import { createMockAdapter } from './adapter';
@@ -719,5 +719,25 @@ describe('后台 mock：撤销入场', () => {
     expect((await s2.api.checkIns.void(seeded.id, { reason: 'x' })).checkIn).toMatchObject({ voided: true, voidInfo: { reason: '扫错了卡' } });
     const anon = setup();
     expect(await status(anon.api.checkIns.void(first.checkIn.id, { reason: 'x' }))).toBe(401);
+  });
+
+  it('冻结规则：都能看，只有老板能改；改了以后冻结按新规则拦', async () => {
+    const { api, login, db } = setup();
+    await login('13800000003');
+    expect(await api.settings.freezeRules()).toEqual(defaultFreezeRules);
+    const next = { memberSelfService: false, perMonth: 2, perYear: 6, minDays: 7, maxDays: 60 };
+    expect(await status(api.settings.saveFreezeRules(next))).toBe(403);
+    await login('13800000002');
+    expect(await status(api.settings.saveFreezeRules(next))).toBe(403);
+    await login('13800000001');
+    const bad = await api.settings.saveFreezeRules({ ...next, minDays: 10, maxDays: 9 }).catch((e: ApiError) => e);
+    expect(bad).toMatchObject({ status: 400, data: { field: 'maxDays' } });
+    expect(await api.settings.saveFreezeRules({ ...next, extra: 1 } as typeof next)).toEqual(next);
+    expect(await api.settings.freezeRules()).toEqual(next);
+    expect(db.rules.freezeRules).toEqual(next);
+    const card = { id: 'p', kind: 'period' as const, memberId: 'm', productId: 'y', name: '年卡', startsOn: '2026-01-01', expiresOn: '2026-12-31' };
+    const args = { card, cards: [card], history: [], today: db.today, rules: db.rules.freezeRules };
+    expect(freezeBlockedBy(args)).toBe('freeze-not-self-service');
+    expect(freezeBlockedBy({ ...args, rules: { ...db.rules.freezeRules, memberSelfService: true }, history: ['2026-10-01', '2026-10-02'] })).toBe('freeze-month-quota-used');
   });
 });

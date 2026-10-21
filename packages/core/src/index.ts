@@ -9,3 +9,5 @@ export * from './order';
 export * from './checkIn';
 export * from './insurance';
 export * from './voidCheckIn';
+export * from './freeze';
+export * from './freezeRules';

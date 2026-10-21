@@ -23,6 +23,7 @@ describe('页面权限', () => {
     entries: ['owner', 'manager', 'desk'],
     products: ['owner', 'manager'],
     staff: ['owner'],
+    settings: ['owner'],
   };
 
   it.each(Object.keys(PAGE_ROLES) as PageKey[])('%s', page => {
@@ -50,6 +51,7 @@ describe('操作权限', () => {
     'product.edit': ['owner', 'manager'],
     'staff.manage': ['owner'],
     'import.run': ['owner'],
+    'settings.freezeRules': ['owner'],
   };
 
   it.each(Object.keys(ACTION_ROLES) as ActionKey[])('%s', action => {

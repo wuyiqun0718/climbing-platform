@@ -14,6 +14,7 @@ export const NAV: readonly { path: string; name: PageKey; label: string }[] = [
   { path: '/entries', name: 'entries', label: '入场与分享' },
   { path: '/products', name: 'products', label: '卡种与价格' },
   { path: '/staff', name: 'staff', label: '员工' },
+  { path: '/settings', name: 'settings', label: '设置' },
 ];
 
 /** 这个角色能看到的导航 */
@@ -24,6 +25,7 @@ const PAGES: Partial<Record<PageKey, () => Promise<unknown>>> = {
   dashboard: () => import('./pages/DashboardPage.vue'),
   finance: () => import('./pages/FinancePage.vue'),
   members: () => import('./pages/MembersPage.vue'),
+  settings: () => import('./pages/SettingsPage.vue'),
 };
 
 declare module 'vue-router' {

@@ -22,5 +22,7 @@ export default defineGym({
   rules: {
     referralsPerMonth: 1,
     referralRequiresInviterSameDay: true,
+    // 没写的用 @climb/core 的 defaultFreezeRules（每年次数、天数上下限是占位，等馆方定）
+    freezeRules: { memberSelfService: true, perMonth: 1 },
   },
 });

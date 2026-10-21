@@ -7,7 +7,7 @@ import type { Staff, StaffRole, Store } from '@climb/api';
  * 标「等馆方」的是先定的占位，馆方确认后只改这张表。
  */
 
-export type PageKey = 'dashboard' | 'finance' | 'members' | 'courses' | 'events' | 'entries' | 'products' | 'staff';
+export type PageKey = 'dashboard' | 'finance' | 'members' | 'courses' | 'events' | 'entries' | 'products' | 'staff' | 'settings';
 
 export type ActionKey =
   /** 新建会员（13） */
@@ -29,7 +29,9 @@ export type ActionKey =
   /** 员工账号（22） */
   | 'staff.manage'
   /** 青橙导入（39） */
-  | 'import.run';
+  | 'import.run'
+  /** 改冻结规则（17.5）。已定老板能改；店长能不能改等定了权限再说 */
+  | 'settings.freezeRules';
 
 const ALL: StaffRole[] = ['owner', 'manager', 'desk'];
 const MANAGER_UP: StaffRole[] = ['owner', 'manager'];
@@ -44,6 +46,7 @@ export const PAGE_ROLES: Record<PageKey, readonly StaffRole[]> = {
   entries: ALL,
   products: MANAGER_UP,
   staff: OWNER,
+  settings: OWNER,
 };
 
 export const ACTION_ROLES: Record<ActionKey, readonly StaffRole[]> = {
@@ -57,6 +60,7 @@ export const ACTION_ROLES: Record<ActionKey, readonly StaffRole[]> = {
   'product.edit': MANAGER_UP,
   'staff.manage': OWNER,
   'import.run': OWNER,
+  'settings.freezeRules': OWNER,
 };
 
 export const canSeePage = (role: StaffRole, page: PageKey) => PAGE_ROLES[page].includes(role);
