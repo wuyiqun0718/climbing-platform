@@ -1,4 +1,4 @@
-import { ApiError, createAdminApi, createApi, type CreateStaffBody } from '@climb/api';
+import { ApiError, createAdminApi, createApi, type AdminClassRow, type CreateClassBody, type CreateStaffBody } from '@climb/api';
 import { defaultFreezeRules, freezeBlockedBy, ledgerMismatch } from '@climb/core';
 import { addDays, endOfMonth } from '@climb/utils';
 import { describe, expect, it } from 'vitest';
@@ -1492,5 +1492,142 @@ describe('后台 mock：团课课程种类', () => {
     expect(db.rules.classRules.cancelBeforeMinutes).toBe(60);
     expect(db.auditLogs.at(-1)).toMatchObject({ action: 'settings.class_rules', before: { cancelBeforeMinutes: 120, waitlistMax: null }, after: { cancelBeforeMinutes: 60, waitlistMax: 5 } });
     expect(await status(api.settings.saveClassRules({ cancelBeforeMinutes: -1, waitlist: true, waitlistMax: null, lateGraceMinutes: 15 }))).toBe(400);
+  });
+});
+
+describe('后台 mock：团课排期', () => {
+  // 2026-10-21 是周三，这周从 10-19 开始；示例课表见 db.ts 的 sampleClassSessions
+  function classSetup() {
+    const s = setup();
+    s.db.clock = '12:00:00';
+    return s;
+  }
+  const code = (p: Promise<unknown>) => p.then(() => null, (e: ApiError) => [e.status, (e.data as { code?: string; field?: string }).code === 'bad-input' ? (e.data as { field?: string }).field : (e.data as { code?: string }).code]);
+  /** 小程序课表接口（不用登录） */
+  const mpClasses = async (db: MockDb, q = '') => (await createMockAdapter(db)({ method: 'GET', url: `/classes${q}`, headers: {} })).data as AdminClassRow[];
+  /** 给会员发一张团课课包，约上（或候补）某节课 */
+  function book(db: MockDb, sessionId: string, memberId: string, status: 'booked' | 'waitlisted', createdAt: string) {
+    const cardId = `cc-${memberId}`;
+    if (!db.cards.some(c => c.id === cardId)) {
+      db.cards.push({ id: cardId, kind: 'class', memberId, productId: 'p-class10', name: '团课 10 次', total: 10, remaining: status === 'booked' ? 9 : 10, expiresOn: '2026-12-31' });
+    }
+    db.classBookings.push({ id: `cb-${db.classBookings.length + 1}`, sessionId, memberId, status, cardId, createdAt, deducted: status === 'booked' ? 1 : 0 });
+  }
+
+  it('按周、按门店看课表；只管滨港店的店长必须带自己的店；week 要是周一', async () => {
+    const { api, login } = classSetup();
+    await login('13800000001');
+    const all = await api.classes.week();
+    expect(all.week).toBe('2026-10-19');
+    expect(all.sessions.map(s => [s.on, s.startTime, s.storeId])).toEqual([
+      ['2026-10-20', '19:30', 'bingang'],
+      ['2026-10-21', '19:00', 'huiju'],
+      ['2026-10-22', '19:30', 'bingang'],
+      ['2026-10-24', '10:00', 'bingang'],
+    ]);
+    expect(all.sessions[3]).toMatchObject({ name: '顶绳进阶', coachName: '店长阿凯', booked: 0, left: 8 });
+    await login('13800000002');
+    expect(await status(api.classes.week())).toBe(403);
+    expect(await status(api.classes.week({ store: 'huiju' }))).toBe(403);
+    expect((await api.classes.week({ store: 'bingang' })).sessions).toHaveLength(3);
+    expect(await code(api.classes.week({ week: '2026-10-20', store: 'bingang' }))).toEqual([400, 'week']);
+  });
+
+  it('加一节课：按课程拷贝，写操作日志，小程序课表马上能看到', async () => {
+    const { api, login, db } = classSetup();
+    await login('13800000002');
+    const made = await api.classes.create({ classTypeId: 'ct-intro', storeId: 'bingang', on: '2026-10-23', startTime: '19:30', capacity: 6 });
+    expect(made).toMatchObject({ name: '入门抱石', minutes: 60, capacity: 6, credits: 1, status: 'scheduled', booked: 0, left: 6 });
+    expect((await mpClasses(db, '?store=bingang')).map(s => s.id)).toContain(made.id);
+    expect(db.auditLogs.at(-1)).toMatchObject({ staffId: 's-manager', action: 'class.create', targetType: 'class_session', targetId: made.id, storeId: 'bingang' });
+    // 改课程种类不影响已排的课
+    await api.classTypes.update('ct-intro', { capacity: 20, name: '抱石入门' });
+    expect((await api.classes.week({ store: 'bingang' })).sessions.find(s => s.id === made.id)).toMatchObject({ name: '入门抱石', capacity: 6 });
+  });
+
+  it('加课的冲突和限制：同门店同时间、同教练同时间、时间过了、停用的课程、别的店、前台、字段不对', async () => {
+    const { api, login } = classSetup();
+    await login('13800000001');
+    const body = (over: Partial<CreateClassBody>): CreateClassBody => ({ classTypeId: 'ct-intro', storeId: 'bingang', on: '2026-10-23', startTime: '19:30', ...over });
+    expect(await code(api.classes.create(body({ on: '2026-10-22', startTime: '20:00' })))).toEqual([422, 'class-store-busy']);
+    expect(await code(api.classes.create(body({ storeId: 'huiju', on: '2026-10-24', startTime: '10:30', coachId: 's-manager' })))).toEqual([422, 'class-coach-busy']);
+    expect(await code(api.classes.create(body({ on: '2026-10-21', startTime: '10:00' })))).toEqual([422, 'class-started']);
+    expect(await code(api.classes.create(body({ classTypeId: 'ct-kids' })))).toEqual([422, 'class-type-inactive']);
+    expect(await code(api.classes.create(body({ capacity: 0 })))).toEqual([400, 'capacity']);
+    expect(await code(api.classes.create(body({ startTime: '7:30' })))).toEqual([400, 'startTime']);
+    expect(await code(api.classes.create(body({ coachId: 'nobody' })))).toEqual([400, 'coachId']);
+    expect(await status(api.classes.create(body({ classTypeId: 'nope' })))).toBe(404);
+    await login('13800000002');
+    expect(await status(api.classes.create(body({ storeId: 'huiju' })))).toBe(403);
+    await login('13800000003');
+    expect(await status(api.classes.create(body({})))).toBe(403);
+  });
+
+  it('改课：已开始的不能改时间（人数还能改）；改时间查冲突；人数不少于已约的，调大了候补补上并扣次', async () => {
+    const { api, login, db } = classSetup();
+    await login('13800000001');
+    const week = (await api.classes.week({ store: 'bingang' })).sessions;
+    const tue = week.find(s => s.on === '2026-10-20')!;
+    const thu = week.find(s => s.on === '2026-10-22')!;
+    expect(await code(api.classes.update(tue.id, { startTime: '20:00' }))).toEqual([422, 'class-time-locked']);
+    expect(await api.classes.update(tue.id, { capacity: 15 })).toMatchObject({ capacity: 15 });
+    expect(await code(api.classes.update(thu.id, { on: '2026-10-24', startTime: '10:30' }))).toEqual([422, 'class-store-busy']);
+    expect(await api.classes.update(thu.id, { startTime: '20:00' })).toMatchObject({ startTime: '20:00' });
+
+    db.classSessions.find(s => s.id === thu.id)!.capacity = 1;
+    book(db, thu.id, 'm-old-1', 'booked', '2026-10-20T10:00:00Z');
+    book(db, thu.id, 'm-old-2', 'waitlisted', '2026-10-20T11:00:00Z');
+    expect(await code(api.classes.update(thu.id, { capacity: 0 }))).toEqual([400, 'capacity']);
+    const r = await api.classes.update(thu.id, { capacity: 2 });
+    expect(r).toMatchObject({ capacity: 2, booked: 2, waitlisted: 0, left: 0 });
+    expect(db.cards.find(c => c.id === 'cc-m-old-2')).toMatchObject({ remaining: 9 });
+    expect(db.ledger.at(-1)).toMatchObject({ cardId: 'cc-m-old-2', reason: 'class_book', delta: -1, remainingAfter: 9, ref: { type: 'class_booking' }, operatorType: 'staff', operatorId: 's-owner' });
+    expect(db.auditLogs.at(-1)).toMatchObject({ action: 'class.update', targetId: thu.id, before: { capacity: 1 }, after: { capacity: 2, promoted: ['cb-2'] } });
+  });
+
+  it('取消一节课：原因必填；已约的退次（class_void），候补作废；写操作日志；小程序课表里显示取消和原因', async () => {
+    const { api, login, db } = classSetup();
+    await login('13800000002');
+    const sat = (await api.classes.week({ store: 'bingang' })).sessions.find(s => s.on === '2026-10-24')!;
+    book(db, sat.id, 'm-old-1', 'booked', '2026-10-20T10:00:00Z');
+    book(db, sat.id, 'm-old-2', 'waitlisted', '2026-10-20T11:00:00Z');
+    expect(await code(api.classes.cancel(sat.id, { reason: ' ' }))).toEqual([400, 'reason']);
+    const r = await api.classes.cancel(sat.id, { reason: '教练生病' });
+    expect(r).toMatchObject({ session: { status: 'cancelled', cancelReason: '教练生病', booked: 0 }, refunded: 1, waitlistVoided: 1 });
+    expect(db.classBookings.map(b => b.status)).toEqual(['voided', 'voided']);
+    expect(db.cards.find(c => c.id === 'cc-m-old-1')).toMatchObject({ remaining: 10 });
+    expect(db.cards.find(c => c.id === 'cc-m-old-2')).toMatchObject({ remaining: 10 });
+    expect(db.ledger.at(-1)).toMatchObject({ cardId: 'cc-m-old-1', reason: 'class_void', delta: 1, remainingAfter: 10, ref: { type: 'class_booking', id: 'cb-1' }, operatorId: 's-manager' });
+    expect(db.auditLogs.at(-1)).toMatchObject({ action: 'class.cancel', targetId: sat.id, storeId: 'bingang', reason: '教练生病', before: { status: 'scheduled' }, after: { status: 'cancelled', refunded: 1 } });
+    expect((await mpClasses(db)).find(s => s.id === sat.id)).toMatchObject({ status: 'cancelled', cancelReason: '教练生病' });
+    expect(await code(api.classes.cancel(sat.id, { reason: '再取消一次' }))).toEqual([422, 'class-cancelled']);
+    expect(await code(api.classes.update(sat.id, { capacity: 3 }))).toEqual([422, 'class-cancelled']);
+  });
+
+  it('复制上周课表：时间、人数、教练照上周；停用的课程、已有冲突的、时间过了的跳过；再复制一次全跳过', async () => {
+    const { api, login, db } = classSetup();
+    await login('13800000001');
+    const next = await api.classes.copyWeek({ week: '2026-10-26', store: 'bingang' });
+    expect(next.created.map(s => [s.on, s.startTime, s.name, s.coachId ?? null])).toEqual([
+      ['2026-10-27', '19:30', '入门抱石', null],
+      ['2026-10-29', '19:30', '入门抱石', null],
+      ['2026-10-31', '10:00', '顶绳进阶', 's-manager'],
+    ]);
+    expect(next.skipped).toEqual([]);
+    expect((await api.classes.copyWeek({ week: '2026-10-26', store: 'bingang' })).created).toEqual([]);
+
+    // 复制到这周：上周二的挪到这周二已经过了；其余跟这周已有的课冲突；上周六的亲子攀岩课程停用了
+    const thisWeek = await api.classes.copyWeek({ week: '2026-10-19', store: 'bingang' });
+    expect(thisWeek.created).toEqual([]);
+    expect(thisWeek.skipped.map(s => [s.on, s.name, s.code])).toEqual([
+      ['2026-10-13', '入门抱石', 'class-started'],
+      ['2026-10-15', '入门抱石', 'class-store-busy'],
+      ['2026-10-17', '顶绳进阶', 'class-coach-busy'],
+      ['2026-10-17', '亲子攀岩', 'class-type-inactive'],
+    ]);
+    expect(db.auditLogs.filter(l => l.action === 'class.copy_week')).toHaveLength(3);
+    await login('13800000002');
+    expect(await status(api.classes.copyWeek({ week: '2026-10-26' }))).toBe(403);
+    expect(await code(api.classes.copyWeek({ week: '2026-10-27', store: 'bingang' }))).toEqual([400, 'week']);
   });
 });

@@ -57,6 +57,7 @@ describe('操作权限', () => {
     'settings.freezeRules': ['owner'],
     'data.export': ['owner', 'manager'],
     'classType.edit': ['owner', 'manager'],
+    'class.schedule': ['owner', 'manager'],
     'settings.classRules': ['owner'],
     'member.fullPhone': ['owner'],
   };

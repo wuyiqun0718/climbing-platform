@@ -1,6 +1,6 @@
 import { MEMBER_SOURCES, type DeskCheckInResult, type DeskOrderResult, type RefundResult, type EntryMethod, type VoidCheckInResult, type MemberSource, type Staff, type Store } from '@climb/api';
-import { REFUND_METHOD_BY_CHANNEL, type AuditLogEntry, type ClassType, defaultRules, insuranceForEntry, newPolicy, type Card, type RefundMethod, type RefundStatus, type InsurancePolicy, type CountCard, type GiftCard, type Share, type GymRules, type LedgerEntry, type Product, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
-import { addDays, addMonths, daysBetween, endOfMonth, monthOf, type DateKey } from '@climb/utils';
+import { REFUND_METHOD_BY_CHANNEL, type AuditLogEntry, type ClassBooking, type ClassSession, type ClassType, defaultRules, insuranceForEntry, newPolicy, type Card, type RefundMethod, type RefundStatus, type InsurancePolicy, type CountCard, type GiftCard, type Share, type GymRules, type LedgerEntry, type Product, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
+import { addDays, addMonths, daysBetween, endOfMonth, fromDateKey, monthOf, type DateKey } from '@climb/utils';
 
 /** 会员（对应 members 表），目前放了看板「新客从哪来」和会员列表用到的字段 */
 export interface MockMember {
@@ -106,6 +106,12 @@ export interface MockDb {
   auditLogs: MockAuditLog[];
   /** 团课课程种类（对应 class_types 表）；有一个停用的 */
   classTypes: ClassType[];
+  /** 团课课表（对应 class_sessions 表），小程序 GET /classes 读同一份；示例：上周和这周两家店的课 */
+  classSessions: ClassSession[];
+  /** 团课预约（对应 class_bookings 表），小程序约课写这里；示例数据没有 */
+  classBookings: ClassBooking[];
+  /** mock 的「现在」几点（HH:mm:ss），测试里固定；不填用本机时间。日期用 today */
+  clock?: string;
   /** 每家店的看板数字（示例），全部门店 = 各店相加 */
   storeStats: Record<string, { monthRevenueCents: number; todayEntries: number; lastWeekSameTimeEntries: number; todayBookings: number; activeMembers: number }>;
   members: MockMember[];
@@ -163,6 +169,8 @@ export function createMockDb(today: DateKey, rules: GymRules = defaultRules): Mo
       { id: 'ct-rope', name: '顶绳进阶', minutes: 90, capacity: 8, credits: 2, coachId: 's-manager', active: true },
       { id: 'ct-kids', name: '亲子攀岩', minutes: 60, capacity: 10, credits: 1, active: false },
     ],
+    classSessions: sampleClassSessions(today),
+    classBookings: [],
     ...withShares(withLedger(withCheckIns(sampleMembers(today), staff, today), staff, today), today),
     ...sampleOrders(today),
     products: sampleProducts(),
@@ -468,6 +476,30 @@ function withShares<T extends Pick<MockDb, 'members' | 'cards' | 'checkIns' | 'l
   if (pendingCard) sendOut(pendingCard, 2, today);
 
   return { ...data, cards, shares };
+}
+
+/**
+ * 示例课表：上周和这周，滨港店每周二、四晚上入门抱石，周六上午顶绳进阶（店长阿凯带）；汇聚店周三晚上入门抱石；
+ * 上周还有一节亲子攀岩（这个课程后来停用了，复制上周时会跳过）。
+ */
+function sampleClassSessions(today: DateKey): ClassSession[] {
+  const day = fromDateKey(today).getDay();
+  const monday = addDays(today, day === 0 ? -6 : 1 - day);
+  const plan: [string, string, number, string, string, number, number, number, string?][] = [
+    // 课程 ID、课名、星期（周一 = 0）、门店、开始、时长、人数、扣次、教练
+    ['ct-intro', '入门抱石', 1, 'bingang', '19:30', 60, 12, 1],
+    ['ct-intro', '入门抱石', 3, 'bingang', '19:30', 60, 12, 1],
+    ['ct-rope', '顶绳进阶', 5, 'bingang', '10:00', 90, 8, 2, 's-manager'],
+    ['ct-intro', '入门抱石', 2, 'huiju', '19:00', 60, 10, 1],
+  ];
+  const sessions: ClassSession[] = [];
+  for (const week of [addDays(monday, -7), monday]) {
+    for (const [classTypeId, name, dow, storeId, startTime, minutes, capacity, credits, coachId] of plan) {
+      sessions.push({ id: `cs-${sessions.length + 1}`, classTypeId, name, storeId, on: addDays(week, dow), startTime, minutes, capacity, credits, ...(coachId ? { coachId } : {}), status: 'scheduled' });
+    }
+  }
+  sessions.push({ id: `cs-${sessions.length + 1}`, classTypeId: 'ct-kids', name: '亲子攀岩', storeId: 'bingang', on: addDays(monday, -2), startTime: '15:00', minutes: 60, capacity: 10, credits: 1, status: 'scheduled' });
+  return sessions;
 }
 
 /** 示例订单：三家店最近 70 天，每天几笔，渠道和品类照原型的比例大致铺开；再放几笔退款 */

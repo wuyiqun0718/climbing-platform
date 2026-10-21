@@ -20,9 +20,13 @@ export type AuditAction =
   | 'data.export'
   | 'class_type.create'
   | 'class_type.update'
-  | 'settings.class_rules';
+  | 'settings.class_rules'
+  | 'class.create'
+  | 'class.update'
+  | 'class.cancel'
+  | 'class.copy_week';
 
-export type AuditTargetType = 'order' | 'check_in' | 'card' | 'product' | 'staff' | 'settings' | 'export' | 'class_type';
+export type AuditTargetType = 'order' | 'check_in' | 'card' | 'product' | 'staff' | 'settings' | 'export' | 'class_type' | 'class_session';
 
 export const AUDIT_ACTIONS = [
   'order.create',
@@ -42,6 +46,10 @@ export const AUDIT_ACTIONS = [
   'class_type.create',
   'class_type.update',
   'settings.class_rules',
+  'class.create',
+  'class.update',
+  'class.cancel',
+  'class.copy_week',
 ] as const satisfies readonly AuditAction[];
 
 export const AUDIT_ACTION_TEXT: Record<AuditAction, string> = {
@@ -62,6 +70,10 @@ export const AUDIT_ACTION_TEXT: Record<AuditAction, string> = {
   'class_type.create': '新建团课课程',
   'class_type.update': '修改团课课程',
   'settings.class_rules': '改团课规则',
+  'class.create': '排团课',
+  'class.update': '改团课',
+  'class.cancel': '取消团课',
+  'class.copy_week': '复制上周课表',
 };
 
 export interface AuditLogEntry {

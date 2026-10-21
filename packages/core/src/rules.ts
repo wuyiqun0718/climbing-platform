@@ -36,7 +36,21 @@ export type RuleErrorCode =
   | 'staff-self-deactivate'
   | 'staff-self-demote'
   | 'staff-last-owner'
-  | 'class-type-inactive';
+  | 'class-type-inactive'
+  // 团课约课、取消（classes.ts，跟小程序分支同名）
+  | 'class-cancelled'
+  | 'class-started'
+  | 'class-already-booked'
+  | 'class-no-card'
+  | 'class-full'
+  | 'class-waitlist-full'
+  | 'class-cancel-too-late'
+  | 'booking-not-active'
+  // 后台排课（classSchedule.ts）
+  | 'class-time-invalid'
+  | 'class-coach-busy'
+  | 'class-store-busy'
+  | 'class-time-locked';
 
 export class RuleError extends Error {
   constructor(public code: RuleErrorCode, message: string) {

@@ -1,12 +1,13 @@
 <script setup lang="ts">
 /**
- * 课程排期页。现在只有「团课课程」：课程种类的新建、编辑、停用（任务 25），和团课规则（取消截止、候补、迟到，占位，等馆方）。
- * 排期（26）、私教（28–30）以后加 tab。校验都在 @climb/core 的 classTypes.ts，这里只负责显示和提交。
+ * 课程排期页：团课课表（任务 26，components/ClassSchedule.vue），团课课程种类的新建、编辑、停用（任务 25），
+ * 和团课规则（取消截止、候补、迟到，占位，等馆方）。私教（28–30）以后加。校验都在 @climb/core 的 classTypes.ts，这里只负责显示和提交。
  */
 import { classRulesErrors, type ClassRules, type ClassRulesErrors, type ClassType } from '@climb/core';
 import { DataTable, Field, errorText, useToast, type Column } from '@climb/ui-web';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { api } from '../api';
+import ClassSchedule from '../components/ClassSchedule.vue';
 import ClassTypeForm from '../components/ClassTypeForm.vue';
 import { canDo } from '../permissions';
 import { session } from '../session';
@@ -131,8 +132,14 @@ async function saveRules() {
   <header class="page-h">
     <div>
       <h1>课程排期</h1>
-      <p>团课课程：停用后不能再排新课，已经排了的照常上；改了只影响以后排的课</p>
+      <p>排好的课就是小程序里能约的课；取消一节课要写原因，已约的人退回次数</p>
     </div>
+  </header>
+  <ClassSchedule :types="types" :coaches="coaches" />
+
+  <header class="sub-h">
+    <h2>团课课程</h2>
+    <p>停用后不能再排新课，已经排了的照常上；改了只影响以后排的课</p>
     <button v-if="canEdit" type="button" class="create" @click="openForm(null)">新建团课课程</button>
   </header>
   <ClassTypeForm v-model:open="formOpen" :type="editing" :types="types" :coaches="coaches" @saved="onSaved" />
@@ -177,6 +184,9 @@ async function saveRules() {
 .page-h p { margin: 4px 0 16px; font-size: 13px; color: var(--ink-muted); }
 .create { padding: 6px 14px; font: inherit; font-weight: 600; color: var(--on-brand); background: var(--brand); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; justify-self: start; }
 .panel { margin-bottom: 24px; }
+.sub-h { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.sub-h h2 { margin: 0; font-size: 16px; }
+.sub-h p { flex: 1; margin: 0; font-size: 13px; color: var(--ink-muted); }
 .card h2 { margin: 0 0 4px; font-size: 16px; }
 .sub { margin: 0 0 12px; font-size: 13px; color: var(--ink-muted); }
 .rules fieldset { display: grid; gap: 12px; max-width: 360px; margin: 0; padding: 0; border: 0; }

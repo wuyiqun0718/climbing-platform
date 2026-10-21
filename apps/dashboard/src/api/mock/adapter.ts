@@ -25,6 +25,12 @@ import {
   type CreateMemberBody,
   type CreateProductBody,
   type ClassTypeBody,
+  type AdminClassRow,
+  type CancelClassResult,
+  type ClassWeek,
+  type CopyWeekResult,
+  type CreateClassBody,
+  type UpdateClassBody,
   type ClassTypePatchBody,
   type CreateStaffBody,
   type StaffRow,
@@ -89,6 +95,20 @@ import {
   insuranceForEntry,
   entryPolicy,
   shareRecordState,
+  planSession,
+  rescheduleSession,
+  staffCancelSession,
+  copyWeek,
+  weekStartOf,
+  isWeekStart,
+  isClockTime,
+  classLedgerEntry,
+  sessionSeats,
+  sessionStartsAt,
+  CLASS_CAPACITY_MAX,
+  type CardChange,
+  type ClassBooking,
+  type ClassSession,
   newClassTypeErrors,
   classTypePatchErrors,
   buildClassType,
@@ -1236,6 +1256,171 @@ function saveClassRules(db: MockDb, staff: Staff, body: any): ApiResponse {
   return ok(db.rules.classRules);
 }
 
+/** mock 的「现在」：日期是 today，时间是 db.clock（测试里固定）或本机时间 */
+function mockNow(db: MockDb): Date {
+  const t = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return new Date(`${db.today}T${db.clock ?? `${pad(t.getHours())}:${pad(t.getMinutes())}:${pad(t.getSeconds())}`}`);
+}
+
+/** 课表的一行：加上教练名字和名额（core 的 sessionSeats） */
+function classRow(db: MockDb, s: ClassSession): AdminClassRow {
+  return { ...s, coachName: s.coachId ? (db.staff.find(x => x.id === s.coachId)?.name ?? null) : null, ...sessionSeats(s, db.classBookings) };
+}
+
+/** 能当教练的：在用的员工（教练资料见任务 28） */
+const activeCoachIds = (db: MockDb) => db.staff.filter(s => s.active).map(s => s.id);
+
+/** 课包次数变了：写卡、记流水（关联到预约） */
+function applyClassChanges(db: MockDb, changes: CardChange[], staff: Staff, at: string, note = '') {
+  for (const ch of changes) {
+    db.cards[db.cards.findIndex(c => c.id === ch.card.id)] = ch.card;
+    db.ledger.push(classLedgerEntry({ id: nextId('l-', db.ledger), change: ch, at, operator: { operatorType: 'staff', operatorId: staff.id }, note }));
+  }
+}
+
+const saveBookings = (db: MockDb, changed: ClassBooking[]) => {
+  db.classBookings = db.classBookings.map(b => changed.find(c => c.id === b.id) ?? b);
+};
+
+/** 排课的权限和门店：class.schedule，门店要是自己能操作的 */
+function scheduleScope(db: MockDb, staff: Staff, storeId: string): ApiResponse | null {
+  if (!canDo(staff.role, 'class.schedule')) return fail(403, 'forbidden', '没有排课的权限');
+  if (!db.stores.some(st => st.id === storeId)) return fail(404, 'store-not-found', '没有这家店');
+  if (!canSeeStore(staff, storeId)) return fail(403, 'forbidden', '没有这家店的权限');
+  return null;
+}
+
+/** 课表：口径见 @climb/api 的 ClassWeek */
+function classWeek(db: MockDb, staff: Staff, week: string | null, storeId: string | null): ApiResponse {
+  const w = week ?? weekStartOf(db.today);
+  if (!isWeekStart(w)) return badInput('week', 'week 要填一周的周一');
+  const scope = storeScope(db, staff, storeId);
+  if (!Array.isArray(scope)) return scope;
+  const end = addDays(w, 7);
+  const sessions = db.classSessions
+    .filter(s => s.on >= w && s.on < end && scope.includes(s.storeId))
+    .sort((a, b) => sessionStartsAt(a).getTime() - sessionStartsAt(b).getTime() || a.storeId.localeCompare(b.storeId))
+    .map(s => classRow(db, s));
+  const res: ClassWeek = { week: w, storeId, sessions };
+  return ok(res);
+}
+
+/** 人数上限、教练的字段校验（排课和改课共用） */
+function classFieldError(db: MockDb, body: { capacity?: unknown; coachId?: unknown; startTime?: unknown; on?: unknown }): ApiResponse | null {
+  if (body.on !== undefined && !isDateKey(body.on)) return badInput('on', '日期不对');
+  if (body.startTime !== undefined && !isClockTime(body.startTime)) return badInput('startTime', '开始时间要填 HH:mm');
+  if (body.capacity !== undefined && !(Number.isInteger(body.capacity) && (body.capacity as number) >= 1 && (body.capacity as number) <= CLASS_CAPACITY_MAX)) {
+    return badInput('capacity', `人数上限填 1–${CLASS_CAPACITY_MAX} 的整数`);
+  }
+  if (body.coachId !== undefined && body.coachId !== null && !activeCoachIds(db).includes(body.coachId as string)) return badInput('coachId', '没有这个教练，或者账号停用了');
+  return null;
+}
+
+/** 加一节课：规则在 @climb/core 的 classSchedule.ts（planSession） */
+function createClass(db: MockDb, staff: Staff, body: Partial<CreateClassBody> | null): ApiResponse {
+  const b = body ?? {};
+  const scope = scheduleScope(db, staff, String(b.storeId ?? ''));
+  if (scope) return scope;
+  const type = db.classTypes.find(t => t.id === b.classTypeId);
+  if (!type) return fail(404, 'class-type-not-found', '没有这个课程');
+  if (b.on === undefined) return badInput('on', '请选日期');
+  if (b.startTime === undefined) return badInput('startTime', '请填开始时间');
+  const bad = classFieldError(db, b);
+  if (bad) return bad;
+  let session: ClassSession;
+  try {
+    session = planSession({ type, id: nextId('cs-', db.classSessions), storeId: b.storeId!, on: b.on, startTime: b.startTime, capacity: b.capacity, coachId: b.coachId, sessions: db.classSessions, now: mockNow(db) });
+  } catch (e) {
+    return ruleFail(e);
+  }
+  db.classSessions.push(session);
+  audit(db, staff, { action: 'class.create', targetType: 'class_session', targetId: session.id, storeId: session.storeId, before: null, after: session });
+  return ok(classRow(db, session));
+}
+
+/** 改一节课：时间、人数上限、教练（core 的 rescheduleSession），人数调大了候补自动补上并扣次 */
+function updateClass(db: MockDb, staff: Staff, id: string, body: UpdateClassBody | null): ApiResponse {
+  const session = db.classSessions.find(s => s.id === id);
+  if (!session) return fail(404, 'class-not-found', '没有这节课');
+  const scope = scheduleScope(db, staff, session.storeId);
+  if (scope) return scope;
+  const patch = body ?? {};
+  const bad = classFieldError(db, patch);
+  if (bad) return bad;
+  let r: ReturnType<typeof rescheduleSession>;
+  try {
+    r = rescheduleSession({ session, patch, sessions: db.classSessions, bookings: db.classBookings, cards: db.cards, now: mockNow(db) });
+  } catch (e) {
+    return ruleFail(e);
+  }
+  const at = nowAt(db);
+  db.classSessions[db.classSessions.findIndex(s => s.id === id)] = r.session;
+  saveBookings(db, r.promoted);
+  applyClassChanges(db, r.changes, staff, at, '人数上限调大，候补补上');
+  const d = auditDiff(session, r.session);
+  if (d) {
+    const after = r.promoted.length ? { ...d.after, promoted: r.promoted.map(b => b.id) } : d.after;
+    audit(db, staff, { action: 'class.update', targetType: 'class_session', targetId: id, storeId: session.storeId, at, before: d.before, after });
+  }
+  return ok(classRow(db, r.session));
+}
+
+/** 取消一节课：原因必填；已约的退次（class_void），候补作废，规则是 classes.ts 的 cancelSession */
+function cancelClass(db: MockDb, staff: Staff, id: string, body: { reason?: unknown } | null): ApiResponse {
+  const session = db.classSessions.find(s => s.id === id);
+  if (!session) return fail(404, 'class-not-found', '没有这节课');
+  const scope = scheduleScope(db, staff, session.storeId);
+  if (scope) return scope;
+  const reason = String(body?.reason ?? '');
+  let r: ReturnType<typeof staffCancelSession>;
+  try {
+    r = staffCancelSession({ session, bookings: db.classBookings, cards: db.cards, reason, now: mockNow(db) });
+  } catch (e) {
+    return ruleFail(e);
+  }
+  const at = nowAt(db);
+  const waitlistVoided = r.bookings.filter(b => db.classBookings.find(x => x.id === b.id)?.status === 'waitlisted').length;
+  db.classSessions[db.classSessions.findIndex(s => s.id === id)] = r.session;
+  saveBookings(db, r.bookings);
+  applyClassChanges(db, r.changes, staff, at, `团课取消：${r.session.cancelReason}`);
+  const refunded = r.changes.length;
+  audit(db, staff, {
+    action: 'class.cancel', targetType: 'class_session', targetId: id, storeId: session.storeId, reason: r.session.cancelReason, at,
+    before: { status: session.status }, after: { status: r.session.status, voidedBookings: r.bookings.map(b => b.id), refunded },
+  });
+  const res: CancelClassResult = { session: classRow(db, r.session), refunded, waitlistVoided };
+  return ok(res);
+}
+
+/** 复制上周课表到 week 这一周（core 的 copyWeek），门店口径同课表 */
+function copyClassWeek(db: MockDb, staff: Staff, body: { week?: unknown; store?: unknown } | null): ApiResponse {
+  if (!canDo(staff.role, 'class.schedule')) return fail(403, 'forbidden', '没有排课的权限');
+  const week = body?.week;
+  if (!isWeekStart(week)) return badInput('week', 'week 要填一周的周一');
+  const storeId = typeof body?.store === 'string' && body.store ? body.store : null;
+  const scope = storeScope(db, staff, storeId);
+  if (!Array.isArray(scope)) return scope;
+  const from = addDays(week, -7);
+  const lastWeek = db.classSessions.filter(s => s.on >= from && s.on < week && scope.includes(s.storeId));
+  let n = 0;
+  const nextSessionId = () => {
+    let id: string;
+    do id = `cs-${db.classSessions.length + ++n}`;
+    while (db.classSessions.some(s => s.id === id));
+    return id;
+  };
+  const r = copyWeek({ week, lastWeek, types: db.classTypes, sessions: db.classSessions, coachIds: activeCoachIds(db), newId: nextSessionId, now: mockNow(db) });
+  db.classSessions.push(...r.created);
+  const skipped = r.skipped.map(x => {
+    const s = db.classSessions.find(c => c.id === x.sessionId)!;
+    return { sessionId: s.id, name: s.name, on: s.on, startTime: s.startTime, code: x.code };
+  });
+  audit(db, staff, { action: 'class.copy_week', targetType: 'class_session', targetId: week, storeId, before: null, after: { week, created: r.created.map(s => s.id), skipped: skipped.map(s => ({ sessionId: s.sessionId, code: s.code })) } });
+  const res: CopyWeekResult = { created: r.created.map(s => classRow(db, s)), skipped };
+  return ok(res);
+}
+
 /** 新建卡种：口径见 @climb/api 的 CreateProductBody，规则都在 @climb/core 的 product.ts */
 function createProduct(db: MockDb, staff: Staff, body: Partial<CreateProductBody> | null): ApiResponse {
   if (!canDo(staff.role, 'product.edit') || !canDo(staff.role, 'product.price')) return fail(403, 'forbidden', '没有新建卡种的权限');
@@ -1471,6 +1656,40 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
     path: /^\/admin\/check-ins\/([^/]+)\/void$/,
     auth: true,
     handle: ({ db, params, body, staff }) => voidDeskCheckIn(db, staff!, decodeURIComponent(params[0]!), body),
+  },
+  { method: 'GET', path: /^\/admin\/classes$/, auth: true, handle: ({ db, query, staff }) => classWeek(db, staff!, query.get('week'), query.get('store')) },
+  { method: 'POST', path: /^\/admin\/classes$/, auth: true, handle: ({ db, body, staff }) => createClass(db, staff!, body) },
+  { method: 'POST', path: /^\/admin\/classes\/copy-week$/, auth: true, handle: ({ db, body, staff }) => copyClassWeek(db, staff!, body) },
+  {
+    method: 'PATCH',
+    path: /^\/admin\/classes\/([^/]+)$/,
+    auth: true,
+    handle: ({ db, params, body, staff }) => updateClass(db, staff!, decodeURIComponent(params[0]!), body),
+  },
+  {
+    method: 'POST',
+    path: /^\/admin\/classes\/([^/]+)\/cancel$/,
+    auth: true,
+    handle: ({ db, params, body, staff }) => cancelClass(db, staff!, decodeURIComponent(params[0]!), body),
+  },
+  // 小程序的课表（mvp/miniapp 的 GET /classes）：from 起 days 天，store 不填三家店都看；只返回正常和取消了的课。
+  // 小程序 mock 合并过来后读同一份 db.classSessions（那边还会加名额和我的预约）
+  {
+    method: 'GET',
+    path: /^\/classes$/,
+    auth: false,
+    handle: ({ db, query }) => {
+      const from = query.get('from') || db.today;
+      const days = Math.min(31, Math.max(1, Number(query.get('days')) || 7));
+      const until = addDays(from, days);
+      const store = query.get('store');
+      return ok(
+        db.classSessions
+          .filter(s => (s.status === 'scheduled' || s.status === 'cancelled') && s.on >= from && s.on < until && (!store || s.storeId === store))
+          .sort((a, b) => sessionStartsAt(a).getTime() - sessionStartsAt(b).getTime())
+          .map(s => classRow(db, s)),
+      );
+    },
   },
   { method: 'GET', path: /^\/admin\/class-types$/, auth: true, handle: ({ db }) => ok(sortClassTypes(db.classTypes)) },
   { method: 'POST', path: /^\/admin\/class-types$/, auth: true, handle: ({ db, body, staff }) => createClassType(db, staff!, body) },

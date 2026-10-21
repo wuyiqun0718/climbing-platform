@@ -18,7 +18,13 @@ export type LedgerReason =
   | 'refund'
   | 'import'
   | 'freeze'
-  | 'unfreeze';
+  | 'unfreeze'
+  | 'class_book'
+  | 'class_cancel'
+  | 'class_void'
+  | 'pt_book'
+  | 'pt_cancel'
+  | 'pt_void';
 
 export const LEDGER_REASON_TEXT: Record<LedgerReason, string> = {
   purchase: '买卡',
@@ -32,6 +38,13 @@ export const LEDGER_REASON_TEXT: Record<LedgerReason, string> = {
   import: '青橙导入',
   freeze: '冻结',
   unfreeze: '解冻',
+  // 下面几条的文字跟小程序分支 ledger.ts 的 LEDGER_REASON_LABELS 一致
+  class_book: '约团课',
+  class_cancel: '取消约课，退回',
+  class_void: '团课取消，退回',
+  pt_book: '约私教',
+  pt_cancel: '取消私教，退回',
+  pt_void: '教练取消，退回',
 };
 
 export type LedgerOperatorType = 'member' | 'staff' | 'system';
@@ -48,7 +61,7 @@ export interface LedgerEntry {
   expiresOnAfter: DateKey;
   reason: LedgerReason;
   /** 关联的入场记录、订单、分享 */
-  ref: { type: 'check_in' | 'order' | 'share' | 'import'; id: string } | null;
+  ref: { type: 'check_in' | 'order' | 'share' | 'import' | 'class_booking'; id: string } | null;
   operatorType: LedgerOperatorType;
   /** 会员 ID 或员工 ID；system 为 null */
   operatorId: string | null;

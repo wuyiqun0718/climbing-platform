@@ -1,4 +1,7 @@
 import type { DateKey } from '@climb/utils';
+import type { ClassRules } from './gym';
+import { isCardNormal, RuleError, type RuleErrorCode } from './rules';
+import type { Card, LedgerReason, LessonCard } from './types';
 
 /**
  * 团课：课程种类 → 排出来的一节节课 → 会员的预约。小程序（任务 28–30）和后台（mvp/dashboard 任务 25–27）共用这里的类型和规则。
@@ -71,5 +74,197 @@ export interface ClassBooking {
   closedAt?: string;
 }
 
-// 以上类型从小程序分支 mvp/miniapp 的 classes.ts 原样拷过来（同名同字段）；约课、取消、候补补位等规则函数在那边，合并时整份用那边的。
-// 后台建课程种类、排课的校验在 classTypes.ts。
+/**
+ * 课包次数的一次变化：调用方据此写卡、记流水（ledgerEntry）。团课和私教共用：
+ * 团课的 reason 是 class_*、ref 为 class_booking；私教（pt.ts）的是 pt_*、ref 为 pt_booking
+ */
+export interface CardChange {
+  card: LessonCard;
+  delta: number;
+  reason: Extract<LedgerReason, 'class_book' | 'class_cancel' | 'class_void' | 'pt_book' | 'pt_cancel' | 'pt_void'>;
+  bookingId: string;
+}
+
+/** 占着名额或候补位的预约 */
+export const isActiveBooking = (b: ClassBooking) => b.status === 'booked' || b.status === 'waitlisted';
+
+/** 开课时间。DateKey + HH:mm 按本地时间解析 */
+export function sessionStartsAt(s: Pick<ClassSession, 'on' | 'startTime'>): Date {
+  return new Date(`${s.on}T${s.startTime}:00`);
+}
+
+/** 自助取消截止时间：开课前 classRules.cancelBeforeMinutes 分钟 */
+export function cancelDeadline(s: Pick<ClassSession, 'on' | 'startTime'>, rules: ClassRules): Date {
+  return new Date(sessionStartsAt(s).getTime() - rules.cancelBeforeMinutes * 60_000);
+}
+
+/** 签到时算不算迟到缺席：开课后超过 lateGraceMinutes 分钟 */
+export function isLateForClass(s: Pick<ClassSession, 'on' | 'startTime'>, at: Date, rules: ClassRules): boolean {
+  return at.getTime() > sessionStartsAt(s).getTime() + rules.lateGraceMinutes * 60_000;
+}
+
+/** 这节课已约、候补各几人，还剩几个名额 */
+export function sessionSeats(session: ClassSession, bookings: ClassBooking[]) {
+  const mine = bookings.filter(b => b.sessionId === session.id);
+  const booked = mine.filter(b => b.status === 'booked' || b.status === 'attended' || b.status === 'absent').length;
+  const waitlisted = mine.filter(b => b.status === 'waitlisted').length;
+  return { booked, waitlisted, left: Math.max(0, session.capacity - booked) };
+}
+
+/** 这节课的候补队伍：按下单时间排，补位也按这个顺序 */
+export function waitlistQueue(sessionId: string, bookings: ClassBooking[]): ClassBooking[] {
+  return bookings
+    .filter(b => b.sessionId === sessionId && b.status === 'waitlisted')
+    .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id < b.id ? -1 : 1));
+}
+
+/** 候补排第几（从 1 开始）；不在候补里为 null */
+export function waitlistPosition(booking: ClassBooking, bookings: ClassBooking[]): number | null {
+  if (booking.status !== 'waitlisted') return null;
+  const i = waitlistQueue(booking.sessionId, bookings).findIndex(b => b.id === booking.id);
+  return i < 0 ? null : i + 1;
+}
+
+/** 这张卡能不能约这节课：团课课包、状态正常、上课那天没过期、次数够 */
+export function isClassCardUsable(card: Card, memberId: string, session: ClassSession): card is LessonCard {
+  return card.kind === 'class' && card.memberId === memberId && isCardNormal(card) && card.expiresOn >= session.on && card.remaining >= session.credits;
+}
+
+/** 能用来约这节课的课包：先到期的排前面 */
+export function classCardOptions(cards: Card[], memberId: string, session: ClassSession): LessonCard[] {
+  return cards
+    .filter((c): c is LessonCard => isClassCardUsable(c, memberId, session))
+    .sort((a, b) => (a.expiresOn < b.expiresOn ? -1 : a.expiresOn > b.expiresOn ? 1 : 0));
+}
+
+const TEXT: Partial<Record<RuleErrorCode, string>> = {
+  'class-cancelled': '这节课已经取消了',
+  'class-started': '这节课已经开始了',
+  'class-already-booked': '这节课你已经约了',
+  'class-no-card': '没有能用的团课课包，先买一个',
+  'class-full': '这节课约满了',
+  'class-waitlist-full': '这节课约满了，候补也排满了',
+  'class-cancel-too-late': '离开课太近了，不能自己取消，找前台帮你处理',
+  'booking-not-active': '这个预约已经取消或者上过课了',
+};
+const fail = (code: RuleErrorCode): never => { throw new RuleError(code, TEXT[code]!); };
+
+const deduct = (card: LessonCard, n: number): LessonCard => ({ ...card, remaining: card.remaining - n });
+const giveBack = (card: LessonCard, n: number): LessonCard => ({ ...card, remaining: card.remaining + n });
+
+/** 约课前检查；能约（或能排候补）为 null */
+export function bookBlockedBy(args: { session: ClassSession; bookings: ClassBooking[]; cards: Card[]; memberId: string; now: Date; rules: ClassRules }): RuleErrorCode | null {
+  const { session, bookings, cards, memberId, now, rules } = args;
+  if (session.status === 'cancelled') return 'class-cancelled';
+  if (now.getTime() >= sessionStartsAt(session).getTime()) return 'class-started';
+  if (bookings.some(b => b.sessionId === session.id && b.memberId === memberId && isActiveBooking(b))) return 'class-already-booked';
+  if (!classCardOptions(cards, memberId, session).length) return 'class-no-card';
+  const seats = sessionSeats(session, bookings);
+  if (seats.left > 0) return null;
+  if (!rules.waitlist) return 'class-full';
+  if (rules.waitlistMax !== null && seats.waitlisted >= rules.waitlistMax) return 'class-waitlist-full';
+  return null;
+}
+
+/**
+ * 约课：有名额就约上并扣次（class_book），满员按规则排候补（不扣次）。
+ * cardId 不填用最先到期的能用课包。后端在事务里锁住这节课再算名额，免得超卖。
+ */
+export function bookClass(args: {
+  id: string; session: ClassSession; bookings: ClassBooking[]; cards: Card[]; memberId: string; cardId?: string; now: Date; rules: ClassRules;
+}): { booking: ClassBooking; changes: CardChange[] } {
+  const { id, session, bookings, cards, memberId, now } = args;
+  const blocked = bookBlockedBy(args);
+  if (blocked) fail(blocked);
+  const options = classCardOptions(cards, memberId, session);
+  const card = args.cardId ? options.find(c => c.id === args.cardId) : options[0];
+  if (!card) fail('class-no-card');
+  const base = { id, sessionId: session.id, memberId, cardId: card!.id, createdAt: now.toISOString() };
+  if (sessionSeats(session, bookings).left <= 0) return { booking: { ...base, status: 'waitlisted', deducted: 0 }, changes: [] };
+  const booking: ClassBooking = { ...base, status: 'booked', deducted: session.credits };
+  return { booking, changes: [{ card: deduct(card!, session.credits), delta: -session.credits, reason: 'class_book', bookingId: id }] };
+}
+
+/** 会员自己能不能取消这个预约：候补开课前都能取消；约上的要在截止时间前 */
+export function cancelBlockedBy(args: { booking: ClassBooking; session: ClassSession; now: Date; rules: ClassRules }): RuleErrorCode | null {
+  const { booking, session, now, rules } = args;
+  if (!isActiveBooking(booking)) return 'booking-not-active';
+  if (session.status === 'cancelled') return 'class-cancelled';
+  if (now.getTime() >= sessionStartsAt(session).getTime()) return 'class-started';
+  if (booking.status === 'booked' && now.getTime() > cancelDeadline(session, rules).getTime()) return 'class-cancel-too-late';
+  return null;
+}
+
+/**
+ * 候补补位：空出名额时按排队先后补上，扣次（class_book）。补到的人没有能用的课包就跳过，留在候补里。
+ * 开课后、课程取消后不补。
+ */
+export function fillFromWaitlist(args: { session: ClassSession; bookings: ClassBooking[]; cards: Card[]; now: Date }): { bookings: ClassBooking[]; changes: CardChange[] } {
+  const { session, now } = args;
+  let bookings = args.bookings;
+  let cards = args.cards;
+  const changes: CardChange[] = [];
+  if (session.status === 'cancelled' || now.getTime() >= sessionStartsAt(session).getTime()) return { bookings: [], changes };
+  const queue = waitlistQueue(session.id, bookings);
+  const promoted: ClassBooking[] = [];
+  for (const w of queue) {
+    if (sessionSeats(session, bookings).left <= 0) break;
+    const options = classCardOptions(cards, w.memberId, session);
+    const card = options.find(c => c.id === w.cardId) ?? options[0];
+    if (!card) continue;
+    const after = deduct(card, session.credits);
+    const booked: ClassBooking = { ...w, status: 'booked', cardId: card.id, deducted: session.credits };
+    bookings = bookings.map(b => (b.id === w.id ? booked : b));
+    cards = cards.map(c => (c.id === card.id ? after : c));
+    promoted.push(booked);
+    changes.push({ card: after, delta: -session.credits, reason: 'class_book', bookingId: w.id });
+  }
+  return { bookings: promoted, changes };
+}
+
+/**
+ * 取消预约。by = 'member' 时按截止时间拦；'staff'（前台帮取消，后台任务 27）不受截止限制，照样退次。
+ * 约上的退回扣的次数（class_cancel），空出的名额由候补第一位补上（返回在 promoted / changes 里）。
+ */
+export function cancelBooking(args: {
+  booking: ClassBooking; session: ClassSession; bookings: ClassBooking[]; cards: Card[]; now: Date; rules: ClassRules; by: 'member' | 'staff';
+}): { booking: ClassBooking; promoted: ClassBooking[]; changes: CardChange[] } {
+  const { booking, session, cards, now, rules, by } = args;
+  const blocked = cancelBlockedBy({ booking, session, now, rules });
+  if (blocked && !(by === 'staff' && blocked === 'class-cancel-too-late')) fail(blocked);
+  const cancelled: ClassBooking = { ...booking, status: 'cancelled', closedAt: now.toISOString() };
+  const changes: CardChange[] = [];
+  let cardsAfter = cards;
+  if (booking.status === 'booked' && booking.deducted > 0) {
+    const card = cards.find((c): c is LessonCard => c.id === booking.cardId && c.kind === 'class');
+    if (card) {
+      const back = giveBack(card, booking.deducted);
+      cardsAfter = cards.map(c => (c.id === card.id ? back : c));
+      changes.push({ card: back, delta: booking.deducted, reason: 'class_cancel', bookingId: booking.id });
+    }
+  }
+  const bookings = args.bookings.map(b => (b.id === booking.id ? cancelled : b));
+  const filled = booking.status === 'booked' ? fillFromWaitlist({ session, bookings, cards: cardsAfter, now }) : { bookings: [], changes: [] };
+  return { booking: cancelled, promoted: filled.bookings, changes: [...changes, ...filled.changes] };
+}
+
+/** 岩馆取消一节课（后台任务 26）：约上的全部退次（class_void），候补的直接作废 */
+export function cancelSession(args: { session: ClassSession; bookings: ClassBooking[]; cards: Card[]; reason: string; now: Date }): {
+  session: ClassSession; bookings: ClassBooking[]; changes: CardChange[];
+} {
+  const { session, reason, now } = args;
+  if (session.status === 'cancelled') fail('class-cancelled');
+  let cards = args.cards;
+  const changes: CardChange[] = [];
+  const voided: ClassBooking[] = [];
+  for (const b of args.bookings) {
+    if (b.sessionId !== session.id || !isActiveBooking(b)) continue;
+    voided.push({ ...b, status: 'voided', closedAt: now.toISOString() });
+    const card = b.status === 'booked' && b.deducted > 0 ? cards.find((c): c is LessonCard => c.id === b.cardId && c.kind === 'class') : undefined;
+    if (!card) continue;
+    const back = giveBack(card, b.deducted);
+    cards = cards.map(c => (c.id === card.id ? back : c));
+    changes.push({ card: back, delta: b.deducted, reason: 'class_void', bookingId: b.id });
+  }
+  return { session: { ...session, status: 'cancelled', cancelReason: reason }, bookings: voided, changes };
+}

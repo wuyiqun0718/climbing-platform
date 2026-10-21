@@ -36,6 +36,8 @@ export type ActionKey =
   | 'import.run'
   /** 团课课程种类：新建、编辑、停用（25）。等馆方：先放店长以上 */
   | 'classType.edit'
+  /** 团课排期：加课、改课、复制上周、取消一节课（26）。等馆方：先放店长以上，只能排自己能操作的店 */
+  | 'class.schedule'
   /** 改团课规则：取消截止、候补、迟到（25）。等馆方：跟冻结规则一样先只给老板 */
   | 'settings.classRules'
   /** 导出 Excel（24）。等馆方：先放店长以上；每种导出另外要能看对应的页面（订单要财务） */
@@ -79,6 +81,7 @@ export const ACTION_ROLES: Record<ActionKey, readonly StaffRole[]> = {
   'settings.freezeRules': OWNER,
   'data.export': MANAGER_UP,
   'classType.edit': MANAGER_UP,
+  'class.schedule': MANAGER_UP,
   'settings.classRules': OWNER,
   'member.fullPhone': OWNER,
 };

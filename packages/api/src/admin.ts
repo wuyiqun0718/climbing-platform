@@ -1,4 +1,4 @@
-import { MEMBER_SOURCES, type Card, type CardAdjustInput, type FreezeOverridable, type PeriodCard, type RuleErrorCode, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type OrderStatus, type RefundBasis, type RefundMethod, type RefundStatus, type LedgerEntry, type MemberSource, type PayChannel, type Product, type ProductInput, type ProductPatch, type RevenueBucket, type RevenueCategory, type RevenueChannel, type Share, type ShareRecordState, type StaffInput, type StaffPatch, type StaffRole, type AuditAction, type AuditLogEntry, type ClassRules, type ClassType, type ClassTypeInput, type ClassTypePatch } from '@climb/core';
+import { MEMBER_SOURCES, type Card, type CardAdjustInput, type FreezeOverridable, type PeriodCard, type RuleErrorCode, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type OrderStatus, type RefundBasis, type RefundMethod, type RefundStatus, type LedgerEntry, type MemberSource, type PayChannel, type Product, type ProductInput, type ProductPatch, type RevenueBucket, type RevenueCategory, type RevenueChannel, type Share, type ShareRecordState, type StaffInput, type StaffPatch, type StaffRole, type AuditAction, type AuditLogEntry, type ClassRules, type ClassType, type ClassTypeInput, type ClassTypePatch, type ClassSession, type SessionPatch } from '@climb/core';
 import type { Cents, DateKey } from '@climb/utils';
 import { createHttp, type ClientOptions } from './client';
 
@@ -237,6 +237,55 @@ export interface ExportResult {
 export type ClassTypeBody = ClassTypeInput;
 export type ClassTypePatchBody = ClassTypePatch;
 export type ClassRulesBody = ClassRules;
+
+/**
+ * 团课排期（任务 26），规则在 @climb/core 的 classSchedule.ts；取消一节课、候补补位、退次用 classes.ts（跟小程序同一份）。
+ * 课表 ClassSession 就是小程序 GET /classes 读的那一份，排好就算发布（没有草稿）。
+ * - GET /admin/classes?week=&store=：week 是周一（YYYY-MM-DD，不带是这周），这一周的课（含取消了的），按日期、开始时间排；门店口径同财务页（storeScope）。
+ * - POST /admin/classes：加一节课（课程种类、门店、日期、开始时间，人数上限和教练不填用种类的默认）。
+ * - PATCH /admin/classes/:id：改日期、开始时间、人数上限、教练（coachId 传 null 去掉）。已开始的课不能改时间；人数上限不少于已约上的，调大了候补自动补上并扣次（流水 class_book）。
+ * - POST /admin/classes/:id/cancel：取消，reason 必填（400）；已约的退次（流水 class_void），候补作废。
+ * - POST /admin/classes/copy-week：把上周的课复制到 week 这一周（store 不带是全部门店，口径同上），跳过的列出原因。
+ * 写的都要 class.schedule（等馆方，先店长以上），而且门店要是自己能操作的，不是 403；课程种类、课、门店没有 404；
+ * 字段不对 400（data.field）；规则不让（冲突、时间过了、已开始、停用的种类、取消了的）422，data.code 是 core 的 RuleErrorCode。
+ * 每次操作写操作日志（class.create / class.update / class.cancel / class.copy_week）。
+ */
+export interface AdminClassRow extends ClassSession {
+  coachName: string | null;
+  booked: number;
+  waitlisted: number;
+  /** 还剩几个名额 */
+  left: number;
+}
+
+export interface ClassWeek {
+  week: DateKey;
+  storeId: string | null;
+  sessions: AdminClassRow[];
+}
+
+export interface CreateClassBody {
+  classTypeId: string;
+  storeId: string;
+  on: DateKey;
+  startTime: string;
+  capacity?: number;
+  coachId?: string;
+}
+
+export type UpdateClassBody = SessionPatch;
+
+export interface CancelClassResult {
+  session: AdminClassRow;
+  /** 退了次数的预约数、作废的候补数 */
+  refunded: number;
+  waitlistVoided: number;
+}
+
+export interface CopyWeekResult {
+  created: AdminClassRow[];
+  skipped: { sessionId: string; name: string; on: DateKey; startTime: string; code: RuleErrorCode }[];
+}
 
 /** 后台列表的一页。page 从 1 开始；超出范围时后端夹到最后一页，以返回的 page 为准 */
 export interface PageOf<T> {
@@ -758,6 +807,19 @@ export function createAdminApi(opts: ClientOptions) {
     },
     exports: {
       create: <K extends ExportKind>(kind: K, filters: ExportFilters[K]) => http<ExportResult>('POST', `/admin/exports/${kind}`, filters),
+    },
+    classes: {
+      week: (q: { week?: DateKey; store?: string } = {}) => {
+        const qs = new URLSearchParams();
+        if (q.week) qs.set('week', q.week);
+        if (q.store) qs.set('store', q.store);
+        const s = qs.toString();
+        return http<ClassWeek>('GET', s ? `/admin/classes?${s}` : '/admin/classes');
+      },
+      create: (body: CreateClassBody) => http<AdminClassRow>('POST', '/admin/classes', body),
+      update: (id: string, body: UpdateClassBody) => http<AdminClassRow>('PATCH', `/admin/classes/${encodeURIComponent(id)}`, body),
+      cancel: (id: string, body: { reason: string }) => http<CancelClassResult>('POST', `/admin/classes/${encodeURIComponent(id)}/cancel`, body),
+      copyWeek: (body: { week: DateKey; store?: string }) => http<CopyWeekResult>('POST', '/admin/classes/copy-week', body),
     },
     classTypes: {
       list: () => http<ClassType[]>('GET', '/admin/class-types'),

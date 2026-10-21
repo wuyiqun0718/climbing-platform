@@ -1,5 +1,8 @@
 import type { Cents, DateKey } from '@climb/utils';
 
+/** 跟小程序分支一样，从 types 也能拿到 LedgerReason（classes.ts 从这里引） */
+export type { LedgerReason } from './ledger';
+
 export type ProductCategory = 'period' | 'count' | 'pt' | 'class';
 
 /** 在售商品：期限卡、次卡、私教课包、团课包 */

@@ -198,11 +198,12 @@
 - 完成标准：能新建、编辑、停用。
 - 补（2026-10-22）：`ClassType`、`ClassSession`、`ClassBooking` 等类型从小程序分支 `classes.ts` 原样拷过来（只拷了类型，约课规则函数合并时整份用那边的），`GymRules.classRules` / `ClassRules` / `defaultClassRules` 和 `defineGym` 的合并写法照小程序 `gym.ts` 原样加。校验在新文件 core 的 `classTypes.ts`：时长、人数上限、扣次是正整数（上限是占位常量），启用的不能重名，默认教练要是在用的员工；`sessionFromType` 排课时拷课名、时长、人数上限、扣次、默认教练，停用的种类抛 `class-type-inactive`（给 26 用）；`classRulesErrors` 校验团课规则。接口 `GET/POST/PATCH /admin/class-types`（编辑要 `classType.edit`，占位店长以上），团课规则 `GET/PUT /admin/settings/class-rules`（改要 `settings.classRules`，占位只有老板）；新建、修改、停用、改规则都写操作日志。「单节价」小程序的 `ClassType` 没有这个字段，先不做。默认教练先从员工列表选（只有老板拿得到），教练列表等 28。
 
-**26. 团课排期和发布**
+**26. 团课排期和发布** ✅
 - 依赖：25
 - 涉及文件：`src/components/ClassSchedule.vue`、契约 `GET/POST/PATCH /admin/classes?week=&store=`、mock
 - 内容：按门店、按周看课表；加一节课（课程、时间、教练、人数上限）；复制上周课表；取消一节课（已约的人退次数，写原因）。
 - 完成标准：发布后小程序约课接口能看到（mock 共用数据）。
+- 补（2026-10-22）：`classes.ts` 和 `classes.test.ts` 整份从小程序分支原样拷过来（约课、取消、候补补位、`cancelSession`），为此 `LedgerReason` 加了 class_* / pt_*（文字同小程序）、流水 ref 加 `class_booking`、`RuleErrorCode` 加了团课的码、`types.ts` 转出 `LedgerReason`；拷来的测试里 `defineGym` 那行去掉了这边还没有的 `entryQrLink`。排课规则在新文件 core 的 `classSchedule.ts`：`planSession`（用 25 的 `sessionFromType` 拷贝；时间要在现在之后、当天 24:00 前结束；同教练、同门店时间重叠拦下）、`rescheduleSession`（已开始的不能改时间；人数上限不少于已约的，调大了用 `fillFromWaitlist` 补候补并扣次）、`staffCancelSession`（原因必填，直接调 `cancelSession`）、`copyWeek`（上周没取消的课挪一周，人数和教练照上周，教练停用了换默认教练；停用的种类、冲突、时间过了的跳过并给原因）、`classLedgerEntry`（class_book / class_void 流水）。接口 `GET /admin/classes?week=&store=`、`POST /admin/classes`、`PATCH /admin/classes/:id`、`POST /admin/classes/:id/cancel`、`POST /admin/classes/copy-week`；写的要 `class.schedule`（占位店长以上）且门店是自己能操作的，门店口径同财务页；每次操作写操作日志。课表就是 `db.classSessions`，排好即发布；mock 加了不用登录的 `GET /classes`（照小程序那边的筛选），小程序 mock 合并后读同一份 `classSessions` / `classBookings`。mock 的「现在」可以用 `db.clock` 固定。
 
 **27. 团课名单和签到**
 - 依赖：26
