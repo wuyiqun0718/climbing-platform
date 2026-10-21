@@ -8,6 +8,7 @@ export * from './shop';
 export * from './orders';
 export * from './freeze';
 export * from './checkIn';
+export * from './waiver';
 export * from './insurance';
 export * from './entryQr';
 export * from './entrySheet';

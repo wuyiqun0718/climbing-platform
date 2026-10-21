@@ -1,6 +1,6 @@
 import type { CheckInPreview, CheckInResult, EntryQrBody } from '@climb/api';
 import {
-  checkEntryQr, checkInPlan, checkInWith, entryLedgerDelta, insuranceForEntry, newEntryQr, newPolicy, useEntryQr,
+  checkEntryQr, checkInPlan, checkInWith, currentWaiver, entryLedgerDelta, hasSignedWaiver, insuranceForEntry, newEntryQr, newPolicy, useEntryQr,
   type Card, type CheckInArgs, type EntryContext, type GymRules, type LedgerEntry,
 } from '@climb/core';
 import type { DateKey } from '@climb/utils';
@@ -45,6 +45,12 @@ export function createCheckInRoutes(
     return qr;
   };
 
+  /** 当前版本的告知书和这个会员签没签 */
+  const waiverOf = (memberId: string) => {
+    const current = currentWaiver(db.waiverVersions, h.today());
+    return { current, signed: hasSignedWaiver(db.waivers, memberId, current) };
+  };
+
   const storeOf = (storeId: string) => db.stores.find(s => s.id === storeId)!;
 
   const planArgs = (memberId: string, storeId: string): CheckInArgs => ({
@@ -65,7 +71,12 @@ export function createCheckInRoutes(
       const me = h.requireMember(ctx);
       const qr = validQr(ctx.body as EntryQrBody);
       const { reentry, options } = checkInPlan(planArgs(me, qr.storeId));
-      return { store: storeOf(qr.storeId), reentry, options, todayPolicy: insuranceForEntry(db.policies, me, h.today()).policy };
+      const waiver = waiverOf(me);
+      return {
+        store: storeOf(qr.storeId), reentry, options,
+        todayPolicy: insuranceForEntry(db.policies, me, h.today()).policy,
+        waiver: waiver.signed ? null : waiver.current,
+      };
     },
 
     'POST /check-ins': (ctx): CheckInResult => {
@@ -80,8 +91,8 @@ export function createCheckInRoutes(
       const card = db.cards.find(c => c.id === body.cardId && c.memberId === me);
       if (!card) throw new MockHttpError(404, 'card-not-found', '没找到这张卡');
       const today = h.today();
-      const waiverSigned = false; // 告知书在任务 20 做；core 现在不拦（CHECK_IN_REQUIRES_WAIVER）
-      const { card: updated, deducted, reentry } = checkInWith({ ...planArgs(me, qr.storeId), cardId: card.id, waiverSigned });
+      const waiverSigned = waiverOf(me).signed;
+      const { card: updated, deducted, reentry } = checkInWith({ ...planArgs(me, qr.storeId), cardId: card.id, via: 'scan', waiverSigned });
 
       const id = h.nextId('ci');
       const insurance = insuranceForEntry(db.policies, me, today);

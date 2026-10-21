@@ -91,6 +91,14 @@ function reset() {
   });
 }
 
+/** 后台上了新版告知书：本地标记跟着刷新，下次扫码要重签 */
+function newWaiver() {
+  if (!mock) return;
+  const v = mock.publishWaiver();
+  member.load().catch(() => {});
+  uni.showToast({ title: `告知书换成 ${v.version}，入场前要重签`, icon: 'none' });
+}
+
 const giveOne = () => countCard.value && act(() => api.shares.createCount({ cardId: countCard.value!.id, quantity: 1 }), '送出 1 次');
 const invite = () => act(() => api.shares.createReferral(), '发了一张老带新邀请');
 const claim = (s: Share) => act(() => api.shares.claim(s.id), '领到了');
@@ -125,6 +133,7 @@ const claim = (s: Share) => act(() => api.shares.claim(s.id), '领到了');
       <text v-if="!claimable.length" class="line muted">没有</text>
 
       <view class="row foot">
+        <text class="chip" @click="newWaiver">告知书出新版</text>
         <text class="chip" @click="reset">重置数据</text>
       </view>
     </view>

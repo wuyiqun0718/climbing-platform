@@ -1,13 +1,14 @@
 import { ApiError, createApi } from '@climb/api';
 import { defaultRules } from '@climb/core';
 import { describe, expect, it } from 'vitest';
-import { createMock, MOCK_MEMBERS, mockToken, seedDb, type MockStorage } from './index';
+import { createMock, MOCK_MEMBERS, MOCK_WAIVER, mockToken, seedDb, type MockStorage } from './index';
 
 const TODAY = '2026-10-21';
 
-/** 两位示例会员共用一份数据，像原型里的两部手机 */
+/** 两位示例会员共用一份数据，像原型里的两部手机；小鹿也先签好告知书（告知书的规则在 checkins.test.ts 里测） */
 function setup() {
   const mock = createMock({ rules: defaultRules, today: () => TODAY });
+  mock.db.waivers.push({ id: 'waiver-sign-xiaolu', memberId: MOCK_MEMBERS.xiaolu, waiverVersionId: MOCK_WAIVER.id, signedAt: `${TODAY}T01:00:00.000Z` });
   const entry = (storeId: string, cardId: string) => ({ ...mock.issueEntryQr(storeId), cardId, idempotencyKey: `key-${Math.random()}` });
   const as = (memberId: string | null) =>
     createApi({ baseURL: '', gymId: 'benchmark', adapter: mock.adapter, getToken: () => (memberId ? mockToken(memberId) : null) });

@@ -1,12 +1,12 @@
 import type { EntryQrBody, RequestAdapter } from '@climb/api';
-import type { GymRules } from '@climb/core';
+import type { GymRules, WaiverVersion } from '@climb/core';
 import { toDateKey, type DateKey } from '@climb/utils';
 import { loadCurrentWx, loadDb, saveCurrentWx, saveDb, seedDb, type MockDb, type MockStorage } from './db';
 import { createRoutes } from './routes';
 import { issueEntryQr } from './routes/checkins';
 import { createMockAdapter, type MockIdentity } from './router';
 
-export { MOCK_LEGACY_PHONE, MOCK_MEMBERS, mockToken, mockWxToken, seedDb, type MockDb, type MockStorage } from './db';
+export { MOCK_LEGACY_PHONE, MOCK_MEMBERS, MOCK_WAIVER, mockToken, mockWxToken, seedDb, type MockDb, type MockStorage } from './db';
 
 export interface MockOptions {
   rules: GymRules;
@@ -40,6 +40,8 @@ export interface Mock {
   simulatePayment(orderId: string): Promise<void>;
   /** 前台平板在某家店显示一个新的入场码（后端的 `GET /desk/qr`）；H5 的「模拟扫码」和测试用 */
   issueEntryQr(storeId: string): EntryQrBody;
+  /** 后台上了一版新的告知书，今天生效（条款在旧版后面加一条），所有人入场前要重签；测试和开发面板用 */
+  publishWaiver(): WaiverVersion;
   /** 数据回到示例数据（不改当前身份） */
   reset(): void;
 }
@@ -101,6 +103,14 @@ export function createMock(opts: MockOptions): Mock {
       const qr = issueEntryQr(db, storeId, now());
       if (storage) saveDb(storage, db);
       return qr;
+    },
+    publishWaiver() {
+      const n = db.waiverVersions.length + 1;
+      const last = db.waiverVersions[db.waiverVersions.length - 1];
+      const version = { ...last, id: `waiver-v${n}`, version: `${today().slice(0, 7)}-v${n}`, points: [...last.points, `（第 ${n} 版新加的一条示意条款）`], effectiveFrom: today() };
+      db.waiverVersions.push(version);
+      if (storage) saveDb(storage, db);
+      return version;
     },
     reset() {
       // 路由里拿的是同一个 db 对象，所以原地替换内容

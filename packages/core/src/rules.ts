@@ -25,6 +25,7 @@ export type RuleErrorCode =
   | 'freeze-year-quota-used'
   | 'card-not-frozen'
   | 'waiver-required'
+  | 'waiver-outdated'
   | 'qr-expired'
   | 'qr-used';
 

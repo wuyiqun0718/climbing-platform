@@ -1,4 +1,6 @@
 import type { Me, PhoneBindResult, WxLoginResult } from '@climb/api';
+import { currentWaiver, hasSignedWaiver } from '@climb/core';
+import type { DateKey } from '@climb/utils';
 import { mockToken, mockWxToken, type MockDb, type MockMember } from '../db';
 import { MockHttpError, type MockContext, type MockRoutes } from '../router';
 
@@ -14,14 +16,13 @@ const PHONE = /^1\d{10}$/;
  */
 export function createAuthRoutes(
   db: MockDb,
-  helpers: { nextId: (prefix: string) => string; requireMember: (ctx: MockContext) => string },
+  helpers: { today: () => DateKey; nextId: (prefix: string) => string; requireMember: (ctx: MockContext) => string },
 ): MockRoutes {
   const toMe = (m: MockMember): Me => ({
     id: m.id,
     name: m.name,
     phone: m.phone,
-    // 告知书签署在任务 20 接上，先一律当没签
-    waiverSigned: false,
+    waiverSigned: hasSignedWaiver(db.waivers, m.id, currentWaiver(db.waiverVersions, helpers.today())),
   });
 
   return {

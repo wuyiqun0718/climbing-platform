@@ -1,4 +1,4 @@
-import type { Card, CheckIn, EntryOption, InsurancePolicy, LedgerEntry, Order, Product, RuleErrorCode, Share } from '@climb/core';
+import type { Card, CheckIn, EntryOption, InsurancePolicy, LedgerEntry, Order, Product, RuleErrorCode, Share, WaiverSignature, WaiverVersion } from '@climb/core';
 import { createHttp, type ClientOptions } from './client';
 
 export * from './client';
@@ -79,6 +79,8 @@ export interface CheckInPreview {
   options: EntryOption[];
   /** 今天已经投的那张保单；为 null 时这次入场会新投一张 */
   todayPolicy: InsurancePolicy | null;
+  /** 还没签当前版本的风险告知书时，带上这一版让会员看完同意（先 `POST /waivers` 再入场）；签过为 null */
+  waiver: WaiverVersion | null;
 }
 
 /** `POST /check-ins` 的返回：入场记录，加上门店名、是不是再次入场、当天的保单（新投的或复用的） */
@@ -126,11 +128,15 @@ export function createApi(opts: ClientOptions) {
       /** 接着付之前没付的订单（订单记录里的「去付款」）：重新拿支付参数，后端用同一个 out_trade_no 再调一次微信下单 */
       pay: (id: string) => http<CreateOrderResult>('POST', `/orders/${encodeURIComponent(id)}/pay`),
     },
+    waivers: {
+      /** 同意某一版风险告知书。不是当前版本（中间换了版）返回 409 waiver-outdated；同一版签过再签返回原来那条 */
+      sign: (body: { waiverVersionId: string }) => http<WaiverSignature>('POST', '/waivers', body),
+    },
     checkIns: {
-      /** 扫了前台的码：验码（不作废），列出能用的卡。码用过或过期返回 409 qr-used / qr-expired */
+      /** 扫了前台的码：验码（不作废），列出能用的卡、要不要先签告知书。码用过或过期返回 409 qr-used / qr-expired */
       preview: (body: EntryQrBody) => http<CheckInPreview>('POST', '/check-ins/preview', body),
       /**
-       * 确认入场：成功后码作废；当天第一次入场新投一张保单，再次入场复用。
+       * 确认入场：成功后码作废；当天第一次入场新投一张保单，再次入场复用。没签当前版本的告知书返回 409 waiver-required。
        * idempotencyKey 由页面在进签到页时生成一次，网络重试、连点都带同一个，后端只入场一次、返回同一条记录。
        */
       create: (body: EntryQrBody & { cardId: string; idempotencyKey: string }) => http<CheckInResult>('POST', '/check-ins', body),

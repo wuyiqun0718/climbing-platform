@@ -34,7 +34,7 @@ describe('会员 store', () => {
     const { store } = setup();
     expect(store.state.loaded).toBe(false);
     await store.load();
-    expect(store.state.me).toMatchObject({ id: MOCK_MEMBERS.ajie, name: '阿杰', waiverSigned: false });
+    expect(store.state.me).toMatchObject({ id: MOCK_MEMBERS.ajie, name: '阿杰', waiverSigned: true });
     expect(store.state.cards.map(c => c.id)).toEqual(['card-ajie-year', 'card-ajie-c10']);
     expect(store.state.loaded).toBe(true);
     expect(store.state.loading).toBe(false);

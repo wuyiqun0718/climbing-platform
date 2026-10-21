@@ -1,7 +1,7 @@
 import { ApiError, createApi } from '@climb/api';
 import { defaultRules, ENTRY_QR_TTL_SECONDS, entrySheet } from '@climb/core';
 import { describe, expect, it } from 'vitest';
-import { createMock, MOCK_MEMBERS, mockToken } from './index';
+import { createMock, MOCK_MEMBERS, MOCK_WAIVER, mockToken } from './index';
 
 const TODAY = '2026-10-21';
 const C10 = 'card-ajie-c10';
@@ -73,6 +73,7 @@ describe('mock 扫码入场', () => {
 
   it('每个人各投各的；体验券入场也含保险', async () => {
     const { mock, ajie, xiaolu } = setup();
+    await xiaolu.waivers.sign({ waiverVersionId: MOCK_WAIVER.id });
     const { card } = await xiaolu.shares.claim((await ajie.shares.createReferral()).id);
     const a = await ajie.checkIns.create({ ...mock.issueEntryQr('huiju'), cardId: YEAR, idempotencyKey: 'k1' });
     const b = await xiaolu.checkIns.create({ ...mock.issueEntryQr('huiju'), cardId: card.id, idempotencyKey: 'k1' });
@@ -82,6 +83,7 @@ describe('mock 扫码入场', () => {
 
   it('规则拦下的入场不作废码、不投保', async () => {
     const { mock, ajie, xiaolu } = setup();
+    await xiaolu.waivers.sign({ waiverVersionId: MOCK_WAIVER.id });
     const { card } = await xiaolu.shares.claim((await ajie.shares.createReferral()).id);
     const qr = mock.issueEntryQr('huiju');
     expect(await codeOf(xiaolu.checkIns.create({ ...qr, cardId: card.id, idempotencyKey: 'k1' }))).toBe('inviter-not-checked-in');
@@ -98,6 +100,44 @@ describe('mock 扫码入场', () => {
     const { order } = await xiaolu.orders.create({ productId: sheet.singleTicket!.id });
     await mock.simulatePayment(order.id);
     const paid = await xiaolu.orders.get(order.id);
+    await xiaolu.waivers.sign({ waiverVersionId: MOCK_WAIVER.id });
     expect(await xiaolu.checkIns.create({ ...qr, cardId: paid.cardId!, idempotencyKey: 'k1' })).toMatchObject({ deducted: 1, reentry: false, policy: { status: 'pending' } });
+  });
+
+  it('第一次入场：预览带上告知书，没签被拦（不作废码、不扣次、不投保）；签了就能进，再预览不再带', async () => {
+    const { mock, xiaolu } = setup();
+    const { order } = await xiaolu.orders.create({ productId: 'c10' });
+    await mock.simulatePayment(order.id);
+    const cardId = (await xiaolu.orders.get(order.id)).cardId!;
+    const qr = mock.issueEntryQr('huiju');
+    expect((await xiaolu.checkIns.preview(qr)).waiver).toEqual(MOCK_WAIVER);
+    expect(await xiaolu.me.get()).toMatchObject({ waiverSigned: false });
+
+    expect(await codeOf(xiaolu.checkIns.create({ ...qr, cardId, idempotencyKey: 'k1' }))).toBe('waiver-required');
+    expect(mock.db.entryQrs.find(q => q.token === qr.qrToken)?.usedAt).toBeUndefined();
+    expect(mock.db.policies.filter(p => p.on === TODAY)).toEqual([]);
+    expect((await xiaolu.me.cards()).find(c => c.id === cardId)).toMatchObject({ remaining: 10 });
+
+    const sig = await xiaolu.waivers.sign({ waiverVersionId: MOCK_WAIVER.id });
+    expect(sig).toMatchObject({ memberId: MOCK_MEMBERS.xiaolu, waiverVersionId: MOCK_WAIVER.id });
+    expect(await xiaolu.waivers.sign({ waiverVersionId: MOCK_WAIVER.id })).toEqual(sig);
+    expect(mock.db.waivers.filter(w => w.memberId === MOCK_MEMBERS.xiaolu)).toHaveLength(1);
+    expect(await xiaolu.me.get()).toMatchObject({ waiverSigned: true });
+    expect((await xiaolu.checkIns.preview(qr)).waiver).toBeNull();
+    expect(await xiaolu.checkIns.create({ ...qr, cardId, idempotencyKey: 'k1' })).toMatchObject({ deducted: 1 });
+  });
+
+  it('告知书换新版后要重签：旧版签名不算，签旧版被拒，签新版才能进', async () => {
+    const { mock, ajie } = setup();
+    expect((await ajie.checkIns.preview(mock.issueEntryQr('binggang'))).waiver).toBeNull();
+    const v2 = mock.publishWaiver();
+    const qr = mock.issueEntryQr('binggang');
+    expect((await ajie.checkIns.preview(qr)).waiver).toMatchObject({ id: v2.id });
+    expect(await ajie.me.get()).toMatchObject({ waiverSigned: false });
+    expect(await codeOf(ajie.checkIns.create({ ...qr, cardId: YEAR, idempotencyKey: 'k1' }))).toBe('waiver-required');
+    expect(await codeOf(ajie.waivers.sign({ waiverVersionId: MOCK_WAIVER.id }))).toBe('waiver-outdated');
+
+    await ajie.waivers.sign({ waiverVersionId: v2.id });
+    expect(await ajie.checkIns.create({ ...qr, cardId: YEAR, idempotencyKey: 'k1' })).toMatchObject({ storeId: 'binggang' });
   });
 });

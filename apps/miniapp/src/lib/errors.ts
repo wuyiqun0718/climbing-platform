@@ -25,6 +25,7 @@ const RULE_MESSAGES: Record<RuleErrorCode, string> = {
   'freeze-year-quota-used': '今年的冻结次数用完了',
   'card-not-frozen': '这张卡没有冻结，刷新看看',
   'waiver-required': '先看一下风险告知书，同意后再入场',
+  'waiver-outdated': '告知书刚更新了，看一下新版再同意',
   'qr-expired': '这个码过期了，扫一下平板上新的码',
   'qr-used': '这个码已经用过了，扫一下平板上新的码',
 };

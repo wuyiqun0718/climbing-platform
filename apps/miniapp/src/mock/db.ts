@@ -1,4 +1,4 @@
-import { ledgerEntry, snapshotOf, type Card, type CheckIn, type EntryQr, type InsurancePolicy, type LedgerEntry, type Order, type Product, type Share } from '@climb/core';
+import { ledgerEntry, snapshotOf, type Card, type CheckIn, type EntryQr, type InsurancePolicy, type LedgerEntry, type Order, type Product, type Share, type WaiverSignature, type WaiverVersion } from '@climb/core';
 import { addDays, type DateKey } from '@climb/utils';
 
 export interface MockMember {
@@ -35,6 +35,10 @@ export interface MockDb {
   entryQrs: EntryQr[];
   /** 入场保险，一人一天一张 */
   policies: InsurancePolicy[];
+  /** 风险告知书的各个版本（后台上新版） */
+  waiverVersions: WaiverVersion[];
+  /** 会员签的告知书，只追加 */
+  waivers: WaiverSignature[];
   /** 卡的流水，只追加 */
   ledger: LedgerEntry[];
   orders: Order[];
@@ -52,6 +56,23 @@ export const mockToken = (memberId: string) => `mock:${memberId}`;
 
 /** 微信登录了但还没验证手机号时的临时 token，只能用来调 `POST /auth/phone` */
 export const mockWxToken = (openid: string) => `mock-wx:${openid}`;
+
+/**
+ * 告知书第一版。条款是原型里编的示意文本（prototype/js/data.js 的 WAIVER_POINTS），
+ * 正式文本要馆方提供或请律师看过（docs/project-context.md 第 6 节第 9 条），上线前在后台换成正式版。
+ */
+export const MOCK_WAIVER: WaiverVersion = {
+  id: 'waiver-2026-01',
+  version: '2026-01',
+  title: '攀岩运动风险告知书',
+  points: [
+    '攀岩有坠落、扭伤、擦伤等风险，我会按自己的水平选择线路。',
+    '第一次来会先听前台讲安全须知，抱石落地时屈膝、不往人多的地方跳。',
+    '顶绳和先锋要用馆里认可的保护方式，没学过保护不给别人做保护。',
+    '身体不舒服、喝过酒不上墙；未成年人要有监护人陪同。',
+  ],
+  effectiveFrom: '2026-01-01',
+};
 
 /**
  * 示例数据，跟原型一致：年卡会员阿杰（还有一张 10 次卡），第一次来的小鹿什么卡都没有。
@@ -125,6 +146,9 @@ export function seedDb(today: DateKey): MockDb {
     checkIns,
     entryQrs: [],
     policies,
+    waiverVersions: [MOCK_WAIVER],
+    // 阿杰来过几次，签过告知书；小鹿第一次来、老周还没用过小程序，都没签
+    waivers: [{ id: 'waiver-sign-seed-1', memberId: MOCK_MEMBERS.ajie, waiverVersionId: MOCK_WAIVER.id, signedAt: at(addDays(today, -62)) }],
     ledger,
     orders,
     seq: 0,
@@ -140,7 +164,7 @@ export interface MockStorage {
 const DB_KEY = 'mock:db';
 const WX_KEY = 'mock:wx';
 /** 示例数据的结构改了就加 1，存着的旧数据会被丢掉、重新生成 */
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 
 /** 读存着的数据；没有或者版本不对就用示例数据重新生成 */
 export function loadDb(storage: MockStorage, today: DateKey): MockDb {

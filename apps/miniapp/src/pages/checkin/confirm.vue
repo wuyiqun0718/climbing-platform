@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ApiError, type CheckInResult, type CreateOrderResult, type EntryQrBody } from '@climb/api';
-import { entryBlockedText, entrySheet, pickEntryCard, POLICY_STATUS_TEXT, type EntryOption, type EntrySheet } from '@climb/core';
+import { entryBlockedText, entrySheet, pickEntryCard, POLICY_STATUS_TEXT, type EntryOption, type EntrySheet, type WaiverVersion } from '@climb/core';
 import { formatDot, formatYuan } from '@climb/utils';
 import { onLoad } from '@dcloudio/uni-app';
 import gym from '@gym';
@@ -11,10 +11,12 @@ import { requireLogin } from '../../lib/use-login';
 import { member } from '../../stores';
 import { CHECKIN_PAGE, fromPageQuery, NOT_OURS_MESSAGE } from './scan';
 import { startScan } from './start-scan';
+import WaiverAgree from './waiver.vue';
 
 // 签到页：微信扫前台的码直接打开，或者小程序里扫码后跳过来。
 // 解析码、确认登录、预览（验码，不作废）→ 选卡（没卡就买单次票）→ 确认入场。
-// 选哪张、能不能用、保险怎么标都按 @climb/core 的 entrySheet，这里只显示。告知书在任务 20，成功页在任务 22。
+// 选哪张、能不能用、保险怎么标都按 @climb/core 的 entrySheet，这里只显示。
+// 没签当前版本的风险告知书时预览会带上它：勾选同意后先签（POST /waivers），再付款或入场。成功页在任务 22。
 const status = ref<'loading' | 'bad' | 'ready' | 'done'>('loading');
 const message = ref('');
 const qr = ref<EntryQrBody | null>(null);
@@ -23,6 +25,9 @@ const reentry = ref(false);
 const sheet = ref<EntrySheet | null>(null);
 const selected = ref<string | null>(null);
 const submitting = ref(false);
+/** 要签的告知书；签过为 null */
+const waiver = ref<WaiverVersion | null>(null);
+const agreed = ref(false);
 const result = ref<{ checkIn: CheckInResult; cardName: string } | null>(null);
 /** 进页面时生成一次，重试、连点都带同一个，后端只入场一次 */
 const idempotencyKey = `ci-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -41,19 +46,26 @@ onLoad(async q => {
   if (!(await requireLogin({ route: CHECKIN_PAGE, query: { s: r.qr.storeId, t: r.qr.qrToken } }))) return;
   member.ensureLoaded().catch(() => {});
   qr.value = r.qr;
+  await loadPreview();
+});
+
+/** 验码、列卡、看要不要签告知书。告知书中途换了版本时也重新拉一次 */
+async function loadPreview() {
   try {
-    const [preview, products] = await run(() => Promise.all([api.checkIns.preview(r.qr), api.products.list()]), { silent: true, loading: '加载中' });
+    const [preview, products] = await run(() => Promise.all([api.checkIns.preview(qr.value!), api.products.list()]), { silent: true, loading: '加载中' });
     storeName.value = preview.store.name;
     reentry.value = preview.reentry;
     sheet.value = entrySheet({ options: preview.options, products, todayPolicy: preview.todayPolicy });
-    selected.value = sheet.value.selected;
+    if (!selected.value || !sheet.value.options.some(o => o.card.id === selected.value && o.usable)) selected.value = sheet.value.selected;
+    if (preview.waiver?.id !== waiver.value?.id) agreed.value = false;
+    waiver.value = preview.waiver;
     status.value = 'ready';
     uni.setNavigationBarTitle({ title: preview.store.name });
   } catch (e) {
     // 码过期、用过、不是本馆的：后端的原因翻成中文，让会员重新扫
     bad(errorMessage(e));
   }
-});
+}
 
 const rescan = () => startScan('redirectTo');
 const pick = (cardId: string) => { if (sheet.value) selected.value = pickEntryCard({ options: sheet.value.options, selected: selected.value }, cardId); };
@@ -69,7 +81,7 @@ function optionSub(o: EntryOption): string {
 
 const single = computed(() => sheet.value?.singleTicket ?? null);
 const confirmText = computed(() => (sheet.value?.mustBuy && single.value ? `微信支付 ${formatYuan(single.value.priceCents)} 并入场` : '确认入场'));
-const canSubmit = computed(() => !!sheet.value && (sheet.value.mustBuy ? !!single.value : !!selected.value));
+const canSubmit = computed(() => !!sheet.value && (sheet.value.mustBuy ? !!single.value : !!selected.value) && (!waiver.value || agreed.value));
 
 const modal = (title: string, content: string) => uni.showModal({ title, content, showCancel: false, confirmText: '知道了' });
 
@@ -81,7 +93,11 @@ async function enter(cardId: string, cardName: string, bought: boolean) {
     status.value = 'done';
   } catch (e) {
     const code = errorCode(e);
-    if (code === 'qr-expired' || code === 'qr-used') {
+    if (code === 'waiver-required') {
+      // 告知书刚换了新版：重新拉，让会员看新版再同意
+      await loadPreview();
+      modal('告知书更新了', bought ? `${cardName}已经买好，放进卡包了。告知书刚更新，看一下新版再同意就能进。` : '告知书刚更新，看一下新版再同意就能进。');
+    } else if (code === 'qr-expired' || code === 'qr-used') {
       bad(bought ? `${cardName}已经买好，放进卡包了。${errorMessage(e)}` : errorMessage(e));
     } else {
       uni.showToast({ title: errorMessage(e), icon: 'none' });
@@ -110,11 +126,32 @@ async function buyAndEnter() {
   await enter(outcome.order.cardId, p.name, true);
 }
 
+/** 先签告知书（没签当前版本时）；签不成功就不付款、不入场。返回签好了没有 */
+async function signWaiver(): Promise<boolean> {
+  const w = waiver.value;
+  if (!w) return true;
+  try {
+    await run(() => api.waivers.sign({ waiverVersionId: w.id }), { loading: '提交中', silent: true });
+  } catch (e) {
+    if (errorCode(e) !== 'waiver-outdated') {
+      uni.showToast({ title: errorMessage(e), icon: 'none' });
+      return false;
+    }
+    await loadPreview();
+    modal('告知书更新了', '告知书刚更新，看一下新版再同意。');
+    return false;
+  }
+  waiver.value = null;
+  member.markWaiverSigned();
+  return true;
+}
+
 async function submit() {
   const s = sheet.value;
   if (!s || !canSubmit.value || submitting.value) return;
   submitting.value = true;
   try {
+    if (!(await signWaiver())) return;
     if (s.mustBuy) await buyAndEnter();
     else await enter(selected.value!, s.options.find(o => o.card.id === selected.value)!.card.name, false);
   } finally {
@@ -161,6 +198,12 @@ const goShop = () => uni.navigateTo({ url: '/pages/shop/index' });
         <text class="tag">{{ sheet.insurance.tag }}</text>
       </view>
       <text class="fine">{{ sheet.insurance.note }}</text>
+
+      <template v-if="waiver">
+        <text class="label">风险告知书</text>
+        <WaiverAgree v-model="agreed" :waiver="waiver" />
+        <text class="fine">只在第一次入场时签，告知书更新了会请你再看一次。签了以后不用到前台签纸质单。</text>
+      </template>
 
       <button class="btn primary block" :disabled="!canSubmit || submitting" @tap="submit">{{ confirmText }}</button>
       <button v-if="sheet.mustBuy && sheet.waitingInviter" class="btn block" @tap="goHome">我等等再扫</button>

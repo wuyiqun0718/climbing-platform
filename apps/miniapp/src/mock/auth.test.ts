@@ -33,7 +33,7 @@ describe('mock 登录', () => {
   it('绑过手机号的微信直接登录，/me 返回会员信息', async () => {
     const { api, login } = setup();
     expect(await login('wx-ajie')).toMatchObject({ phoneBound: true });
-    expect(await api.me.get()).toEqual({ id: MOCK_MEMBERS.ajie, name: '阿杰', phone: '13800000001', waiverSigned: false });
+    expect(await api.me.get()).toEqual({ id: MOCK_MEMBERS.ajie, name: '阿杰', phone: '13800000001', waiverSigned: true });
   });
 
   it('没登录访问 /me 是 401', async () => {

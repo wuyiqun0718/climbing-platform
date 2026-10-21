@@ -34,9 +34,9 @@ describe('入场：能用的卡', () => {
 
 describe('入场：同一天再次入场', () => {
   it('第一次扣 1 次，同一天第二次不扣', () => {
-    const first = checkInWith<CountCard>({ ...args(), cardId: 'c1', waiverSigned: true });
+    const first = checkInWith<CountCard>({ ...args(), cardId: 'c1', via: 'scan', waiverSigned: true });
     expect(first).toMatchObject({ deducted: 1, reentry: false, card: { remaining: 5 } });
-    const second = checkInWith<CountCard>({ ...args({ cards: [first.card], past: [entered('c1')] }), cardId: 'c1', waiverSigned: true });
+    const second = checkInWith<CountCard>({ ...args({ cards: [first.card], past: [entered('c1')] }), cardId: 'c1', via: 'scan', waiverSigned: true });
     expect(second).toMatchObject({ deducted: 0, reentry: true, card: { remaining: 5 } });
   });
 
@@ -56,25 +56,26 @@ describe('入场：同一天再次入场', () => {
     const usedVoucher = { ...voucher, usedOn: today };
     const plan = checkInPlan(args({ cards: [year, used, usedVoucher], past: [entered('v1')] }));
     expect(plan.options.map(o => [o.card.id, o.deducts])).toEqual([['v1', 0], ['p1', 0]]);
-    expect(checkInWith({ ...args({ cards: [used], past: [entered('c1')] }), cardId: 'c1', waiverSigned: true })).toMatchObject({ deducted: 0, card: { remaining: 0 } });
+    expect(checkInWith({ ...args({ cards: [used], past: [entered('c1')] }), cardId: 'c1', via: 'scan', waiverSigned: true })).toMatchObject({ deducted: 0, card: { remaining: 0 } });
   });
 
   it('岩馆规则不免扣次时，再次入场照扣，用完的卡不能再用', () => {
     const ctx = { today, rules: { ...defaultRules, sameDayReentryFree: false }, hasCheckedIn: () => false };
     expect(checkInPlan(args({ ctx, past: [entered('c1')] }))).toMatchObject({ reentry: true, options: [{ deducts: 1 }] });
-    expect(code(() => checkInWith({ ...args({ ctx, cards: [{ ...tenTimes, remaining: 0 }], past: [entered('c1')] }), cardId: 'c1', waiverSigned: true }))).toBe('card-not-usable');
+    expect(code(() => checkInWith({ ...args({ ctx, cards: [{ ...tenTimes, remaining: 0 }], past: [entered('c1')] }), cardId: 'c1', via: 'scan', waiverSigned: true }))).toBe('card-not-usable');
   });
 });
 
 describe('入场：用卡', () => {
   it('体验券用掉记日期，邀请人没入场不能用；没有的卡、冻结的卡不能用', () => {
-    expect(checkInWith<ReferralVoucher>({ ...args({ cards: [voucher], ctx: { ...args().ctx, hasCheckedIn: id => id === 'lu' } }), cardId: 'v1', waiverSigned: true }).card.usedOn).toBe(today);
-    expect(code(() => checkInWith({ ...args({ cards: [voucher] }), cardId: 'v1', waiverSigned: true }))).toBe('inviter-not-checked-in');
-    expect(code(() => checkInWith({ ...args(), cardId: 'nope', waiverSigned: true }))).toBe('card-not-usable');
-    expect(code(() => checkInWith({ ...args({ cards: [{ ...tenTimes, status: 'frozen' }] }), cardId: 'c1', waiverSigned: true }))).toBe('card-not-usable');
+    expect(checkInWith<ReferralVoucher>({ ...args({ cards: [voucher], ctx: { ...args().ctx, hasCheckedIn: id => id === 'lu' } }), cardId: 'v1', via: 'scan', waiverSigned: true }).card.usedOn).toBe(today);
+    expect(code(() => checkInWith({ ...args({ cards: [voucher] }), cardId: 'v1', via: 'scan', waiverSigned: true }))).toBe('inviter-not-checked-in');
+    expect(code(() => checkInWith({ ...args(), cardId: 'nope', via: 'scan', waiverSigned: true }))).toBe('card-not-usable');
+    expect(code(() => checkInWith({ ...args({ cards: [{ ...tenTimes, status: 'frozen' }] }), cardId: 'c1', via: 'scan', waiverSigned: true }))).toBe('card-not-usable');
   });
 
-  it('没签告知书先不拦（等馆方）', () => {
-    expect(checkInWith({ ...args(), cardId: 'c1', waiverSigned: false }).deducted).toBe(1);
+  it('扫码入场没签告知书（或没签当前版）拦下，不扣次；前台登记先不拦（等馆方）', () => {
+    expect(code(() => checkInWith({ ...args(), cardId: 'c1', via: 'scan', waiverSigned: false }))).toBe('waiver-required');
+    expect(checkInWith({ ...args(), cardId: 'c1', via: 'desk', waiverSigned: false }).deducted).toBe(1);
   });
 });

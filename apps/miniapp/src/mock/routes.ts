@@ -6,6 +6,7 @@ import { createAuthRoutes } from './routes/auth';
 import { createCardRoutes, settleFrozenCards } from './routes/cards';
 import { createCheckInRoutes } from './routes/checkins';
 import { createOrderRoutes } from './routes/orders';
+import { createWaiverRoutes } from './routes/waivers';
 
 /**
  * 按 @climb/api 的契约实现接口。规则全部调 @climb/core，这里只负责存取数据。
@@ -40,10 +41,11 @@ export function createRoutes(db: MockDb, env: { rules: GymRules; today: () => Da
   };
 
   const routes: MockRoutes = {
-    ...createAuthRoutes(db, { nextId, requireMember }),
+    ...createAuthRoutes(db, { today: env.today, nextId, requireMember }),
     ...createCardRoutes(db, { ...env, requireMember, myCard, replaceCard, record }),
     ...createOrderRoutes(db, { ...env, nextId, requireMember, record }),
     ...createCheckInRoutes(db, { ...env, nextId, requireMember, replaceCard, record }),
+    ...createWaiverRoutes(db, { ...env, nextId, requireMember }),
 
     'GET /products': () => db.products.filter(p => p.onSale),
 

@@ -9,12 +9,18 @@ import type { Card, EntryCard } from './types';
  * 等馆方确认的，先用下面的占位，确认后只改这里：
  * 1. REENTRY_ANY_STORE：同一天再次入场不扣次，不管上一次在哪家店（卡三店通用）；改成 false 就只算同一家店。
  *    同日再次入场免不免扣次本身是岩馆配置 GymRules.sameDayReentryFree（默认免）。
- * 2. CHECK_IN_REQUIRES_WAIVER：没签风险告知书能不能入场。先不拦，前台登记时提示前台让会员在小程序里补签；
- *    改成 true 就拦下（错误码 waiver-required）。
+ * 2. CHECK_IN_REQUIRES_WAIVER.desk：前台登记时会员没签（或没签当前版）风险告知书能不能入场。先不拦，前台登记时提示前台
+ *    让会员在小程序里补签；改成 true 就拦下（错误码 waiver-required）。
+ *    扫码入场（scan）已定：第一次入场必须先在小程序里同意告知书，告知书换版本后要重签，所以固定为 true。
+ *    签没签当前版本按 waiver.ts 的 hasSignedWaiver 算。
  */
 
 export const REENTRY_ANY_STORE = true;
-export const CHECK_IN_REQUIRES_WAIVER = false;
+
+/** 入场方式：会员扫前台的码 / 前台在后台登记 */
+export type CheckInVia = 'scan' | 'desk';
+
+export const CHECK_IN_REQUIRES_WAIVER: Record<CheckInVia, boolean> = { scan: true, desk: false };
 
 /** 已有的入场记录里判断要用的字段（对应 check_ins 表） */
 export interface PastCheckIn {
@@ -80,10 +86,14 @@ export function checkInPlan(a: CheckInArgs): CheckInPlan {
 
 /**
  * 用某张卡入场，返回更新后的卡、扣了几次、是不是再次入场。不能用的卡抛 RuleError。
- * waiverSigned：会员签过风险告知书没有（CHECK_IN_REQUIRES_WAIVER 为 true 时没签就拦）。
+ * via：怎么入场的；waiverSigned：会员签过当前版本的风险告知书没有（hasSignedWaiver），按 CHECK_IN_REQUIRES_WAIVER[via] 决定拦不拦。
  */
-export function checkInWith<C extends EntryCard>(a: CheckInArgs & { cardId: string; waiverSigned: boolean }): { card: C; deducted: number; reentry: boolean } {
-  if (CHECK_IN_REQUIRES_WAIVER && !a.waiverSigned) throw new RuleError('waiver-required', '还没签风险告知书，先让会员在小程序里签');
+export function checkInWith<C extends EntryCard>(
+  a: CheckInArgs & { cardId: string; via: CheckInVia; waiverSigned: boolean },
+): { card: C; deducted: number; reentry: boolean } {
+  if (CHECK_IN_REQUIRES_WAIVER[a.via] && !a.waiverSigned) {
+    throw new RuleError('waiver-required', a.via === 'scan' ? '先看一下风险告知书，同意后再入场' : '还没签风险告知书，先让会员在小程序里签');
+  }
   const { reentry, options } = checkInPlan(a);
   const opt = options.find(o => o.card.id === a.cardId);
   if (!opt) throw new RuleError('card-not-usable', '这张卡现在不能用来入场');
