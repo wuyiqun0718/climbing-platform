@@ -1,4 +1,5 @@
 import { addDays, addMonths, type Cents, type DateKey } from '@climb/utils';
+import { periodEndOn } from './freeze';
 import type { GymRules } from './gym';
 import { isCardNormal, RuleError } from './rules';
 import type { Card, PeriodCard, Product } from './types';
@@ -98,11 +99,16 @@ export function payOrder(order: Order, args: { at: string; transactionId: string
   return { order: { ...order, status: 'paid', paidAt: args.at, wxTransactionId: args.transactionId }, issue: true };
 }
 
-/** 期限卡从哪天开始：今天；手上还有状态正常、没到期（含还没开始）的期限卡，就接在最晚那张到期日的次日。和后台一致 */
+/**
+ * 期限卡从哪天开始：今天；手上还有状态正常或冻结中、没到期（含还没开始）的期限卡，就接在最晚那张用完的次日。
+ * 冻结中的卡按冻满计划天数算（periodEndOn），提前解冻时后面的卡会跟着往前挪。和后台一致
+ */
 export function periodStartsOn(cards: readonly Card[], memberId: string, today: DateKey): DateKey {
   const latest = cards
-    .filter((c): c is PeriodCard => c.kind === 'period' && c.memberId === memberId && c.expiresOn >= today && isCardNormal(c))
-    .reduce<DateKey | null>((max, c) => (max === null || c.expiresOn > max ? c.expiresOn : max), null);
+    .filter((c): c is PeriodCard => c.kind === 'period' && c.memberId === memberId && (isCardNormal(c) || c.status === 'frozen'))
+    .map(periodEndOn)
+    .filter(end => end >= today)
+    .reduce<DateKey | null>((max, end) => (max === null || end > max ? end : max), null);
   return latest ? addDays(latest, 1) : today;
 }
 

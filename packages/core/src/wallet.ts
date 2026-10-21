@@ -3,6 +3,8 @@ import type { Card, LessonCard, PeriodCard } from './types';
 
 /** 卡还能不能用：期限卡没到期（含还没生效的续卡），次卡/课时有剩余且没过期，体验券没用过且没过期 */
 export function isCardLive(card: Card, today: DateKey): boolean {
+  // 冻结中的期限卡到期日还没顺延，可能已经过了到期日，照样算还能用
+  if (card.kind === 'period' && card.status === 'frozen') return true;
   if (card.expiresOn < today) return false;
   if (card.kind === 'period') return true;
   if (card.kind === 'referral') return !card.usedOn;
@@ -11,8 +13,8 @@ export function isCardLive(card: Card, today: DateKey): boolean {
 
 /** 卡包里一张卡还剩多少，页面照这个显示 */
 export type CardBalance =
-  /** 期限卡：生效中是到期前还剩几天（含今天）；还没生效是总天数 */
-  | { type: 'days'; left: number; total: number; startsOn?: DateKey }
+  /** 期限卡：生效中是到期前还剩几天（含今天）；还没生效是总天数；冻结中是冻结那天剩的天数，冻到 frozenUntil（含） */
+  | { type: 'days'; left: number; total: number; startsOn?: DateKey; frozenUntil?: DateKey }
   /** 次卡、好友送的次卡、私教课时、团课次数 */
   | { type: 'times'; left: number; total: number }
   /** 体验券：一张就一次 */
@@ -22,6 +24,9 @@ export function cardBalance(card: Card, today: DateKey): CardBalance {
   if (card.kind === 'period') {
     const total = daysBetween(card.startsOn, card.expiresOn) + 1;
     if (card.startsOn > today) return { type: 'days', left: total, total, startsOn: card.startsOn };
+    if (card.status === 'frozen' && card.frozenFrom && card.frozenUntil) {
+      return { type: 'days', left: Math.max(0, daysBetween(card.frozenFrom, card.expiresOn) + 1), total, frozenUntil: card.frozenUntil };
+    }
     return { type: 'days', left: Math.max(0, daysBetween(today, card.expiresOn) + 1), total };
   }
   if (card.kind === 'referral') return { type: 'voucher', used: !!card.usedOn };

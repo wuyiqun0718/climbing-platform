@@ -71,10 +71,15 @@ describe('按商品发卡', () => {
     expect(issue(month, cards)).toMatchObject({ startsOn: '2026-11-30', expiresOn: '2026-12-29' });
   });
 
-  it('已过期、非正常状态、别人的期限卡不影响开始日', () => {
+  it('冻结中的期限卡也算，新卡接在它冻满以后', () => {
+    const frozen = period('a', '2026-10-01', '2026-10-30', { status: 'frozen', frozenFrom: '2026-10-15', frozenUntil: '2026-10-24' });
+    expect(issue(month, [frozen])).toMatchObject({ startsOn: '2026-11-10', expiresOn: '2026-12-09' });
+  });
+
+  it('已过期、作废退款、别人的期限卡不影响开始日', () => {
     const cards: Card[] = [
       period('a', '2026-09-01', '2026-10-19'),
-      period('b', '2026-10-01', '2026-12-31', { status: 'frozen' }),
+      period('b', '2026-10-01', '2026-12-31', { status: 'void' }),
       period('c', '2026-10-01', '2026-12-31', { status: 'refunded' }),
       period('d', '2026-10-01', '2026-12-31', { memberId: 'lu' }),
     ];

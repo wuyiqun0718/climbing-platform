@@ -1,4 +1,4 @@
-import type { Card, CheckIn, LedgerEntry, Order, Product, Share } from '@climb/core';
+import type { Card, CheckIn, LedgerEntry, Order, Product, RuleErrorCode, Share } from '@climb/core';
 import { createHttp, type ClientOptions } from './client';
 
 export * from './client';
@@ -16,6 +16,16 @@ export interface Me {
 export interface CardLedgerItem extends LedgerEntry {
   /** 入场的门店名 */
   storeName?: string;
+}
+
+/** `GET /me/cards/:id/freeze`：这张卡现在能不能自助冻结、能冻几天、本月和今年还剩几次（null 为不限） */
+export interface FreezeOptions {
+  /** 不能冻结的原因；能冻结为 null */
+  blockedBy: RuleErrorCode | null;
+  minDays: number;
+  maxDays: number;
+  monthLeft: number | null;
+  yearLeft: number | null;
 }
 
 /**
@@ -71,6 +81,12 @@ export function createApi(opts: ClientOptions) {
       cards: () => http<Card[]>('GET', '/me/cards'),
       /** 一张卡的使用记录，最新的在前 */
       cardLedger: (cardId: string) => http<CardLedgerItem[]>('GET', `/me/cards/${encodeURIComponent(cardId)}/ledger`),
+      /** 期限卡自助冻结：先查能不能冻、能冻几天 */
+      freezeOptions: (cardId: string) => http<FreezeOptions>('GET', `/me/cards/${encodeURIComponent(cardId)}/freeze`),
+      /** 从今天起冻结 days 天，返回冻结后的卡；到期日等解冻时按实际冻结天数顺延 */
+      freezeCard: (cardId: string, body: { days: number }) => http<Card>('POST', `/me/cards/${encodeURIComponent(cardId)}/freeze`, body),
+      /** 提前解冻，今天就能用；返回解冻后的卡 */
+      unfreezeCard: (cardId: string) => http<Card>('POST', `/me/cards/${encodeURIComponent(cardId)}/unfreeze`),
       /** 自己的订单，最新的在前 */
       orders: () => http<Order[]>('GET', '/me/orders'),
     },

@@ -17,7 +17,13 @@ export type RuleErrorCode =
   | 'product-off-sale'
   | 'order-closed'
   | 'order-not-pending'
-  | 'order-amount-mismatch';
+  | 'order-amount-mismatch'
+  | 'freeze-not-self-service'
+  | 'freeze-card-not-active'
+  | 'freeze-days-out-of-range'
+  | 'freeze-month-quota-used'
+  | 'freeze-year-quota-used'
+  | 'card-not-frozen';
 
 export class RuleError extends Error {
   constructor(public code: RuleErrorCode, message: string) {

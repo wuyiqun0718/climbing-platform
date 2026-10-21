@@ -6,3 +6,4 @@ export * from './summary';
 export * from './wallet';
 export * from './shop';
 export * from './orders';
+export * from './freeze';

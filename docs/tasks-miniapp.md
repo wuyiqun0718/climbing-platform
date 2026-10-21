@@ -39,7 +39,7 @@
 | 9 ✅ | 首页：会员卡摘要、扫码入场大按钮、老带新/分享入口、今日团课、近期活动（后两块先占位） | 5 | `src/pages/index/index.vue`、`packages/ui-mp/*` | 和原型首页一致；没有卡时引导去购卡 |
 | 10 ✅ | 卡包列表：期限卡、次卡、好友送的次卡、体验券、课时卡分组展示，过期/用完的折叠 | 5 | `src/pages/cards/index.vue`、`packages/ui-mp/MemberCard.vue` | 五种卡都能正确显示剩余次数/天数 |
 | 11 ✅ | 契约 + mock + 页面：卡详情和使用记录 `GET /me/cards/:id/ledger` | 10 | `packages/api`、`src/mock/routes/cards.ts`、`src/pages/cards/detail.vue` | 入场、转赠、领取后流水里多一条，原因显示成中文 |
-| 12 | 期限卡自助冻结（已定）：`@climb/core` 加冻结规则，规则由岩馆在后台配置，放进 `GymRules`（每月几次、每年几次、每次最少/最多几天；默认每月 1 次，其余先占位）；契约 + mock：冻结、提前解冻（卡 `status` 改 `frozen`/`normal`，到期日顺延冻结的天数，流水记 `freeze`/`unfreeze`）；卡详情里选天数冻结、提前解冻，冻结中显示到哪天 | 11 | `packages/core/src/rules.ts`、`packages/core/src/gym.ts`、`gyms/benchmark/src/index.ts`、`packages/api`、`src/mock/routes/cards.ts`、`src/pages/cards/detail.vue` | 核心规则有单测（次数用完、天数超限被拒）；冻结中的卡不能入场、不能发老带新（`status` 已在 core 里拦）；改岩馆配置不用改代码 |
+| 12 ✅ | 期限卡自助冻结（已定）：`@climb/core` 加冻结规则，规则由岩馆在后台配置，放进 `GymRules`（每月几次、每年几次、每次最少/最多几天；默认每月 1 次，其余先占位）；契约 + mock：冻结、提前解冻（卡 `status` 改 `frozen`/`normal`，到期日顺延冻结的天数，流水记 `freeze`/`unfreeze`）；卡详情里选天数冻结、提前解冻，冻结中显示到哪天 | 11 | `packages/core/src/rules.ts`、`packages/core/src/gym.ts`、`gyms/benchmark/src/index.ts`、`packages/api`、`src/mock/routes/cards.ts`、`src/pages/cards/detail.vue` | 核心规则有单测（次数用完、天数超限被拒）；冻结中的卡不能入场、不能发老带新（`status` 已在 core 里拦）；改岩馆配置不用改代码 |
 
 ## D. 购卡和支付
 

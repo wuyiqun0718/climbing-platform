@@ -4,9 +4,9 @@ import {
 } from '@climb/core';
 import type { DateKey } from '@climb/utils';
 import type { MockDb } from './db';
-import { MockHttpError, type MockContext, type MockRoutes } from './router';
+import { MockHttpError, type MockContext, type MockHandler, type MockRoutes } from './router';
 import { createAuthRoutes } from './routes/auth';
-import { createCardRoutes } from './routes/cards';
+import { createCardRoutes, settleFrozenCards } from './routes/cards';
 import { createOrderRoutes } from './routes/orders';
 
 /**
@@ -39,14 +39,17 @@ export function createRoutes(db: MockDb, env: { rules: GymRules; today: () => Da
     db.cards = db.cards.map(c => (c.id === card.id ? card : c));
   };
 
-  /** 卡变了就记一笔流水（card 是变化后的卡），跟后端同一个事务里写流水一样 */
-  const record = (card: Card, delta: number, reason: LedgerEntry['reason'], ref?: { type: NonNullable<LedgerEntry['refType']>; id: string }) => {
-    db.ledger.push(ledgerEntry({ id: nextId('led'), card, delta, reason, on: env.today(), at: new Date().toISOString(), ref }));
+  /** 卡变了就记一笔流水（card 是变化后的卡），跟后端同一个事务里写流水一样；on 不填是今天 */
+  const record = (
+    card: Card, delta: number, reason: LedgerEntry['reason'],
+    ref?: { type: NonNullable<LedgerEntry['refType']>; id: string }, extra: { note?: string; on?: DateKey } = {},
+  ) => {
+    db.ledger.push(ledgerEntry({ id: nextId('led'), card, delta, reason, on: extra.on ?? env.today(), at: new Date().toISOString(), ref, note: extra.note }));
   };
 
-  return {
+  const routes: MockRoutes = {
     ...createAuthRoutes(db, { nextId, requireMember }),
-    ...createCardRoutes(db, { requireMember, myCard }),
+    ...createCardRoutes(db, { ...env, requireMember, myCard, replaceCard, record }),
     ...createOrderRoutes(db, { ...env, nextId, requireMember, record }),
 
     'GET /products': () => db.products.filter(p => p.onSale),
@@ -108,5 +111,12 @@ export function createRoutes(db: MockDb, env: { rules: GymRules; today: () => Da
       return result;
     },
   };
+
+  // 冻满了的期限卡次日自动解冻：后端是每天的定时任务，mock 在每次请求前顺手做
+  const settle = (handler: MockHandler): MockHandler => ctx => {
+    settleFrozenCards(db, { today: env.today(), replaceCard, record });
+    return handler(ctx);
+  };
+  return Object.fromEntries(Object.entries(routes).map(([key, handler]) => [key, settle(handler)]));
 }
 

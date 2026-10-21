@@ -20,6 +20,17 @@ export function cardView(card: Card, today: DateKey, done: boolean): CardView {
   const b = cardBalance(card, today);
   const until = `${formatDot(card.expiresOn)} 前有效`;
   const acts: CardAction[] = [];
+  if (card.kind === 'period' && b.type === 'days' && b.frozenUntil) {
+    return {
+      kind: '期限卡 · 冻结中',
+      name: card.name,
+      value: b.left,
+      unit: '天，冻结中',
+      meta: `冻结到 ${formatDot(b.frozenUntil)}，解冻后到期日顺延`,
+      tone: 'neutral',
+      acts,
+    };
+  }
   if (card.kind === 'period' && b.type === 'days') {
     const future = !!b.startsOn;
     if (!done && !future) acts.push({ key: 'scan', label: '入场', dark: true });

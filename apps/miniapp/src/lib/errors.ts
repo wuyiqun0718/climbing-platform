@@ -18,6 +18,12 @@ const RULE_MESSAGES: Record<RuleErrorCode, string> = {
   'order-closed': '订单超时关闭了，重新下一单吧',
   'order-not-pending': '这个订单已经付过了，刷新看看',
   'order-amount-mismatch': '支付金额不对，找前台帮你处理',
+  'freeze-not-self-service': '冻结要到前台办',
+  'freeze-card-not-active': '只有正在用的期限卡可以冻结',
+  'freeze-days-out-of-range': '冻结天数不在允许的范围内',
+  'freeze-month-quota-used': '这个月的冻结次数用完了',
+  'freeze-year-quota-used': '今年的冻结次数用完了',
+  'card-not-frozen': '这张卡没有冻结，刷新看看',
 };
 
 /** 接口层的错误（后端约定的 code，mock 里也一样） */
@@ -38,6 +44,9 @@ const API_MESSAGES: Record<string, string> = {
 };
 
 const MESSAGES: Record<string, string> = { ...API_MESSAGES, ...RULE_MESSAGES };
+
+/** 按 code 取中文提示（接口没报错、只是返回了原因时用，比如不能冻结的原因） */
+export const codeMessage = (code: string) => MESSAGES[code] ?? '现在办不了';
 
 export const NETWORK_ERROR = '网络不太好，稍后再试';
 
