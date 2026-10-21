@@ -1,4 +1,4 @@
-import { MEMBER_SOURCES, type Card, type CardAdjustInput, type FreezeOverridable, type PeriodCard, type RuleErrorCode, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type LedgerEntry, type MemberSource, type PayChannel, type Product, type RevenueBucket, type RevenueCategory, type RevenueChannel } from '@climb/core';
+import { MEMBER_SOURCES, type Card, type CardAdjustInput, type FreezeOverridable, type PeriodCard, type RuleErrorCode, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type OrderStatus, type RefundBasis, type RefundMethod, type RefundStatus, type LedgerEntry, type MemberSource, type PayChannel, type Product, type RevenueBucket, type RevenueCategory, type RevenueChannel } from '@climb/core';
 import type { Cents, DateKey } from '@climb/utils';
 import { createHttp, type ClientOptions } from './client';
 
@@ -143,6 +143,7 @@ export interface FinanceRefundRow {
   amountCents: Cents;
   refundedOn: DateKey;
   reason: string;
+  method: RefundMethod;
 }
 
 /** 后台列表的一页。page 从 1 开始；超出范围时后端夹到最后一页，以返回的 page 为准 */
@@ -235,6 +236,10 @@ export interface MemberOrderRow {
   paidOn: DateKey | null;
   /** 已经退成功的金额，没退过为 0 */
   refundedCents: Cents;
+  /** 按退成功的算（@climb/core 的 orderStatus） */
+  status: OrderStatus;
+  /** 这个订单开的卡；没有卡（单次票、活动、示例订单）为 null */
+  cardId: string | null;
 }
 
 export type EntryMethod = 'scan' | 'desk';
@@ -441,6 +446,84 @@ export interface DeskUnfreezeResult extends CardChangeResult<PeriodCard> {
   days: number;
 }
 
+/**
+ * 退款（任务 18），规则都在 @climb/core 的 refund.ts（用过一部分的怎么折算、退款方式等等馆方的占位也在那里）。
+ * 都要 manager 以上（权限 order.refund，等馆方），不是 403；订单的门店必须是员工能操作的店，否则 403；没有这个订单 404。
+ *
+ * GET /admin/orders/:id/refund：退款前看还能退多少、建议退多少（core 的 suggestedRefund）、怎么退。不改数据。
+ */
+export interface RefundPreview {
+  order: MemberOrderRow;
+  memberName: string;
+  /** 这个订单开的卡（退款前的样子），没有为 null */
+  card: Card | null;
+  /** 不能退的原因（没付款、美团的、退完了，core 的 refundBlockedBy），能退为 null */
+  blockedBy: RuleErrorCode | null;
+  /** 不能退的为 null */
+  method: RefundMethod | null;
+  /** 实付减已退（处理中的也算） */
+  refundableCents: Cents;
+  /** 建议退款金额，前台可以改 */
+  suggestedCents: Cents;
+  basis: RefundBasis;
+  /** 以前的退款，按时间正序 */
+  refunds: RefundRow[];
+}
+
+/**
+ * POST /admin/orders/:id/refund：退 amountCents（大于 0、不超过实付减已退，超了 422 refund-exceeds），reason 必填（空的 400，data.field = reason）。
+ * 不能退的 422（data.code 是 core 的 RuleErrorCode）。requestId 由弹窗每次打开时生成，同一个 requestId 重复提交只退一次，返回第一次的结果。
+ * 成功后：记一张退款单；微信订单原路退（先 processing，等微信回调变 succeeded / failed；mock 当场回调成功），线下订单只记录（当场 succeeded）；
+ * 订单开的卡改成已退款（status = refunded，不能再入场），次卡、课包剩下的次数清零，记一笔 refund 流水（备注是原因）；
+ * 期限卡后面接着的、还没开始的期限卡往前挪，各记一笔 adjust。退成功的才算进财务页的退款和订单的已退。操作日志等任务 23。
+ */
+export interface RefundBody {
+  requestId: string;
+  amountCents: Cents;
+  reason: string;
+}
+
+export interface RefundRow {
+  id: string;
+  orderId: string;
+  amountCents: Cents;
+  method: RefundMethod;
+  status: RefundStatus;
+  /** 退成功的日期，没成功的为 null */
+  refundedOn: DateKey | null;
+  reason: string;
+  /** 发起时间（ISO 8601 带时区）和操作人；示例数据里的没有为空字符串 */
+  at: string;
+  byName: string;
+}
+
+export interface RefundResult {
+  refund: RefundRow;
+  order: MemberOrderRow;
+  /** 退款后的卡，没有为 null */
+  card: Card | null;
+  /** 跟着往前挪的期限卡，没有为空数组 */
+  followers: PeriodCard[];
+}
+
+export const ORDER_STATUS_TEXT: Record<OrderStatus, string> = {
+  unpaid: '没付款',
+  paid: '已付款',
+  partially_refunded: '部分退款',
+  refunded: '已退款',
+};
+
+export const REFUND_METHOD_TEXT: Record<RefundMethod, string> = {
+  wechat_original: '微信原路退回',
+  offline: '线下退',
+};
+
+export const REFUND_STATUS_TEXT: Record<RefundStatus, string> = {
+  processing: '退款中',
+  succeeded: '已退',
+  failed: '退款失败',
+};
+
 export const PAY_CHANNEL_TEXT: Record<PayChannel, string> = {
   wechat: '微信支付',
   desk_cash: '现金',
@@ -494,6 +577,8 @@ export function createAdminApi(opts: ClientOptions) {
     },
     orders: {
       create: (body: CreateDeskOrderBody) => http<DeskOrderResult>('POST', '/admin/orders', body),
+      refundPreview: (id: string) => http<RefundPreview>('GET', `/admin/orders/${encodeURIComponent(id)}/refund`),
+      refund: (id: string, body: RefundBody) => http<RefundResult>('POST', `/admin/orders/${encodeURIComponent(id)}/refund`, body),
     },
     checkIns: {
       preview: (body: CheckInPreviewBody) => http<CheckInPreview>('POST', '/admin/check-ins/preview', body),

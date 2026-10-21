@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CHANNEL_TEXT, REVENUE_CATEGORY_TEXT, type FinanceRefundRow, type FinanceSummary } from '@climb/api';
+import { CHANNEL_TEXT, REFUND_METHOD_TEXT, REVENUE_CATEGORY_TEXT, type FinanceRefundRow, type FinanceSummary } from '@climb/api';
 import { financeRangeError, type RevenueBucket } from '@climb/core';
 import { DataTable, StatTile, errorText, type Column } from '@climb/ui-web';
 import { formatDot, formatYuan, toDateKey } from '@climb/utils';
@@ -69,6 +69,7 @@ const refundColumns = computed<Column<FinanceRefundRow>[]>(() => [
   { key: 'channel', label: '原支付方式', format: r => CHANNEL_TEXT[r.channel] },
   { key: 'orderAmountCents', label: '原实付', num: true, format: r => formatYuan(r.orderAmountCents) },
   { key: 'amountCents', label: '退款', num: true, format: r => formatYuan(r.amountCents) },
+  { key: 'method', label: '怎么退', format: r => REFUND_METHOD_TEXT[r.method] },
   { key: 'reason', label: '原因' },
 ]);
 

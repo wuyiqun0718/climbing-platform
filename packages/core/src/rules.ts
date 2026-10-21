@@ -26,7 +26,12 @@ export type RuleErrorCode =
   | 'card-not-adjustable'
   | 'adjust-invalid'
   | 'adjust-nothing-changed'
-  | 'follower-started';
+  | 'follower-started'
+  | 'order-not-paid'
+  | 'refund-channel-unsupported'
+  | 'order-fully-refunded'
+  | 'refund-amount-invalid'
+  | 'refund-exceeds';
 
 export class RuleError extends Error {
   constructor(public code: RuleErrorCode, message: string) {

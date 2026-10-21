@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ApiError, ENTRY_METHOD_TEXT, type DeskCheckInResult, type DeskOrderResult, type VoidCheckInResult, MEMBER_SOURCE_TEXT, PAY_CHANNEL_TEXT, REVENUE_CATEGORY_TEXT, type MemberDetail, type MemberEntryRow, type MemberOrderRow } from '@climb/api';
+import { ApiError, ENTRY_METHOD_TEXT, ORDER_STATUS_TEXT, type RefundResult, type DeskCheckInResult, type DeskOrderResult, type VoidCheckInResult, MEMBER_SOURCE_TEXT, PAY_CHANNEL_TEXT, REVENUE_CATEGORY_TEXT, type MemberDetail, type MemberEntryRow, type MemberOrderRow } from '@climb/api';
 import { CARD_STATE_TEXT, cardState, cardText, type Card } from '@climb/core';
 import { ConfirmButton, DataTable, errorText, useToast, type Column } from '@climb/ui-web';
 import { formatDot, formatYuan, toDateKey } from '@climb/utils';
@@ -10,6 +10,7 @@ import CardAdjustModal, { type CardAdjustMode } from '../components/CardAdjustMo
 import CardLedgerDrawer from '../components/CardLedgerDrawer.vue';
 import DeskCheckInModal from '../components/DeskCheckInModal.vue';
 import DeskOrderModal from '../components/DeskOrderModal.vue';
+import RefundModal from '../components/RefundModal.vue';
 import { canDo } from '../permissions';
 import { session } from '../session';
 import { createLatest } from './dashboard';
@@ -61,6 +62,7 @@ const orderColumns: Column<MemberOrderRow>[] = [
   { key: 'channel', label: '支付方式', format: r => PAY_CHANNEL_TEXT[r.channel] },
   { key: 'amountCents', label: '金额', num: true, format: r => formatYuan(r.amountCents) },
   { key: 'refundedCents', label: '已退', num: true, format: r => (r.refundedCents ? formatYuan(r.refundedCents) : '—') },
+  { key: 'status', label: '状态', format: r => ORDER_STATUS_TEXT[r.status] },
 ];
 
 const voidText = (r: MemberEntryRow) => (r.voidInfo ? `已撤销（${r.voidInfo.byName}：${r.voidInfo.reason}）` : r.voided ? '已撤销' : '');
@@ -127,6 +129,21 @@ function openAdjust(card: Card, mode: CardAdjustMode) {
 const editable = (c: Card) => c.status !== 'void' && c.status !== 'refunded';
 function onAdjusted(msg: string) {
   toast.success(msg);
+  load();
+}
+
+// 退款：只有店长以上有入口（权限 order.refund），能不能退、退多少由接口按 @climb/core 的 refund.ts 判断
+const canRefund = computed(() => !!session.state.staff && canDo(session.state.staff.role, 'order.refund'));
+const refundOrderId = ref<string | null>(null);
+const refundOpen = ref(false);
+const refundable = (r: MemberOrderRow) => r.status === 'paid' || r.status === 'partially_refunded';
+function openRefund(r: MemberOrderRow) {
+  refundOrderId.value = r.id;
+  refundOpen.value = true;
+}
+function onRefunded(r: RefundResult) {
+  const where = r.refund.method === 'offline' ? '，记得在前台把钱退给会员' : '，原路退回微信';
+  toast.success(`已退款 ${formatYuan(r.refund.amountCents)}${where}${r.card ? `；${r.card.name}已经不能用了` : ''}`);
   load();
 }
 
@@ -201,8 +218,14 @@ const back = () => (window.history.state?.back ? router.back() : router.push({ n
 
     <h2>最近订单</h2>
     <section class="panel">
-      <DataTable :columns="orderColumns" :rows="data.recentOrders" row-key="id" empty="还没有订单" />
+      <DataTable :columns="orderColumns" :rows="data.recentOrders" row-key="id" empty="还没有订单">
+        <template #cell-status="{ row }">
+          {{ ORDER_STATUS_TEXT[row.status] }}
+          <button v-if="canRefund && refundable(row)" type="button" class="link" @click="openRefund(row)">退款</button>
+        </template>
+      </DataTable>
     </section>
+    <RefundModal v-if="refundOrderId" v-model:open="refundOpen" :order-id="refundOrderId" @done="onRefunded" />
 
     <h2>最近入场</h2>
     <section class="panel">

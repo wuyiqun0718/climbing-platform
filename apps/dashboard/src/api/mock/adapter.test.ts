@@ -226,8 +226,8 @@ describe('后台 mock：财务', () => {
       { id: 'e', storeId: 'bingang', memberId: 'm-old-0', productName: '单次票', channel: 'meituan', category: 'single', amountCents: 9_900, paidOn: '2026-09-30' },
     ];
     db.refunds = [
-      { id: 'r1', orderId: 'b', amountCents: 64_000, refundedOn: '2026-10-21', reason: '退一半' },
-      { id: 'r2', orderId: 'e', amountCents: 9_900, refundedOn: '2026-10-01', reason: '没来' },
+      { id: 'r1', orderId: 'b', amountCents: 64_000, refundedOn: '2026-10-21', reason: '退一半', method: 'offline', status: 'succeeded' },
+      { id: 'r2', orderId: 'e', amountCents: 9_900, refundedOn: '2026-10-01', reason: '没来', method: 'offline', status: 'succeeded' },
     ];
     const f = await api.finance({ ...range, store: 'bingang' });
     expect(f).toMatchObject({ grossCents: 187_900, refundCents: 73_900, netCents: 114_000 });
@@ -344,14 +344,15 @@ describe('后台 mock：会员详情', () => {
     const order = (i: number, paidOn: string | null) => ({ id: `o${i}`, storeId: 'huiju', memberId: 'a', productName: '月卡', channel: 'wechat' as const, category: 'period' as const, amountCents: 59_900, paidOn });
     db.orders = [...Array.from({ length: 12 }, (_, i) => order(i, `2026-10-${String(i + 1).padStart(2, '0')}`)), order(99, null), { ...order(100, '2026-10-20'), memberId: 'b' }];
     db.refunds = [
-      { id: 'r1', orderId: 'o11', amountCents: 20_000, refundedOn: '2026-10-15', reason: '' },
-      { id: 'r2', orderId: 'o11', amountCents: 10_000, refundedOn: null, reason: '' },
+      { id: 'r1', orderId: 'o11', amountCents: 20_000, refundedOn: '2026-10-15', reason: '', method: 'wechat_original', status: 'succeeded' },
+      { id: 'r2', orderId: 'o11', amountCents: 10_000, refundedOn: null, reason: '', method: 'wechat_original', status: 'processing' },
     ];
     await login('13800000003');
     const rows = (await api.members.get('a')).recentOrders;
     expect(rows.map(r => r.id)).toEqual(['o99', 'o11', 'o10', 'o9', 'o8', 'o7', 'o6', 'o5', 'o4', 'o3']);
-    expect(rows[1].refundedCents).toBe(20_000);
-    expect(rows[2].refundedCents).toBe(0);
+    expect(rows[1]).toMatchObject({ refundedCents: 20_000, status: 'partially_refunded' });
+    expect(rows[2]).toMatchObject({ refundedCents: 0, status: 'paid' });
+    expect(rows[0].status).toBe('unpaid');
   });
 
   it('最近入场：倒序，撤销的也列出；示例数据里最晚一次 = 会员列表的最近入场', async () => {
@@ -824,5 +825,90 @@ describe('后台 mock：调整卡、冻结和解冻', () => {
     await api.cards.freezeOptions('p-t');
     expect(card(db, 'p-t')).toMatchObject({ status: 'normal', expiresOn: addDays('2027-03-20', 10) });
     expect(db.ledger.find(e => e.cardId === 'p-t' && e.operatorType === 'system')).toMatchObject({ reason: 'unfreeze', at: '2026-10-11T00:00:00+08:00' });
+  });
+});
+
+describe('后台 mock：退款', () => {
+  /** 店长在滨港店给 m-old-5 线下开一张 10 次卡，入场一次，再微信买一张季卡（模拟小程序订单） */
+  async function withOrders() {
+    const s = setup();
+    await s.login('13800000002');
+    const desk = await s.api.orders.create({ requestId: 'buy-1', memberId: 'm-old-5', productId: 'p-10x', storeId: 'bingang', channel: 'desk_cash', amountCents: 128_000, priceReason: '' });
+    await s.api.checkIns.create({ requestId: 'in-1', memberId: 'm-old-5', storeId: 'bingang', cardId: desk.card.id });
+    const season = { id: 'c-wx', kind: 'period' as const, memberId: 'm-old-5', productId: 'p-90', name: '季卡', startsOn: '2026-09-22', expiresOn: '2026-12-20' };
+    s.db.cards.push(season);
+    s.db.ledger.push({ id: 'l-wx', cardId: 'c-wx', at: '2026-09-22T10:00:00+08:00', delta: 0, remainingAfter: null, expiresOnAfter: season.expiresOn, reason: 'purchase', ref: { type: 'order', id: 'o-wx' }, operatorType: 'member', operatorId: 'm-old-5', note: '' });
+    s.db.orders.push({ id: 'o-wx', storeId: 'bingang', memberId: 'm-old-5', productName: '季卡', channel: 'wechat', category: 'period', amountCents: 159_900, paidOn: '2026-09-22', productId: 'p-90', cardId: 'c-wx' });
+    return { ...s, desk };
+  }
+  const body = (over: Record<string, unknown> = {}) => ({ requestId: 'rf-req-1', amountCents: 100_000, reason: '搬家了', ...over });
+
+  it('预览：还能退多少、按剩余比例建议金额、退款方式', async () => {
+    const { api, desk } = await withOrders();
+    expect(await api.orders.refundPreview(desk.order.id)).toMatchObject({
+      blockedBy: null, method: 'offline', refundableCents: 128_000, suggestedCents: 115_200, basis: { kind: 'count', remaining: 9, total: 10 }, refunds: [], card: { id: desk.card.id },
+    });
+    // 季卡 90 天，9-22 开始，今天 10-21 起还剩 61 天
+    expect(await api.orders.refundPreview('o-wx')).toMatchObject({ method: 'wechat_original', suggestedCents: Math.floor((159_900 * 61) / 90), basis: { kind: 'period', remainingDays: 61, totalDays: 90 } });
+  });
+
+  it('线下订单只记录：订单部分退款，卡已退款、次数清零、不能再入场；流水对得上；财务页退款单列', async () => {
+    const { api, db, desk } = await withOrders();
+    const r = await api.orders.refund(desk.order.id, body());
+    expect(r.refund).toMatchObject({ amountCents: 100_000, method: 'offline', status: 'succeeded', refundedOn: '2026-10-21', reason: '搬家了', byName: '店长阿凯' });
+    expect(r.order).toMatchObject({ refundedCents: 100_000, status: 'partially_refunded' });
+    expect(r.card).toMatchObject({ status: 'refunded', remaining: 0 });
+    const ledger = await api.cards.ledger(desk.card.id);
+    expect(ledger.entries.at(-1)).toMatchObject({ reason: 'refund', delta: -9, remainingAfter: 0, ref: { type: 'order', id: desk.order.id }, note: '搬家了', operatorName: '店长阿凯' });
+    expect(ledgerMismatch(ledger.card, ledger.entries)).toBeNull();
+    const preview = await api.checkIns.preview({ memberId: 'm-old-5', storeId: 'bingang' });
+    expect(preview.options.some(o => o.card.id === desk.card.id)).toBe(false);
+    expect(await api.checkIns.create({ requestId: 'in-2', memberId: 'm-old-5', storeId: 'bingang', cardId: desk.card.id }).catch((e: ApiError) => e.status)).toBe(422);
+    expect((await api.members.get('m-old-5')).recentOrders.find(o => o.id === desk.order.id)).toMatchObject({ status: 'partially_refunded', cardId: desk.card.id });
+    const f = await api.finance({ from: '2026-10-01', to: '2026-10-21', store: 'bingang' });
+    expect(f.refunds[0]).toMatchObject({ orderId: desk.order.id, amountCents: 100_000, method: 'offline', reason: '搬家了' });
+    expect(db.refunds.at(-1)).toMatchObject({ staffId: 's-manager' });
+
+    // 再补退剩下的：订单变成已退款
+    const again = await api.orders.refund(desk.order.id, body({ requestId: 'rf-req-2', amountCents: 28_000, reason: '补退' }));
+    expect(again.order).toMatchObject({ refundedCents: 128_000, status: 'refunded' });
+    expect(await api.orders.refundPreview(desk.order.id)).toMatchObject({ blockedBy: 'order-fully-refunded', method: null, refundableCents: 0 });
+  });
+
+  it('微信订单原路退（mock 当场回调成功）；期限卡退了不能再入场', async () => {
+    const { api } = await withOrders();
+    const r = await api.orders.refund('o-wx', body({ amountCents: 159_900 }));
+    expect(r.refund).toMatchObject({ method: 'wechat_original', status: 'succeeded', refundedOn: '2026-10-21' });
+    expect(r.order.status).toBe('refunded');
+    expect(r.card).toMatchObject({ id: 'c-wx', status: 'refunded' });
+    const preview = await api.checkIns.preview({ memberId: 'm-old-5', storeId: 'bingang' });
+    expect(preview.options.some(o => o.card.id === 'c-wx')).toBe(false);
+  });
+
+  it('超额退款 422；金额不对、没写原因 400；同一个 requestId 只退一次', async () => {
+    const { api, db, desk } = await withOrders();
+    expect(await api.orders.refund(desk.order.id, body({ amountCents: 128_001 })).catch((e: ApiError) => e)).toMatchObject({ status: 422, data: { code: 'refund-exceeds' } });
+    expect(await api.orders.refund(desk.order.id, body({ amountCents: 0 })).catch((e: ApiError) => e)).toMatchObject({ status: 400, data: { field: 'amountCents' } });
+    expect(await api.orders.refund(desk.order.id, body({ reason: ' ' })).catch((e: ApiError) => e)).toMatchObject({ status: 400, data: { field: 'reason' } });
+    const n = db.refunds.length;
+    const a = await api.orders.refund(desk.order.id, body());
+    expect(await api.orders.refund(desk.order.id, body())).toEqual(a);
+    expect(db.refunds.length).toBe(n + 1);
+    expect(await api.orders.refund(desk.order.id, body({ requestId: 'rf-req-3', amountCents: 28_001 })).catch((e: ApiError) => e)).toMatchObject({ status: 422, data: { code: 'refund-exceeds' } });
+  });
+
+  it('前台不能退 403；别的店的订单 403；没这个订单 404；美团的、没付款的 422', async () => {
+    const { api, login, db, desk } = await withOrders();
+    await login('13800000003');
+    expect(await status(api.orders.refundPreview(desk.order.id))).toBe(403);
+    expect(await status(api.orders.refund(desk.order.id, body()))).toBe(403);
+    await login('13800000002');
+    const other = db.orders.find(o => o.storeId === 'huiju')!;
+    expect(await status(api.orders.refund(other.id, body()))).toBe(403);
+    expect(await status(api.orders.refund('nope', body()))).toBe(404);
+    await login('13800000001');
+    const meituan = db.orders.find(o => o.channel === 'meituan')!;
+    expect(await api.orders.refund(meituan.id, body({ amountCents: 1 })).catch((e: ApiError) => e)).toMatchObject({ status: 422, data: { code: 'refund-channel-unsupported' } });
+    expect(await api.orders.refund('o-pending', body({ amountCents: 1 })).catch((e: ApiError) => e)).toMatchObject({ status: 422, data: { code: 'order-not-paid' } });
   });
 });

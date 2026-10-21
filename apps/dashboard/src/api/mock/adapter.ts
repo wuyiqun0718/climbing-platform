@@ -32,6 +32,10 @@ import {
   type NewcomerRow,
   type PageOf,
   type ReferralFunnel,
+  type RefundBody,
+  type RefundPreview,
+  type RefundResult,
+  type RefundRow,
   type RequestAdapter,
   type Staff,
   type StoreCompareRow,
@@ -69,6 +73,14 @@ import {
   normalizePhone,
   purchaseLedgerEntry,
   summarizeRevenue,
+  orderStatus,
+  pastFrozenDays,
+  planRefund,
+  refundBlockedBy,
+  refundLedgerEntry,
+  refundableCents,
+  suggestedRefund,
+  REFUND_METHOD_BY_CHANNEL,
   type Card,
   type CheckInArgs,
   type EntryCard,
@@ -269,10 +281,22 @@ function entryRow(db: MockDb, { memberId: _m, void: v, ...c }: MockCheckIn): Mem
   return { ...c, voidInfo: v ? { at: v.at, byName: db.staff.find(s => s.id === v.staffId)?.name ?? '', reason: v.reason } : null };
 }
 
-/** 会员详情、开卡结果里的订单行；已退只算退成功的 */
+/** 会员详情、开卡、退款结果里的订单行；已退和状态只算退成功的 */
 function orderRow(db: MockDb, o: MockOrder): MemberOrderRow {
-  const refundedCents = db.refunds.filter(r => r.orderId === o.id && r.refundedOn).reduce((n, r) => n + r.amountCents, 0);
-  return { id: o.id, storeId: o.storeId, productName: o.productName, category: o.category, channel: o.channel, amountCents: o.amountCents, paidOn: o.paidOn, refundedCents };
+  const refunds = db.refunds.filter(r => r.orderId === o.id);
+  const refundedCents = refunds.filter(r => r.status === 'succeeded').reduce((n, r) => n + r.amountCents, 0);
+  return {
+    id: o.id,
+    storeId: o.storeId,
+    productName: o.productName,
+    category: o.category,
+    channel: o.channel,
+    amountCents: o.amountCents,
+    paidOn: o.paidOn,
+    refundedCents,
+    status: orderStatus(o, refunds),
+    cardId: o.cardId ?? null,
+  };
 }
 
 /** 新记录的 ID：前缀 + 序号，跳过已经有的 */
@@ -653,6 +677,95 @@ function deskUnfreeze(db: MockDb, staff: Staff, id: string, body: Partial<DeskUn
   return ok(res);
 }
 
+/** 退款的权限、订单和门店校验；通过返回订单、它开的卡和以前的退款 */
+function refundScope(db: MockDb, staff: Staff, id: string): { order: MockOrder; card: Card | null; refunds: MockDb['refunds'] } | ApiResponse {
+  if (!canDo(staff.role, 'order.refund')) return fail(403, 'forbidden', '店长以上才能退款');
+  const order = db.orders.find(o => o.id === id);
+  if (!order) return fail(404, 'order-not-found', '没有这个订单');
+  if (!canSeeStore(staff, order.storeId)) return fail(403, 'forbidden', '没有这家店的权限');
+  const card = db.cards.find(c => c.id === order.cardId) ?? null;
+  return { order, card, refunds: db.refunds.filter(r => r.orderId === order.id) };
+}
+
+function refundRow(db: MockDb, r: MockDb['refunds'][number]): RefundRow {
+  const byName = r.staffId ? (db.staff.find(s => s.id === r.staffId)?.name ?? '') : '';
+  return { id: r.id, orderId: r.orderId, amountCents: r.amountCents, method: r.method, status: r.status, refundedOn: r.refundedOn, reason: r.reason, at: r.at ?? '', byName };
+}
+
+/** 退款前看能退多少、建议退多少：口径见 @climb/api 的 RefundPreview */
+function refundPreview(db: MockDb, staff: Staff, id: string): ApiResponse {
+  const scope = refundScope(db, staff, id);
+  if ('status' in scope) return scope;
+  const { order, card, refunds } = scope;
+  const blockedBy = refundBlockedBy(order, refunds);
+  const frozenDays = card ? pastFrozenDays(db.ledger, card.id) : 0;
+  const s = suggestedRefund({ order, refunds, card, frozenDays, today: db.today });
+  const res: RefundPreview = {
+    order: orderRow(db, order),
+    memberName: db.members.find(m => m.id === order.memberId)?.name ?? '',
+    card,
+    blockedBy,
+    method: blockedBy ? null : REFUND_METHOD_BY_CHANNEL[order.channel],
+    refundableCents: refundableCents(order, refunds),
+    suggestedCents: blockedBy ? 0 : s.cents,
+    basis: s.basis,
+    refunds: refunds.map(r => refundRow(db, r)),
+  };
+  return ok(res);
+}
+
+/** 退款：口径见 @climb/api 的 RefundBody，规则都在 @climb/core 的 refund.ts */
+function refundOrder(db: MockDb, staff: Staff, id: string, body: Partial<RefundBody> | null): ApiResponse {
+  const scope = refundScope(db, staff, id);
+  if ('status' in scope) return scope;
+  const requestId = String(body?.requestId ?? '');
+  if (!requestId) return badInput('requestId', '缺少 requestId');
+  const done = db.refundRequests[requestId];
+  if (done) return ok(done);
+
+  const { order, card, refunds } = scope;
+  const reason = String(body?.reason ?? '').trim();
+  const amountCents = Number(body?.amountCents);
+  let r: ReturnType<typeof planRefund>;
+  try {
+    r = planRefund({ order, refunds, card, cards: db.cards.filter(c => c.memberId === order.memberId), amountCents, reason, today: db.today });
+  } catch (e) {
+    if (e instanceof RuleError && e.code === 'refund-amount-invalid') return badInput('amountCents', e.message);
+    return ruleFail(e);
+  }
+
+  const at = nowAt(db);
+  const refund: MockDb['refunds'][number] = {
+    id: nextId('rf-', db.refunds),
+    orderId: order.id,
+    amountCents,
+    refundedOn: r.status === 'succeeded' ? db.today : null,
+    reason,
+    method: r.method,
+    status: r.status,
+    at,
+    staffId: staff.id,
+  };
+  db.refunds.push(refund);
+  // 微信原路退：mock 当场模拟微信回调退款成功
+  if (refund.method === 'wechat_original') {
+    refund.status = 'succeeded';
+    refund.refundedOn = db.today;
+  }
+  const operator = { operatorType: 'staff' as const, operatorId: staff.id };
+  if (r.card && card && r.card !== card) {
+    db.cards[db.cards.findIndex(c => c.id === card.id)] = r.card;
+    db.ledger.push(refundLedgerEntry({ id: nextId('l-', db.ledger), card: r.card, delta: r.delta, at, orderId: order.id, operator, note: reason }));
+    for (const f of r.followers) {
+      db.cards[db.cards.findIndex(c => c.id === f.id)] = f;
+      db.ledger.push(cardChangeLedgerEntry({ id: nextId('l-', db.ledger), card: f, reason: 'adjust', at, operator, note: '前一张期限卡退款，开始日往前挪' }));
+    }
+  }
+  const res: RefundResult = { refund: refundRow(db, refund), order: orderRow(db, order), card: r.card, followers: r.followers };
+  db.refundRequests[requestId] = res;
+  return ok(res);
+}
+
 /** 冻结规则 PUT /admin/settings/freeze-rules；存在 db.rules 里，小程序冻结接口和后台冻结都读这一份 */
 function saveFreezeRules(db: MockDb, staff: Staff, body: any): ApiResponse {
   if (!canDo(staff.role, 'settings.freezeRules')) return fail(403, 'forbidden', '只有老板能改冻结规则');
@@ -729,7 +842,7 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
       const memberName = (id: string) => db.members.find(m => m.id === id)?.name ?? '';
       const refunds = s.refunds.map((r): FinanceRefundRow => {
         const o = orderById.get(r.orderId)!;
-        const reason = db.refunds.find(x => x.id === r.id)?.reason ?? '';
+        const full = db.refunds.find(x => x.id === r.id)!;
         return {
           refundId: r.id,
           orderId: o.id,
@@ -742,7 +855,8 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
           orderAmountCents: o.amountCents,
           amountCents: r.amountCents,
           refundedOn: r.refundedOn!,
-          reason,
+          reason: full.reason,
+          method: full.method,
         };
       });
       const res: FinanceSummary = { ...s, storeId, from, to, refunds };
@@ -782,6 +896,18 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
     path: /^\/admin\/orders$/,
     auth: true,
     handle: ({ db, body, staff }) => createDeskOrder(db, staff!, body),
+  },
+  {
+    method: 'GET',
+    path: /^\/admin\/orders\/([^/]+)\/refund$/,
+    auth: true,
+    handle: ({ db, params, staff }) => refundPreview(db, staff!, decodeURIComponent(params[0]!)),
+  },
+  {
+    method: 'POST',
+    path: /^\/admin\/orders\/([^/]+)\/refund$/,
+    auth: true,
+    handle: ({ db, params, body, staff }) => refundOrder(db, staff!, decodeURIComponent(params[0]!), body),
   },
   {
     method: 'POST',

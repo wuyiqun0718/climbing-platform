@@ -138,11 +138,12 @@
 - 完成标准：改了配置后小程序冻结接口按新规则拦（mock 共用一份数据）；core 单测覆盖每月次数、每年次数、天数上下限、跨月跨年。
 - 补（2026-10-21）：`FreezeRules` / `defaultFreezeRules` 和 `freeze.ts` 跟小程序分支完全一致（`isPeriodActive` 也跟着改成要求状态正常，冻结中的卡不能入场、不能发老带新）；后台设置的校验在 core 的 `freezeRules.ts`（`freezeRulesErrors`，次数 1 以上或不限、每年不少于每月、天数 1–365 且最多不少于最少）。页面放在新的「设置」页（只有老板，权限 `settings.freezeRules`）；mock 存在 `db.rules.freezeRules`，小程序 mock 合并后要读同一份。`freezeBlockedBy` 先查 `memberSelfService`，后台帮冻（17）不能直接用它，要另包一层并支持店长写原因破例。
 
-**18. 退款**
+**18. 退款** ✅
 - 依赖：5、11
 - 涉及文件：`src/components/RefundModal.vue`、契约 `POST /admin/orders/:id/refund`、mock
 - 内容：选订单、退款金额（不超过实付减已退）、原因；微信订单走原路退，线下订单只记录；卡改成已退款。用过一部分的折算规则等馆方，先手填金额。
 - 完成标准：超额退款被拦（mock 返回 422）；只有 manager 以上可见。
+- 补（2026-10-21）：规则在 core 的 `refund.ts`，等馆方的占位集中在文件开头：折算 `suggestedRefund`（次卡、课包按剩余次数/总次数，送出去的算用掉；期限卡按剩余天数/总天数，冻结过的天数用 `pastFrozenDays` 从解冻流水算出来、两边都不算，今天算剩余，冻结中的从冻结那天起算；不到 1 分舍掉；只是建议，前台可以改）；`planRefund`（金额大于 0、不超过实付减已退，处理中的也算已退；原因必填；按渠道 `REFUND_METHOD_BY_CHANNEL`：微信原路退先 processing，现金/POS/转账/青橙导入线下退当场 succeeded，美团不在这里退；卡改 refunded 不能再入场，次卡清零记 refund 流水，期限卡后面没开始的续卡往前挪；一个订单可以分几次退）；`orderStatus`（按退成功的算 paid/partially_refunded/refunded）。契约多一个 `GET /admin/orders/:id/refund` 给弹窗看建议金额；订单行加 `status`、`cardId`，财务退款行加 `method`。入口在会员详情「最近订单」。mock 微信退款当场模拟回调成功；真后端要接微信退款接口和回调。权限 `order.refund` 仍是占位（店长以上）。操作日志等 23。
 
 ### D. 卡种、记录、员工
 

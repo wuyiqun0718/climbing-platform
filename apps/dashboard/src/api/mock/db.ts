@@ -1,5 +1,5 @@
-import { MEMBER_SOURCES, type DeskCheckInResult, type DeskOrderResult, type EntryMethod, type VoidCheckInResult, type MemberSource, type Staff, type Store } from '@climb/api';
-import { defaultRules, type Card, type InsurancePolicy, type CountCard, type GymRules, type LedgerEntry, type Product, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
+import { MEMBER_SOURCES, type DeskCheckInResult, type DeskOrderResult, type RefundResult, type EntryMethod, type VoidCheckInResult, type MemberSource, type Staff, type Store } from '@climb/api';
+import { REFUND_METHOD_BY_CHANNEL, defaultRules, type Card, type RefundMethod, type RefundStatus, type InsurancePolicy, type CountCard, type GymRules, type LedgerEntry, type Product, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
 import { addDays, addMonths, daysBetween, monthOf, type DateKey } from '@climb/utils';
 
 /** 会员（对应 members 表），目前放了看板「新客从哪来」和会员列表用到的字段 */
@@ -59,9 +59,13 @@ export interface MockOrder extends RevenueOrder {
   cardId?: string;
 }
 
-/** 退款（对应 refunds 表） */
+/** 退款（对应 refunds 表）。示例退款没有发起时间和操作人 */
 export interface MockRefund extends RevenueRefund {
   reason: string;
+  method: RefundMethod;
+  status: RefundStatus;
+  at?: string;
+  staffId?: string;
 }
 
 /** 示例数据生成时的会员：都到过店 */
@@ -83,6 +87,8 @@ export interface MockDb {
   deskOrderRequests: Record<string, DeskOrderResult>;
   /** 前台登记入场的幂等记录：requestId → 第一次的结果 */
   deskCheckInRequests: Record<string, DeskCheckInResult>;
+  /** 退款的幂等记录：requestId → 第一次的结果 */
+  refundRequests: Record<string, RefundResult>;
   /** 撤销入场的结果：入场 ID → 第一次撤销的结果，重复撤销原样返回 */
   checkInVoids: Record<string, VoidCheckInResult>;
   /** 订单和退款（财务页用；看板的营收目前还是 storeStats 里的示例数字） */
@@ -123,6 +129,7 @@ export function createMockDb(today: DateKey, rules: GymRules = defaultRules): Mo
     deskOrderRequests: {},
     deskCheckInRequests: {},
     checkInVoids: {},
+    refundRequests: {},
     policies: [],
     waiverVersion: '2026-01',
     storeStats: {
@@ -380,13 +387,16 @@ function sampleOrders(today: DateKey): Pick<MockDb, 'orders' | 'refunds'> {
   for (let i = 0; i < 8; i++) {
     const o = refundable[Math.floor((refundable.length * (i + 0.5)) / 8)]; // 每笔退不同的订单
     const after = addDays(o.paidOn!, 1 + rand(10));
+    const processing = i === 7; // 最后一笔还在处理中（微信退款等回调）
     refunds.push({
       id: `rf-${i + 1}`,
       orderId: o.id,
       // 一半全退，一半退一部分（用过一部分的次卡，金额手填）
       amountCents: i % 2 ? o.amountCents : Math.round(o.amountCents / 2),
-      refundedOn: i === 7 ? null : after > today ? today : after, // 最后一笔还在处理中
+      refundedOn: processing ? null : after > today ? today : after,
       reason: i % 2 ? '买错了，没用过' : '搬家了，退剩下的次数',
+      method: REFUND_METHOD_BY_CHANNEL[o.channel]!,
+      status: processing ? 'processing' : 'succeeded',
     });
   }
   return { orders, refunds };

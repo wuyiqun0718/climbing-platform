@@ -24,7 +24,7 @@ export type ActionKey =
   | 'card.freeze'
   /** 后台帮冻时超了冻结规则（次数、天数），写原因破例（17）。已定店长以上 */
   | 'card.freezeOverride'
-  /** 退款（18） */
+  /** 退款（18）。等馆方：先放店长以上 */
   | 'order.refund'
   /** 新建、改价、上下架卡种（19） */
   | 'product.edit'
