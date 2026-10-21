@@ -23,6 +23,11 @@ const API_MESSAGES: Record<string, string> = {
   'card-not-shareable': '只有自己买的次卡可以分给朋友',
   'invalid-qr': '这个码不是本馆的入场码',
   'share-not-found': '这个分享不存在',
+  'invalid-code': '微信登录没成功，再试一次',
+  'phone-required': '先验证一下手机号',
+  'invalid-phone-code': '手机号没验证成功，再试一次',
+  'phone-taken': '这个手机号已经绑了别的微信，找前台帮你处理',
+  'wx-already-bound': '这个微信已经绑过手机号了',
 };
 
 const MESSAGES: Record<string, string> = { ...API_MESSAGES, ...RULE_MESSAGES };

@@ -3,9 +3,9 @@ import type { GymRules } from '@climb/core';
 import { toDateKey, type DateKey } from '@climb/utils';
 import { loadCurrentMember, loadDb, MOCK_MEMBERS, saveCurrentMember, saveDb, seedDb, type MockDb, type MockStorage } from './db';
 import { createRoutes } from './routes';
-import { createMockAdapter } from './router';
+import { createMockAdapter, type MockIdentity } from './router';
 
-export { MOCK_MEMBERS, mockToken, seedDb, type MockDb, type MockStorage } from './db';
+export { MOCK_LEGACY_PHONE, MOCK_MEMBERS, mockToken, mockWxToken, seedDb, type MockDb, type MockStorage } from './db';
 
 export interface MockOptions {
   rules: GymRules;
@@ -36,9 +36,10 @@ export function createMock(opts: MockOptions): Mock {
   const db = opts.db ?? (storage ? loadDb(storage, today()) : seedDb(today()));
   let current: string = storage ? loadCurrentMember(storage, db) : MOCK_MEMBERS.ajie;
 
-  const resolveToken = (token: string) => {
+  const resolveToken = (token: string): MockIdentity => {
+    if (token.startsWith('mock-wx:')) return { memberId: null, openid: token.slice(8) || null };
     const id = token.startsWith('mock:') ? token.slice(5) : '';
-    return db.members.some(m => m.id === id) ? id : null;
+    return { memberId: db.members.some(m => m.id === id) ? id : null, openid: null };
   };
   const inner = createMockAdapter(createRoutes(db, { rules: opts.rules, today }), resolveToken);
   const adapter: RequestAdapter = async req => {
@@ -54,7 +55,7 @@ export function createMock(opts: MockOptions): Mock {
     db,
     currentMember: () => current,
     switchMember(memberId) {
-      if (!db.members.some(m => m.id === memberId)) throw new Error(`mock 里没有会员 ${memberId}`);
+      if (!db.members.some(m => m.id === memberId && m.openid)) throw new Error(`mock 里没有登录过的会员 ${memberId}`);
       current = memberId;
       if (storage) saveCurrentMember(storage, memberId);
     },

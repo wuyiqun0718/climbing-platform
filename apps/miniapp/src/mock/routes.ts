@@ -2,6 +2,7 @@ import { applyEntry, claimShare, createReferral, shareFromCountCard, type EntryC
 import type { DateKey } from '@climb/utils';
 import type { MockDb } from './db';
 import { MockHttpError, type MockContext, type MockRoutes } from './router';
+import { createAuthRoutes } from './routes/auth';
 
 /**
  * 按 @climb/api 的契约实现接口。规则全部调 @climb/core，这里只负责存取数据。
@@ -11,6 +12,8 @@ export function createRoutes(db: MockDb, env: { rules: GymRules; today: () => Da
   const nextId = (prefix: string) => `${prefix}-${++db.seq}`;
 
   const requireMember = (ctx: MockContext) => {
+    // 微信登录了、还没验证手机号：前端据此跳去验证手机号，而不是重新微信登录
+    if (!ctx.memberId && ctx.openid) throw new MockHttpError(401, 'phone-required', '请先验证手机号');
     if (!ctx.memberId) throw new MockHttpError(401, 'unauthorized', '请先登录');
     return ctx.memberId;
   };
@@ -32,6 +35,8 @@ export function createRoutes(db: MockDb, env: { rules: GymRules; today: () => Da
   };
 
   return {
+    ...createAuthRoutes(db, { nextId, requireMember }),
+
     'GET /products': () => db.products.filter(p => p.onSale),
 
     'GET /me/cards': ctx => {

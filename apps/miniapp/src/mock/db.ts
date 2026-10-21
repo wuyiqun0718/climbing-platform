@@ -5,6 +5,11 @@ export interface MockMember {
   id: string;
   name: string;
   phone: string;
+  /** 小程序登录后才有；从青橙导入的老会员一开始为空，第一次登录验证手机号时绑上 */
+  openid: string | null;
+  source: 'walkin' | 'legacy_import';
+  /** 青橙里的会员 ID */
+  legacyId?: string;
 }
 
 export interface MockStore {
@@ -23,13 +28,20 @@ export interface MockDb {
   seq: number;
 }
 
-export const MOCK_MEMBERS = { ajie: 'm-ajie', xiaolu: 'm-xiaolu' } as const;
+export const MOCK_MEMBERS = { ajie: 'm-ajie', xiaolu: 'm-xiaolu', laozhou: 'm-laozhou' } as const;
 
-/** mock 的 token 就是 `mock:<会员 id>`，登录做好之前先这样 */
+/** 从青橙导入、还没用过小程序的老会员老周的手机号；H5 登录时输入它就能认领老卡 */
+export const MOCK_LEGACY_PHONE = '13800000003';
+
+/** mock 的 token 就是 `mock:<会员 id>` */
 export const mockToken = (memberId: string) => `mock:${memberId}`;
+
+/** 微信登录了但还没验证手机号时的临时 token，只能用来调 `POST /auth/phone` */
+export const mockWxToken = (openid: string) => `mock-wx:${openid}`;
 
 /**
  * 示例数据，跟原型一致：年卡会员阿杰（还有一张 10 次卡），第一次来的小鹿什么卡都没有。
+ * 另有一位从青橙导入的老会员老周（20 次卡剩 8 次），还没登录过小程序，没有 openid。
  * 价格是原型里的占位价（docs/project-context.md 第 7 节）。
  */
 export function seedDb(today: DateKey): MockDb {
@@ -38,8 +50,9 @@ export function seedDb(today: DateKey): MockDb {
   });
   return {
     members: [
-      { id: MOCK_MEMBERS.ajie, name: '阿杰', phone: '13800000001' },
-      { id: MOCK_MEMBERS.xiaolu, name: '小鹿', phone: '13800000002' },
+      { id: MOCK_MEMBERS.ajie, name: '阿杰', phone: '13800000001', openid: 'wx-ajie', source: 'walkin' },
+      { id: MOCK_MEMBERS.xiaolu, name: '小鹿', phone: '13800000002', openid: 'wx-xiaolu', source: 'walkin' },
+      { id: MOCK_MEMBERS.laozhou, name: '老周', phone: MOCK_LEGACY_PHONE, openid: null, source: 'legacy_import', legacyId: 'qc-10086' },
     ],
     stores: [
       { id: 'binggang', name: '滨港店' },
@@ -63,6 +76,7 @@ export function seedDb(today: DateKey): MockDb {
     cards: [
       { id: 'card-ajie-year', kind: 'period', memberId: MOCK_MEMBERS.ajie, productId: 'year', name: '年卡', startsOn: addDays(today, -209), expiresOn: addDays(today, 155) },
       { id: 'card-ajie-c10', kind: 'count', memberId: MOCK_MEMBERS.ajie, productId: 'c10', name: '10 次卡', total: 10, remaining: 6, expiresOn: addDays(today, 118) },
+      { id: 'card-laozhou-c20', kind: 'count', memberId: MOCK_MEMBERS.laozhou, productId: 'c20', name: '20 次卡', total: 20, remaining: 8, expiresOn: addDays(today, 200) },
     ],
     shares: [],
     checkIns: [],
@@ -79,7 +93,7 @@ export interface MockStorage {
 const DB_KEY = 'mock:db';
 const MEMBER_KEY = 'mock:member';
 /** 示例数据的结构改了就加 1，存着的旧数据会被丢掉、重新生成 */
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 /** 读存着的数据；没有或者版本不对就用示例数据重新生成 */
 export function loadDb(storage: MockStorage, today: DateKey): MockDb {
@@ -97,7 +111,7 @@ export function saveDb(storage: MockStorage, db: MockDb) {
 /** 开发时当前用哪位示例会员的身份，默认阿杰 */
 export function loadCurrentMember(storage: MockStorage, db: MockDb): string {
   const id = storage.get(MEMBER_KEY);
-  return typeof id === 'string' && db.members.some(m => m.id === id) ? id : MOCK_MEMBERS.ajie;
+  return typeof id === 'string' && db.members.some(m => m.id === id && m.openid) ? id : MOCK_MEMBERS.ajie;
 }
 
 export function saveCurrentMember(storage: MockStorage, memberId: string) {

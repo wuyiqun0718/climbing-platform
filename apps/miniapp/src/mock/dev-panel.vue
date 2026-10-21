@@ -10,7 +10,8 @@ const open = ref(false);
 const cards = computed(() => member.state.cards);
 const current = ref(mock?.currentMember() ?? '');
 
-const members = computed(() => mock?.db.members ?? []);
+/** 只列登录过小程序的；青橙导入还没绑微信的老会员要走登录认领 */
+const members = computed(() => (mock?.db.members ?? []).filter(m => m.openid));
 const nameOf = (id: string) => members.value.find(m => m.id === id)?.name ?? id;
 /** 别人发的、还没领的分享；接口里没有「列出分享」，开发面板直接看 mock 的数据 */
 const claimable = ref<Share[]>([]);

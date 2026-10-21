@@ -1,13 +1,9 @@
+import type { Me } from '@climb/api';
 import type { Card } from '@climb/core';
 import { reactive, readonly } from 'vue';
 
-/** 当前登录的会员；`GET /me`（任务 6）的返回，先只放页面要用的 */
-export interface Me {
-  id: string;
-  name: string;
-  /** 当前版本的风险告知书签过没有（任务 20 接上 `POST /waivers`） */
-  waiverSigned: boolean;
-}
+/** 当前登录的会员，`GET /me` 的返回 */
+export type { Me };
 
 export interface MemberStoreDeps {
   /** 拉当前会员；没登录返回 null */

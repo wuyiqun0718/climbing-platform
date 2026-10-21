@@ -10,10 +10,7 @@ const TODAY = '2026-10-21';
 function setup() {
   const mock = createMock({ rules: defaultRules, today: () => TODAY });
   const api = createApi({ baseURL: '', gymId: 'benchmark', adapter: mock.adapter, getToken: () => mockToken(mock.currentMember()) });
-  const fetchMe = vi.fn(async (): Promise<Me | null> => {
-    const m = mock.db.members.find(x => x.id === mock.currentMember())!;
-    return { id: m.id, name: m.name, waiverSigned: false };
-  });
+  const fetchMe = vi.fn((): Promise<Me | null> => api.me.get());
   const fetchCards = vi.fn(() => api.me.cards());
   const store = createMemberStore({ fetchMe, fetchCards });
   return { mock, api, store, fetchMe, fetchCards };
@@ -109,11 +106,11 @@ describe('会员 store', () => {
 
   it('换了身份后，旧身份晚回来的数据不覆盖新数据', async () => {
     const slow = deferred<Me | null>();
-    const fetchMe = vi.fn().mockReturnValueOnce(slow.promise).mockResolvedValue({ id: 'b', name: '小鹿', waiverSigned: false });
+    const fetchMe = vi.fn().mockReturnValueOnce(slow.promise).mockResolvedValue({ id: 'b', name: '小鹿', phone: '13800000002', waiverSigned: false });
     const store = createMemberStore({ fetchMe, fetchCards: async () => [] });
     const first = store.load();
     await store.reset();
-    slow.resolve({ id: 'a', name: '阿杰', waiverSigned: true });
+    slow.resolve({ id: 'a', name: '阿杰', phone: '13800000001', waiverSigned: true });
     await first;
     expect(store.state.me?.name).toBe('小鹿');
     expect(store.state.loading).toBe(false);

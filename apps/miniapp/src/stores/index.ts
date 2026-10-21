@@ -1,16 +1,15 @@
-import { api, mock } from '../api';
+import { ApiError } from '@climb/api';
+import { api } from '../api';
 import { createMemberStore, type Me } from './member';
 
-/**
- * 当前会员。`GET /me` 还没有（任务 6），先这样凑：
- * - mock：开发面板选的示例会员；告知书一律当没签过（任务 20 在 mock 里记签署）
- * - 真后端：返回 null，当成没登录
- */
+/** 当前会员；401（没登录、或者还没验证手机号）当成没登录 */
 async function fetchMe(): Promise<Me | null> {
-  if (!mock) return null;
-  const id = mock.currentMember();
-  const m = mock.db.members.find(x => x.id === id);
-  return m ? { id: m.id, name: m.name, waiverSigned: false } : null;
+  try {
+    return await api.me.get();
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 401) return null;
+    throw e;
+  }
 }
 
 /** 全局共享的会员状态，页面里 `member.state.cards` 直接用 */

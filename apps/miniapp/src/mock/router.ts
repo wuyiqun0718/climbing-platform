@@ -11,8 +11,16 @@ export class MockHttpError extends Error {
 export interface MockContext {
   params: Record<string, string>;
   body: unknown;
-  /** 由 Authorization 头里的 token 解析出来；没登录为 null */
+  /** 由 Authorization 头里的 token 解析出来；没登录、或者只微信登录了还没验证手机号时为 null */
   memberId: string | null;
+  /** 微信登录了但还没验证手机号时有值（临时 token） */
+  openid: string | null;
+}
+
+/** token 解析出来的身份 */
+export interface MockIdentity {
+  memberId: string | null;
+  openid: string | null;
 }
 
 export type MockHandler = (ctx: MockContext) => unknown;
@@ -39,19 +47,19 @@ function compile(routes: MockRoutes): CompiledRoute[] {
 /** 去掉域名和查询串，只留路径 */
 const pathOf = (url: string) => url.replace(/^[a-z]+:\/\/[^/]+/i, '').split('?')[0] || '/';
 
-export function createMockAdapter(routes: MockRoutes, resolveToken: (token: string) => string | null): RequestAdapter {
+export function createMockAdapter(routes: MockRoutes, resolveToken: (token: string) => MockIdentity): RequestAdapter {
   const table = compile(routes);
   return async (req: ApiRequest): Promise<ApiResponse> => {
     const path = pathOf(req.url);
     const auth = req.headers.Authorization ?? '';
-    const memberId = auth.startsWith('Bearer ') ? resolveToken(auth.slice(7)) : null;
+    const { memberId, openid } = auth.startsWith('Bearer ') ? resolveToken(auth.slice(7)) : { memberId: null, openid: null };
     for (const r of table) {
       const m = r.method === req.method ? r.pattern.exec(path) : null;
       if (!m) continue;
       const params = Object.fromEntries(r.keys.map((k, i) => [k, decodeURIComponent(m[i + 1])]));
       try {
         // 复制一份，避免页面拿到 mock 内部对象的引用
-        const data = r.handler({ params, body: req.body ?? {}, memberId });
+        const data = r.handler({ params, body: req.body ?? {}, memberId, openid });
         return { status: 200, data: data === undefined ? null : JSON.parse(JSON.stringify(data)) };
       } catch (e) {
         if (e instanceof RuleError) return { status: 409, data: { code: e.code, message: e.message } };
