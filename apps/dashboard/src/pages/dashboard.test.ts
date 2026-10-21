@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createLatest, entriesCompare, funnelSteps, newcomerTotals, pct } from './dashboard';
+import { createLatest, entriesCompare, expiryText, funnelSteps, newcomerTotals, pct } from './dashboard';
 
 describe('今日入场对比', () => {
   // 2026-10-21 是周三
@@ -51,5 +51,13 @@ describe('新客和老带新', () => {
       { label: '办卡', value: 12, width: 24, rate: 40 },
     ]);
     expect(funnelSteps({ sent: 0, claimed: 0, visited: 0, bought: 0 }).map(s => [s.width, s.rate])).toEqual([[0, null], [0, 0], [0, 0], [0, 0]]);
+  });
+});
+
+describe('到期说明', () => {
+  it('今天、明天、几天后；跨月也对', () => {
+    expect(expiryText('2026-10-21', '2026-10-21')).toBe('今天到期');
+    expect(expiryText('2026-10-21', '2026-10-22')).toBe('明天到期');
+    expect(expiryText('2026-10-28', '2026-11-04')).toBe('7 天后到期');
   });
 });

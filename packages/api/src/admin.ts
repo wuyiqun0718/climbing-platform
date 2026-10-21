@@ -47,6 +47,32 @@ export interface DashboardSummary {
   newcomers: NewcomerRow[];
   /** 本月老带新：发出 → 领取 → 到店 → 办卡，每一步都是上一步的子集 */
   referral: ReferralFunnel;
+  /** 快到期的期限卡（规则见 @climb/core 的 expiringPeriodCards），按到期日排 */
+  expiring: ExpiringCardRow[];
+  /** 门店对比，只在看全部门店时返回（只有能看全部门店的员工能拿到），按门店列表顺序；按单店看时为 null */
+  stores: StoreCompareRow[] | null;
+}
+
+/** 看板「7 天内到期」的一行。按门店看时算会员的归属门店（同 activeMembers，等馆方） */
+export interface ExpiringCardRow {
+  cardId: string;
+  cardName: string;
+  memberId: string;
+  memberName: string;
+  /** 会员的归属门店 */
+  storeId: string;
+  expiresOn: DateKey;
+}
+
+/** 门店对比的一行，口径跟同名的单店数字一致 */
+export interface StoreCompareRow {
+  storeId: string;
+  monthRevenueCents: Cents;
+  todayEntries: number;
+  activeMembers: number;
+  /** 本月新客（各来源合计）和其中办卡的人数 */
+  newcomers: number;
+  newcomersBought: number;
 }
 
 /** 会员来源（members.source） */

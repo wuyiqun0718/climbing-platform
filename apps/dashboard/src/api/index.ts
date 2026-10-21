@@ -33,7 +33,7 @@ export const api = createAdminApi({
   baseURL: base ?? '',
   gymId: gym.id,
   adapter: withUnauthorizedHook(
-    usingMock ? createMockAdapter(createMockDb(toDateKey(new Date())), { delayMs: 200 }) : fetchAdapter,
+    usingMock ? createMockAdapter(createMockDb(toDateKey(new Date()), gym.rules), { delayMs: 200 }) : fetchAdapter,
     () => unauthorized(),
   ),
   getToken: () => token,

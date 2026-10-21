@@ -1,4 +1,17 @@
-import { MEMBER_SOURCES, type ApiRequest, type ApiResponse, type DashboardSummary, type LoginResult, type NewcomerRow, type ReferralFunnel, type RequestAdapter, type Staff } from '@climb/api';
+import {
+  MEMBER_SOURCES,
+  type ApiRequest,
+  type ApiResponse,
+  type DashboardSummary,
+  type ExpiringCardRow,
+  type LoginResult,
+  type NewcomerRow,
+  type ReferralFunnel,
+  type RequestAdapter,
+  type Staff,
+  type StoreCompareRow,
+} from '@climb/api';
+import { expiringPeriodCards } from '@climb/core';
 import { monthOf } from '@climb/utils';
 import { canSeeStore } from '../../permissions';
 import type { MockDb } from './db';
@@ -55,6 +68,33 @@ function referralFunnel(db: MockDb, storeIds: string[]): ReferralFunnel {
   return { sent: sent.length, claimed: claimed.length, visited: visited.length, bought: bought.length };
 }
 
+/** 快到期的期限卡，按会员归属门店；哪些卡算「快到期」由 @climb/core 决定 */
+function expiringRows(db: MockDb, storeIds: string[]): ExpiringCardRow[] {
+  const byId = new Map(db.members.map(m => [m.id, m]));
+  return expiringPeriodCards(db.cards, db.today, db.rules).flatMap(c => {
+    const m = byId.get(c.memberId);
+    if (!m || !storeIds.includes(m.homeStoreId)) return [];
+    return [{ cardId: c.id, cardName: c.name, memberId: m.id, memberName: m.name, storeId: m.homeStoreId, expiresOn: c.expiresOn }];
+  });
+}
+
+type StoreStat = keyof MockDb['storeStats'][string];
+const sumStats = (db: MockDb, ids: string[], k: StoreStat) => ids.reduce((n, id) => n + (db.storeStats[id]?.[k] ?? 0), 0);
+
+function storeCompare(db: MockDb): StoreCompareRow[] {
+  return db.stores.map(st => {
+    const nc = newcomerRows(db, [st.id]);
+    return {
+      storeId: st.id,
+      monthRevenueCents: sumStats(db, [st.id], 'monthRevenueCents'),
+      todayEntries: sumStats(db, [st.id], 'todayEntries'),
+      activeMembers: sumStats(db, [st.id], 'activeMembers'),
+      newcomers: nc.reduce((n, r) => n + r.visitors, 0),
+      newcomersBought: nc.reduce((n, r) => n + r.bought, 0),
+    };
+  });
+}
+
 const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handle: Handler }[] = [
   {
     method: 'POST',
@@ -85,7 +125,7 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
       // 只能看部分门店的员工，必须指定自己的店
       if (storeId ? !canSeeStore(staff!, storeId) : staff!.storeIds.length > 0) return fail(403, 'forbidden', '没有这家店的权限');
       const ids = storeId ? [storeId] : db.stores.map(st => st.id);
-      const sum = (k: keyof MockDb['storeStats'][string]) => ids.reduce((n, id) => n + (db.storeStats[id]?.[k] ?? 0), 0);
+      const sum = (k: StoreStat) => sumStats(db, ids, k);
       const res: DashboardSummary = {
         storeId,
         today: db.today,
@@ -96,6 +136,8 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
         activeMembers: sum('activeMembers'),
         newcomers: newcomerRows(db, ids),
         referral: referralFunnel(db, ids),
+        expiring: expiringRows(db, ids),
+        stores: storeId ? null : storeCompare(db),
       };
       return ok(res);
     },

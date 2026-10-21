@@ -1,9 +1,11 @@
 import { MEMBER_SOURCES, type MemberSource, type Staff, type Store } from '@climb/api';
+import { defaultRules, type GymRules, type PeriodCard } from '@climb/core';
 import { addDays, monthOf, type DateKey } from '@climb/utils';
 
 /** 看板「新客从哪来」用到的会员字段（对应 members 表） */
 export interface MockMember {
   id: string;
+  name: string;
   source: MemberSource;
   /** 归属门店（按办卡门店，等馆方） */
   homeStoreId: string;
@@ -31,12 +33,17 @@ export interface MockDb {
   storeStats: Record<string, { monthRevenueCents: number; todayEntries: number; lastWeekSameTimeEntries: number; todayBookings: number; activeMembers: number }>;
   members: MockMember[];
   referrals: MockReferral[];
+  /** 会员的卡（目前只放了期限卡，给「7 天内到期」用） */
+  cards: PeriodCard[];
+  /** 岩馆规则，mock 判断规则时传给 @climb/core */
+  rules: GymRules;
   today: DateKey;
 }
 
-export function createMockDb(today: DateKey): MockDb {
+export function createMockDb(today: DateKey, rules: GymRules = defaultRules): MockDb {
   return {
     today,
+    rules,
     stores: [
       { id: 'bingang', name: '滨港店' },
       { id: 'huiju', name: '汇聚店' },
@@ -61,7 +68,7 @@ export function createMockDb(today: DateKey): MockDb {
  * 示例会员和老带新邀请：老会员（上个月以前来的）发邀请，本月的新客按来源、门店铺开。
  * 用固定的伪随机数，同一个 today 每次生成的都一样。
  */
-function sampleMembers(today: DateKey): Pick<MockDb, 'members' | 'referrals'> {
+function sampleMembers(today: DateKey): Pick<MockDb, 'members' | 'referrals' | 'cards'> {
   let seed = 7;
   const rand = (n: number) => {
     seed = (seed * 1103515245 + 12345) % 2147483648;
@@ -72,12 +79,20 @@ function sampleMembers(today: DateKey): Pick<MockDb, 'members' | 'referrals'> {
   const daysSoFar = Number(today.slice(8, 10));
   const members: MockMember[] = [];
   const referrals: MockReferral[] = [];
+  const cards: PeriodCard[] = [];
+  let named = 0;
+  const nextName = () => `${SURNAMES[named % SURNAMES.length]}${GIVEN[Math.floor(named++ / SURNAMES.length) % GIVEN.length]}`;
 
   // 老会员：本月以前第一次来，都办过卡，用来发邀请
   for (let i = 0; i < 30; i++) {
     const store = storeIds[i % 3];
     const first = addDays(monthStart, -30 - rand(300));
-    members.push({ id: `m-old-${i}`, source: 'walkin', homeStoreId: store, firstVisitOn: first, firstVisitStoreId: store, firstCardOn: first });
+    members.push({ id: `m-old-${i}`, name: nextName(), source: 'walkin', homeStoreId: store, firstVisitOn: first, firstVisitStoreId: store, firstCardOn: first });
+    // 期限卡：前 12 位在今天前后几天到期（有的今天、有的超过 7 天、有的昨天过期），其余的还早；第 3 位已经续了一张
+    const [name, days] = PERIODS[i % PERIODS.length];
+    const expiresOn = i < 12 ? addDays(today, i - 2) : addDays(today, 20 + i * 9);
+    cards.push({ id: `c-old-${i}`, kind: 'period', memberId: `m-old-${i}`, productId: `p-${days}`, name, startsOn: addDays(expiresOn, 1 - days), expiresOn });
+    if (i === 3) cards.push({ id: `c-old-${i}-renew`, kind: 'period', memberId: `m-old-${i}`, productId: `p-${days}`, name, startsOn: addDays(expiresOn, 1), expiresOn: addDays(expiresOn, days) });
   }
 
   // 本月新客：每种来源的人数和办卡比例大致照原型
@@ -93,7 +108,7 @@ function sampleMembers(today: DateKey): Pick<MockDb, 'members' | 'referrals'> {
       const visit = addDays(monthStart, rand(daysSoFar));
       const store = storeIds[rand(3)];
       const bought = rand(plan[source].buyOneIn) === 0;
-      members.push({ id: `m-${source}-${i}`, source, homeStoreId: store, firstVisitOn: visit, firstVisitStoreId: store, firstCardOn: bought ? visit : null });
+      members.push({ id: `m-${source}-${i}`, name: nextName(), source, homeStoreId: store, firstVisitOn: visit, firstVisitStoreId: store, firstCardOn: bought ? visit : null });
     }
   }
 
@@ -112,10 +127,14 @@ function sampleMembers(today: DateKey): Pick<MockDb, 'members' | 'referrals'> {
       // 没用券就没到店，还算不上新客，不建 first_visit；这里简化成用了券才有会员档案
       if (usedOn) {
         const store = members.find(m => m.id === from)!.homeStoreId;
-        members.push({ id: claimedByMemberId, source: 'referral', homeStoreId: store, firstVisitOn: usedOn, firstVisitStoreId: store, firstCardOn: rand(3) === 0 ? usedOn : null });
+        members.push({ id: claimedByMemberId, name: nextName(), source: 'referral', homeStoreId: store, firstVisitOn: usedOn, firstVisitStoreId: store, firstCardOn: rand(3) === 0 ? usedOn : null });
       }
     }
     referrals.push({ id: `r-${i}`, fromMemberId: from, createdOn, claimedByMemberId, usedOn });
   }
-  return { members, referrals };
+  return { members, referrals, cards };
 }
+
+const SURNAMES = ['林', '陈', '王', '赵', '周', '吴', '郑', '孙', '李', '何', '许', '高', '宋', '唐', '韩', '曹', '彭', '苏'];
+const GIVEN = ['小满', '一鸣', '朵朵', '子轩', '舟', '越', '好', '婷', '想', '夕', '多', '远'];
+const PERIODS: [string, number][] = [['月卡', 30], ['季卡', 90], ['年卡', 365]];

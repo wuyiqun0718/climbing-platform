@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaultRules } from './gym';
-import { applyEntry, claimShare, createReferral, entryOptions, referralQuotaLeft, RuleError, shareFromCountCard, type EntryContext } from './rules';
+import { applyEntry, claimShare, createReferral, entryOptions, expiringPeriodCards, referralQuotaLeft, RuleError, shareFromCountCard, type EntryContext } from './rules';
 import type { CountCard, PeriodCard, Share } from './types';
 
 const today = '2026-10-12';
@@ -69,5 +69,20 @@ describe('老带新', () => {
     expect(referralQuotaLeft([year], sent, 'jie', '2026-11-01', defaultRules)).toBe(1);
     expect(code(() => createReferral({ id: 'r2', cards: [year], sent, memberId: 'jie', today, rules: defaultRules }))).toBe('referral-quota-used');
     expect(code(() => createReferral({ id: 'r2', cards: [tenTimes], sent: [], memberId: 'jie', today, rules: defaultRules }))).toBe('no-period-card');
+  });
+});
+
+describe('快到期提醒', () => {
+  const period = (id: string, memberId: string, expiresOn: string): PeriodCard => ({ id, kind: 'period', memberId, productId: 'm1', name: '月卡', startsOn: '2026-09-01', expiresOn });
+
+  it('今天到 7 天后到期的期限卡，按到期日排，次卡不算', () => {
+    const cards = [period('a', 'm1', '2026-10-19'), period('b', 'm2', '2026-10-12'), period('c', 'm3', '2026-10-11'), period('d', 'm4', '2026-10-20'), { ...tenTimes, expiresOn: '2026-10-13' }];
+    expect(expiringPeriodCards(cards, today, defaultRules).map(c => c.id)).toEqual(['b', 'a']);
+  });
+
+  it('已经续了一张更晚到期的就不提醒；提前天数跟着岩馆配置', () => {
+    const cards = [period('a', 'm1', '2026-10-14'), { ...period('a2', 'm1', '2026-11-14'), startsOn: '2026-10-15' }, period('b', 'm2', '2026-10-14')];
+    expect(expiringPeriodCards(cards, today, defaultRules).map(c => c.id)).toEqual(['b']);
+    expect(expiringPeriodCards(cards, today, { ...defaultRules, expiryReminderDays: 1 })).toEqual([]);
   });
 });

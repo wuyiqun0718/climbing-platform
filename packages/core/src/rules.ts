@@ -1,4 +1,4 @@
-import { endOfMonth, monthOf, type DateKey } from '@climb/utils';
+import { addDays, endOfMonth, monthOf, type DateKey } from '@climb/utils';
 import type { GymRules } from './gym';
 import type { Card, CountCard, EntryCard, GiftCard, PeriodCard, ReferralVoucher, Share } from './types';
 
@@ -68,6 +68,20 @@ export function applyEntry<C extends EntryCard>(card: C, ctx: EntryContext, reen
   if (card.kind === 'referral') return { card: { ...card, usedOn: ctx.today }, deducted: 0 };
   if (card.kind === 'count' || card.kind === 'gift') return { card: { ...card, remaining: card.remaining - 1 }, deducted: 1 };
   return { card, deducted: 0 };
+}
+
+/**
+ * 快到期、该提醒续费的期限卡：今天到 rules.expiryReminderDays 天后之间到期（含两头）。
+ * 同一会员已经有一张更晚到期的期限卡（续过了）就不算。按到期日排序。
+ * 等馆方：次卡快到期或快用完要不要也提醒，先只算期限卡（跟原型一样）。
+ */
+export function expiringPeriodCards(cards: Card[], today: DateKey, rules: GymRules): PeriodCard[] {
+  const until = addDays(today, rules.expiryReminderDays);
+  const periods = cards.filter((c): c is PeriodCard => c.kind === 'period');
+  return periods
+    .filter(c => c.expiresOn >= today && c.expiresOn <= until)
+    .filter(c => !periods.some(o => o.memberId === c.memberId && o.expiresOn > c.expiresOn))
+    .sort((a, b) => a.expiresOn.localeCompare(b.expiresOn) || a.id.localeCompare(b.id));
 }
 
 /** 本月还能不能发老带新邀请 */

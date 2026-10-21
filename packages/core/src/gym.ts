@@ -8,6 +8,8 @@ export interface GymRules {
   referralRequiresInviterSameDay: boolean;
   /** 同一天再次入场是否免扣次 */
   sameDayReentryFree: boolean;
+  /** 看板「快到期」提醒提前几天（含今天到期的）。等馆方，先按原型 7 天 */
+  expiryReminderDays: number;
 }
 
 export interface GymFeatures {
@@ -37,6 +39,7 @@ export const defaultRules: GymRules = {
   referralsPerMonth: 1,
   referralRequiresInviterSameDay: true,
   sameDayReentryFree: true,
+  expiryReminderDays: 7,
 };
 
 export const defaultFeatures: GymFeatures = {

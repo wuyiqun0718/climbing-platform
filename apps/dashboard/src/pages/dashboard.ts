@@ -1,5 +1,5 @@
 import type { NewcomerRow, ReferralFunnel } from '@climb/api';
-import { weekdayOf, type DateKey } from '@climb/utils';
+import { daysBetween, weekdayOf, type DateKey } from '@climb/utils';
 
 /** 今日入场和上周同日同一时段比：差几人次。跟原型一样用人次差，不用百分比（早上人少，百分比跳得厉害） */
 export function entriesCompare(today: DateKey, now: number, lastWeek: number): { diff: number; text: string } {
@@ -43,4 +43,11 @@ export function funnelSteps(f: ReferralFunnel): { label: string; value: number; 
     ['办卡', f.bought],
   ];
   return steps.map(([label, value], i) => ({ label, value, width: pct(value, f.sent), rate: i ? pct(value, steps[i - 1][1]) : null }));
+}
+
+/** 「7 天内到期」里的到期说明：今天到期 / 3 天后到期 */
+export function expiryText(today: DateKey, expiresOn: DateKey): string {
+  const n = daysBetween(today, expiresOn);
+  if (n <= 0) return '今天到期';
+  return n === 1 ? '明天到期' : `${n} 天后到期`;
 }

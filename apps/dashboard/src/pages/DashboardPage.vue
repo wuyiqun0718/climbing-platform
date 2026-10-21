@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { MEMBER_SOURCE_TEXT, type DashboardSummary } from '@climb/api';
-import { BarList, StatTile, errorText, type BarRow } from '@climb/ui-web';
+import { MEMBER_SOURCE_TEXT, type DashboardSummary, type StoreCompareRow } from '@climb/api';
+import { BarList, DataTable, StatTile, errorText, type BarRow, type Column } from '@climb/ui-web';
 import { formatDot, formatYuan, toDateKey, weekdayOf } from '@climb/utils';
 import gym from '@gym';
 import { computed, ref, watch } from 'vue';
 import { api } from '../api';
+import { canSeeAllStores } from '../permissions';
 import { session } from '../session';
-import { createLatest, entriesCompare, funnelSteps, newcomerTotals, pct } from './dashboard';
+import { createLatest, entriesCompare, expiryText, funnelSteps, newcomerTotals, pct } from './dashboard';
 
 const data = ref<DashboardSummary | null>(null);
 const loading = ref(false);
@@ -56,6 +57,23 @@ const funnelRows = computed<BarRow[]>(() =>
     : [],
 );
 
+const allStores = computed(() => session.state.storeId === null);
+const storeNameOf = (id: string) => session.state.stores.find(s => s.id === id)?.name ?? id;
+
+// 门店对比：只给能看全部门店的人，且当前选的是「全部门店」
+const compareRows = computed(() =>
+  data.value?.stores && session.state.staff && canSeeAllStores(session.state.staff) ? data.value.stores : null,
+);
+const compareColumns: Column<StoreCompareRow>[] = [
+  { key: 'storeId', label: '门店' },
+  { key: 'monthRevenueCents', label: '本月营收', num: true },
+  { key: 'todayEntries', label: '今日入场', num: true },
+  { key: 'activeMembers', label: '有效会员', num: true },
+  { key: 'newcomers', label: '本月新客', num: true },
+  { key: 'newcomersBought', label: '其中办卡', num: true, format: r => `${r.newcomersBought}（${pct(r.newcomersBought, r.newcomers)}%）` },
+];
+const revenueTotal = computed(() => (compareRows.value ?? []).reduce((n, r) => n + r.monthRevenueCents, 0));
+
 const show = (v: number | undefined, fmt: (n: number) => string | number = n => n) => (v === undefined ? '—' : fmt(v));
 </script>
 
@@ -88,6 +106,29 @@ const show = (v: number | undefined, fmt: (n: number) => string | number = n => 
       <p class="note">右边的百分比是相对上一步的转化率。</p>
     </div>
   </section>
+  <section v-if="compareRows" class="panel wide" :class="{ loading }">
+    <h2>门店对比</h2>
+    <p class="sub">点门店名只看这家店</p>
+    <DataTable :columns="compareColumns" :rows="compareRows" row-key="storeId">
+      <template #cell-storeId="{ row }">
+        <button type="button" class="link" @click="session.setStore(row.storeId)">{{ storeNameOf(row.storeId) }}</button>
+      </template>
+      <template #cell-monthRevenueCents="{ row }">
+        {{ formatYuan(row.monthRevenueCents) }} <small class="muted">{{ pct(row.monthRevenueCents, revenueTotal) }}%</small>
+      </template>
+    </DataTable>
+  </section>
+  <section v-if="data" class="panel wide" :class="{ loading }">
+    <h2>{{ gym.rules.expiryReminderDays }} 天内到期</h2>
+    <p class="sub">期限卡会员，{{ data.expiring.length }} 人，可以提醒续费</p>
+    <ul v-if="data.expiring.length" class="expiring">
+      <li v-for="x in data.expiring" :key="x.cardId">
+        <RouterLink :to="{ name: 'member', params: { id: x.memberId } }">{{ x.memberName }}</RouterLink>
+        <small>{{ x.cardName }}，{{ allStores ? `${storeNameOf(x.storeId)}，` : '' }}{{ expiryText(today, x.expiresOn) }}</small>
+      </li>
+    </ul>
+    <p v-else class="sub">{{ allStores ? '' : '这家店' }} {{ gym.rules.expiryReminderDays }} 天内没有到期的期限卡</p>
+  </section>
 </template>
 
 <style scoped>
@@ -106,6 +147,14 @@ const show = (v: number | undefined, fmt: (n: number) => string | number = n => 
 .note i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
 .note .k1 { background: var(--accent); }
 .note .k2 { margin-left: 8px; background: var(--brand); }
+.panel.wide { margin-top: 16px; }
+.panel.loading { opacity: 0.55; }
+.link { padding: 0; font: inherit; font-weight: 600; color: var(--ink); background: none; border: 0; text-decoration: underline; cursor: pointer; }
+.muted { color: var(--ink-muted); }
+.expiring { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px 16px; margin: 0; padding: 0; list-style: none; }
+.expiring li { display: flex; flex-direction: column; padding: 8px 0; border-bottom: 1px solid var(--neutral-soft); }
+.expiring a { font-weight: 600; color: var(--ink); }
+.expiring small { font-size: 12px; color: var(--ink-muted); }
 @media (max-width: 1100px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .grid, .grid.two { grid-template-columns: 1fr; } }
 </style>

@@ -15,7 +15,7 @@ function setup() {
 
 type M = MockDb['members'][number];
 const member = (id: string, source: M['source'], store: string, firstVisitOn: string, firstCardOn: string | null = null): M => ({
-  id, source, homeStoreId: store, firstVisitOn, firstVisitStoreId: store, firstCardOn,
+  id, name: `会员${id}`, source, homeStoreId: store, firstVisitOn, firstVisitStoreId: store, firstCardOn,
 });
 
 const status = (p: Promise<unknown>) => p.then(() => 200, (e: ApiError) => e.status);
@@ -139,5 +139,48 @@ describe('后台 mock', () => {
     expect(f.visited).toBeGreaterThanOrEqual(f.bought);
     expect(f.bought).toBeGreaterThan(0);
     expect(all.newcomers.find(r => r.source === 'referral')!.visitors).toBeGreaterThan(0);
+  });
+
+  it('7 天内到期：按会员归属门店，今天到 7 天后，续过的不算', async () => {
+    const { api, login, db } = setup();
+    db.members = [member('a', 'walkin', 'bingang', '2026-01-01'), member('b', 'walkin', 'huiju', '2026-01-01'), member('c', 'walkin', 'bingang', '2026-01-01')];
+    const card = (id: string, memberId: string, expiresOn: string) => ({ id, kind: 'period' as const, memberId, productId: 'p', name: '月卡', startsOn: '2026-01-01', expiresOn });
+    db.cards = [
+      card('a1', 'a', '2026-10-28'),
+      card('a0', 'a', '2026-10-20'), // 昨天过期
+      card('b1', 'b', '2026-10-21'),
+      card('c1', 'c', '2026-10-23'),
+      card('c2', 'c', '2026-11-22'), // c 已经续了
+      card('x1', 'nobody', '2026-10-22'), // 找不到会员的不出现
+    ];
+    await login('13800000001');
+    expect((await api.dashboard()).expiring).toEqual([
+      { cardId: 'b1', cardName: '月卡', memberId: 'b', memberName: '会员b', storeId: 'huiju', expiresOn: '2026-10-21' },
+      { cardId: 'a1', cardName: '月卡', memberId: 'a', memberName: '会员a', storeId: 'bingang', expiresOn: '2026-10-28' },
+    ]);
+    expect((await api.dashboard({ store: 'bingang' })).expiring.map(r => r.cardId)).toEqual(['a1']);
+  });
+
+  it('门店对比：只在全部门店时返回，每家店的数字跟单店看板一致', async () => {
+    const { api, login } = setup();
+    await login('13800000001');
+    const all = await api.dashboard();
+    const stores = await api.stores.list();
+    expect(all.stores!.map(r => r.storeId)).toEqual(stores.map(s => s.id));
+    for (const row of all.stores!) {
+      const one = await api.dashboard({ store: row.storeId });
+      expect(one.stores).toBeNull();
+      expect(row).toEqual({
+        storeId: row.storeId,
+        monthRevenueCents: one.monthRevenueCents,
+        todayEntries: one.todayEntries,
+        activeMembers: one.activeMembers,
+        newcomers: one.newcomers.reduce((n, r) => n + r.visitors, 0),
+        newcomersBought: one.newcomers.reduce((n, r) => n + r.bought, 0),
+      });
+    }
+    expect(all.expiring.length).toBeGreaterThan(0);
+    await login('13800000002');
+    expect((await api.dashboard({ store: 'bingang' })).stores).toBeNull();
   });
 });
