@@ -1,6 +1,6 @@
 import type { StaffRole, Store } from '@climb/api';
 import { describe, expect, it } from 'vitest';
-import { ACTION_ROLES, canDo, canSeeAllAuditLogs, canSeePage, PAGE_ROLES, resolveStore, storeOptions, type ActionKey, type PageKey } from './permissions';
+import { ACTION_ROLES, canDo, canHandlePt, canSeeAllAuditLogs, canSeePage, PAGE_ROLES, resolveStore, storeOptions, type ActionKey, type PageKey } from './permissions';
 
 const ROLES: StaffRole[] = ['owner', 'manager', 'desk'];
 const STORES: Store[] = [
@@ -60,6 +60,8 @@ describe('操作权限', () => {
     'class.schedule': ['owner', 'manager'],
     'class.attend': ['owner', 'manager', 'desk'],
     'class.cancelBooking': ['owner', 'manager', 'desk'],
+    'pt.handle': ['owner', 'manager'],
+    'settings.ptRules': ['owner'],
     'settings.classRules': ['owner'],
     'member.fullPhone': ['owner'],
   };
@@ -74,6 +76,14 @@ describe('操作日志', () => {
     expect(canSeeAllAuditLogs({ role: 'owner', storeIds: ['bingang'] })).toBe(true);
     expect(canSeeAllAuditLogs({ role: 'manager', storeIds: [] })).toBe(true);
     expect(canSeeAllAuditLogs({ role: 'manager', storeIds: ['bingang'] })).toBe(false);
+  });
+});
+
+describe('私教', () => {
+  it('教练本人能处理自己的；店长以上能处理所有人的；前台不能处理别人的', () => {
+    expect(canHandlePt({ id: 's-coach', role: 'desk' }, 's-coach')).toBe(true);
+    expect(canHandlePt({ id: 's-desk', role: 'desk' }, 's-coach')).toBe(false);
+    expect(canHandlePt({ id: 's-m', role: 'manager' }, 's-coach')).toBe(true);
   });
 });
 

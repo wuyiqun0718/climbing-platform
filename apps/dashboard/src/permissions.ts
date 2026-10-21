@@ -42,6 +42,10 @@ export type ActionKey =
   | 'class.attend'
   /** 帮会员取消团课预约，退次（27）。等馆方：前台、店长、老板都能（要写原因） */
   | 'class.cancelBooking'
+  /** 处理私教：标线下约 / 不接课、确认、取消（30）。等馆方：先放店长以上；教练本人处理自己的不看这条（见 canHandlePt） */
+  | 'pt.handle'
+  /** 改私教规则：营业时间、取消截止、要不要教练确认（30）。等馆方：先只给老板 */
+  | 'settings.ptRules'
   /** 改团课规则：取消截止、候补、迟到（25）。等馆方：跟冻结规则一样先只给老板 */
   | 'settings.classRules'
   /** 导出 Excel（24）。等馆方：先放店长以上；每种导出另外要能看对应的页面（订单要财务） */
@@ -88,6 +92,8 @@ export const ACTION_ROLES: Record<ActionKey, readonly StaffRole[]> = {
   'class.schedule': MANAGER_UP,
   'class.attend': ALL,
   'class.cancelBooking': ALL,
+  'pt.handle': MANAGER_UP,
+  'settings.ptRules': OWNER,
   'settings.classRules': OWNER,
   'member.fullPhone': OWNER,
 };
@@ -112,6 +118,12 @@ export const canSeeAllStores = (staff: Pick<Staff, 'storeIds'>) => staff.storeId
  * 等馆方（多店员工能不能看汇总还在讨论）：先这样，定了只改这里。看不了全部的只能按自己的店查，全馆的看不到。
  */
 export const canSeeAllAuditLogs = (staff: Pick<Staff, 'role' | 'storeIds'>) => staff.role === 'owner' || canSeeAllStores(staff);
+
+/**
+ * 能不能处理某位教练的私教（标记、确认、取消）：教练本人（员工 id 就是教练 id）或者有 pt.handle 的（等馆方，先店长以上）。
+ * 门店另外查：预约看预约的门店，标记看教练接私教的店里有没有员工能操作的。
+ */
+export const canHandlePt = (staff: Pick<Staff, 'id' | 'role'>, coachId: string) => staff.id === coachId || canDo(staff.role, 'pt.handle');
 
 export const canSeeStore = (staff: Pick<Staff, 'storeIds'>, storeId: string) => canSeeAllStores(staff) || staff.storeIds.includes(storeId);
 

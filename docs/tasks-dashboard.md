@@ -228,11 +228,12 @@
 - 完成标准：营业时间从 `gym` 配置读，不写死。
 - 补（2026-10-22）：`pt.ts`、`pt.test.ts` 从小程序分支原样拷过来（拷来的测试里 `defineGym` 那行去掉了这边还没有的 `entryQrLink`），`gym.ts` 的 `PtRules` / `defaultPtRules` / `GymRules.ptRules` 和 `defineGym` 的合并、`rules.ts` 的 pt-* 错误码照小程序原样加（pt_* 流水原因在 26 已经加了），流水 ref 加 `pt_booking`。只读视图在新文件 core 的 `ptTimeline.ts`：`ptTimeline`（每位教练一行、每天一列，格子用 `ptDaySlots`，营业时间来自 `ptRules`，挂上预约和标记）、`ptRangeError`（一次最多 7 天）、`ptBookingsOn`（看板「今日约课」现在也算今天占着格子的私教）。接口 `GET /admin/pt-slots?from=&to=&store=`（from 默认今天、to 默认往后 6 天），门店口径同财务页，教练按 `listCoaches` 在这家店接私教的；会员约的格子带会员名字。mock 加了 `db.ptBookings` / `db.ptSlotMarks`（结构同小程序的 PtBooking / PtSlotMark，示例照小程序：Max 明天 14 点会员约、15 点线下约小王、19 点不接课，店长阿凯后天 10 点不接课，昨天 18 点上完一节；课包和流水对得上）。页面在课程排期页「私教」，可切 7 天。
 
-**30. 私教预约处理**
+**30. 私教预约处理** ✅
 - 依赖：29
 - 涉及文件：`CoachTimeline.vue`、契约 `POST /admin/pt-slots`（标记线下约/不接课）、`POST /admin/pt-bookings/:id/confirm`、`/cancel`、mock
 - 内容：点空格标记线下约的；会员约的要不要教练确认等馆方，先做成岩馆配置；取消退课时，有冲突拦下。
 - 完成标准：同一教练同一时段不能约两次（规则写在 `@climb/core`，单测）。
+- 补（2026-10-22）：`pt.ts` 没动（跟小程序逐字一致），只调它的 `markPtSlot` / `confirmPtBooking` / `cancelPtBooking({ by: 'staff' })` / `coachCancelPtBooking`；后台加的在新文件 core 的 `ptDesk.ts`：`deskCancelPtBooking`（kind = member 会员要取消、前台代办，越过自助截止、开课后不行，流水 pt_cancel；kind = coach 教练取消或拒绝，流水 pt_void；两种都要原因，记在 closeReason）、`unmarkPtSlotBlockedBy`（过了的标记不能去）、`ptLedgerEntry`（ref = pt_booking）、`ptRulesErrors`。同一教练同一时段不能约两次、会员约了的格子不能标、标了的会员约不了，都是 pt.ts 的规则，在 `ptDesk.test.ts` 里单测。接口 `POST /admin/pt-slots`、`DELETE /admin/pt-slots/:id`、`POST /admin/pt-bookings/:id/confirm`、`/cancel`；谁能处理按 permissions.ts 的 `canHandlePt`（教练本人，或 `pt.handle` 占位店长以上），门店：预约看预约的店，标记看教练接私教的店；要不要教练确认用 `ptRules.needCoachConfirm`，私教规则加了 `GET/PUT /admin/settings/pt-rules`（改要 `settings.ptRules`，占位只有老板）。都写操作日志。时间轴上点格子处理。
 
 ### G. 活动报名
 

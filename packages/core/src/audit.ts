@@ -26,9 +26,14 @@ export type AuditAction =
   | 'class.cancel'
   | 'class.copy_week'
   | 'class_booking.attend'
-  | 'class_booking.cancel';
+  | 'class_booking.cancel'
+  | 'pt_slot.mark'
+  | 'pt_slot.unmark'
+  | 'pt_booking.confirm'
+  | 'pt_booking.cancel'
+  | 'settings.pt_rules';
 
-export type AuditTargetType = 'order' | 'check_in' | 'card' | 'product' | 'staff' | 'settings' | 'export' | 'class_type' | 'class_session' | 'class_booking';
+export type AuditTargetType = 'order' | 'check_in' | 'card' | 'product' | 'staff' | 'settings' | 'export' | 'class_type' | 'class_session' | 'class_booking' | 'pt_slot' | 'pt_booking';
 
 export const AUDIT_ACTIONS = [
   'order.create',
@@ -54,6 +59,11 @@ export const AUDIT_ACTIONS = [
   'class.copy_week',
   'class_booking.attend',
   'class_booking.cancel',
+  'pt_slot.mark',
+  'pt_slot.unmark',
+  'pt_booking.confirm',
+  'pt_booking.cancel',
+  'settings.pt_rules',
 ] as const satisfies readonly AuditAction[];
 
 export const AUDIT_ACTION_TEXT: Record<AuditAction, string> = {
@@ -80,6 +90,11 @@ export const AUDIT_ACTION_TEXT: Record<AuditAction, string> = {
   'class.copy_week': '复制上周课表',
   'class_booking.attend': '团课签到',
   'class_booking.cancel': '帮会员取消团课',
+  'pt_slot.mark': '标私教时段',
+  'pt_slot.unmark': '去掉私教时段标记',
+  'pt_booking.confirm': '确认私教预约',
+  'pt_booking.cancel': '取消私教预约',
+  'settings.pt_rules': '改私教规则',
 };
 
 export interface AuditLogEntry {

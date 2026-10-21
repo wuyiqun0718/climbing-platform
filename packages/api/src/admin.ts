@@ -1,4 +1,4 @@
-import { MEMBER_SOURCES, type Card, type CardAdjustInput, type FreezeOverridable, type PeriodCard, type RuleErrorCode, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type OrderStatus, type RefundBasis, type RefundMethod, type RefundStatus, type LedgerEntry, type MemberSource, type PayChannel, type Product, type ProductInput, type ProductPatch, type RevenueBucket, type RevenueCategory, type RevenueChannel, type Share, type ShareRecordState, type StaffInput, type StaffPatch, type StaffRole, type AuditAction, type AuditLogEntry, type ClassRules, type ClassType, type ClassTypeInput, type ClassTypePatch, type ClassSession, type SessionPatch, type ClassBooking, type CoachProfile, type CoachView, type PtBooking, type PtSlot, type PtSlotMark } from '@climb/core';
+import { MEMBER_SOURCES, type Card, type CardAdjustInput, type FreezeOverridable, type PeriodCard, type RuleErrorCode, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type OrderStatus, type RefundBasis, type RefundMethod, type RefundStatus, type LedgerEntry, type MemberSource, type PayChannel, type Product, type ProductInput, type ProductPatch, type RevenueBucket, type RevenueCategory, type RevenueChannel, type Share, type ShareRecordState, type StaffInput, type StaffPatch, type StaffRole, type AuditAction, type AuditLogEntry, type ClassRules, type ClassType, type ClassTypeInput, type ClassTypePatch, type ClassSession, type SessionPatch, type ClassBooking, type CoachProfile, type CoachView, type PtBooking, type PtSlot, type PtSlotMark, type PtCancelKind, type PtRules } from '@climb/core';
 import type { Cents, DateKey } from '@climb/utils';
 import { createHttp, type ClientOptions } from './client';
 
@@ -354,6 +354,33 @@ export interface PtTimelineView {
   hours: number[];
   coaches: { coach: CoachView; days: { on: DateKey; slots: AdminPtSlot[] }[] }[];
 }
+
+/**
+ * 私教预约处理（任务 30）。规则都是 @climb/core 的 pt.ts（跟小程序逐字一致：markPtSlot、confirmPtBooking、cancelPtBooking、coachCancelPtBooking），
+ * 后台加的在 ptDesk.ts。教练本人或者 pt.handle（等馆方，先店长以上）能处理，见 permissions.ts 的 canHandlePt，不是 403；
+ * 门店：预约看预约的门店，标记看教练接私教的店，员工要能操作（教练本人不看）。教练、预约、标记没有 404；规则不让的 422（data.code）；原因没写 400（data.field = reason）。
+ * - POST /admin/pt-slots：标一格为线下约的（offline，note 填学员）或不接课（off，note 填原因）。只能标营业时间内、没过、空着的格子，会员约了的、已经标了的 422。
+ * - DELETE /admin/pt-slots/:id：去掉标记，过了的不能去。
+ * - POST /admin/pt-bookings/:id/confirm：确认等确认的预约（ptRules.needCoachConfirm 开着时会员约了是 pending）。
+ * - POST /admin/pt-bookings/:id/cancel：kind = member 是会员要取消、前台代办（越过自助截止，开课后不行，退课时流水 pt_cancel）；
+ *   kind = coach 是教练取消或拒绝（退课时流水 pt_void）。reason 都必填，记在预约的 closeReason 上。格子空出来。
+ * 私教规则 GET/PUT /admin/settings/pt-rules（GymRules.ptRules：营业时间、取消截止、要不要教练确认，默认值是占位）：GET 登录的员工都能看，PUT 只有 settings.ptRules（先只有老板）。
+ * 都写操作日志。
+ */
+export interface MarkPtSlotBody {
+  coachId: string;
+  on: DateKey;
+  hour: number;
+  kind: PtSlotMark['kind'];
+  note?: string;
+}
+
+export interface CancelPtBookingBody {
+  kind: PtCancelKind;
+  reason: string;
+}
+
+export type PtRulesBody = PtRules;
 
 /** 后台列表的一页。page 从 1 开始；超出范围时后端夹到最后一页，以返回的 page 为准 */
 export interface PageOf<T> {
@@ -824,6 +851,14 @@ export function createAdminApi(opts: ClientOptions) {
       update: (id: string, body: UpdateStaffBody) => http<StaffRow>('PATCH', `/admin/staff/${encodeURIComponent(id)}`, body),
     },
     coaches: () => http<CoachView[]>('GET', '/admin/coaches'),
+    ptSlotMarks: {
+      create: (body: MarkPtSlotBody) => http<PtSlotMark>('POST', '/admin/pt-slots', body),
+      remove: (id: string) => http<null>('DELETE', `/admin/pt-slots/${encodeURIComponent(id)}`),
+    },
+    ptBookings: {
+      confirm: (id: string) => http<PtBooking>('POST', `/admin/pt-bookings/${encodeURIComponent(id)}/confirm`),
+      cancel: (id: string, body: CancelPtBookingBody) => http<PtBooking>('POST', `/admin/pt-bookings/${encodeURIComponent(id)}/cancel`, body),
+    },
     ptSlots: (q: { from?: DateKey; to?: DateKey; store?: string } = {}) => {
       const qs = new URLSearchParams();
       if (q.from) qs.set('from', q.from);
@@ -921,6 +956,8 @@ export function createAdminApi(opts: ClientOptions) {
       saveFreezeRules: (body: FreezeRulesBody) => http<FreezeRules>('PUT', '/admin/settings/freeze-rules', body),
       classRules: () => http<ClassRules>('GET', '/admin/settings/class-rules'),
       saveClassRules: (body: ClassRulesBody) => http<ClassRules>('PUT', '/admin/settings/class-rules', body),
+      ptRules: () => http<PtRules>('GET', '/admin/settings/pt-rules'),
+      savePtRules: (body: PtRulesBody) => http<PtRules>('PUT', '/admin/settings/pt-rules', body),
     },
     cards: {
       ledger: (id: string) => http<CardLedger>('GET', `/admin/cards/${encodeURIComponent(id)}/ledger`),

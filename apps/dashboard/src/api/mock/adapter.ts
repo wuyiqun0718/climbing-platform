@@ -27,6 +27,8 @@ import {
   type ClassTypeBody,
   type AdminClassRow,
   type PtTimelineView,
+  type MarkPtSlotBody,
+  type CancelPtBookingBody,
   type AdminPtSlot,
   type AttendResult,
   type CancelBookingResult,
@@ -101,6 +103,15 @@ import {
   insuranceForEntry,
   entryPolicy,
   shareRecordState,
+  markPtSlot,
+  confirmPtBooking,
+  deskCancelPtBooking,
+  unmarkPtSlotBlockedBy,
+  ptLedgerEntry,
+  ptRulesErrors,
+  pickPtRules,
+  type CoachView,
+  type PtSlotMark,
   ptBookingsOn,
   ptRangeError,
   ptTimeline,
@@ -177,7 +188,7 @@ import {
   type RevenueChannel,
 } from '@climb/core';
 import { addDays, centsToYuanText, formatYuan, isDateKey, maskPhone, monthOf, toCsv, type CsvCell } from '@climb/utils';
-import { MEMBERS_VISIBLE_ACROSS_STORES, canDo, canSeeAllAuditLogs, canSeePage, canSeeStore } from '../../permissions';
+import { MEMBERS_VISIBLE_ACROSS_STORES, canDo, canHandlePt, canSeeAllAuditLogs, canSeePage, canSeeStore } from '../../permissions';
 import { mockPasswordHash, type MockClassBooking, type MockAuditLog, type MockCheckIn, type MockDb, type MockMember, type MockOrder, type MockStaff } from './db';
 
 /**
@@ -1580,6 +1591,114 @@ function ptSlotsView(db: MockDb, staff: Staff, q: URLSearchParams): ApiResponse 
   return ok(res);
 }
 
+/** 私教的权限和门店：教练本人，或 pt.handle 且门店是自己能操作的（stores 是这件事涉及的店，有一家能操作就行） */
+function ptScope(staff: Staff, coachId: string, stores: string[]): ApiResponse | null {
+  if (!canHandlePt(staff, coachId)) return fail(403, 'forbidden', '只有教练本人或店长以上能处理私教');
+  if (staff.id !== coachId && !stores.some(id => canSeeStore(staff, id))) return fail(403, 'forbidden', '没有这家店的权限');
+  return null;
+}
+
+const ptCoach = (db: MockDb, id: unknown): CoachView | undefined => listCoaches(db.staff).find(c => c.id === id);
+
+/** 标线下约 / 不接课：core 的 markPtSlot（只能标空着的格子，会员约了的拦下） */
+function createPtMark(db: MockDb, staff: Staff, body: Partial<MarkPtSlotBody> | null): ApiResponse {
+  const b = body ?? {};
+  const coach = ptCoach(db, b.coachId);
+  if (!coach) return fail(404, 'coach-not-found', '没有这位教练');
+  const scope = ptScope(staff, coach.id, coach.storeIds);
+  if (scope) return scope;
+  if (!isDateKey(b.on)) return badInput('on', '日期不对');
+  if (b.kind !== 'offline' && b.kind !== 'off') return badInput('kind', '选一下线下约的还是不接课');
+  const note = typeof b.note === 'string' ? b.note.trim().slice(0, 50) : '';
+  let mark: PtSlotMark;
+  try {
+    mark = markPtSlot({ id: nextId('ptm-', db.ptSlotMarks), coachId: coach.id, on: b.on, hour: Number(b.hour), kind: b.kind, note: note || undefined, bookings: db.ptBookings, marks: db.ptSlotMarks, now: mockNow(db), rules: db.rules.ptRules });
+  } catch (e) {
+    return ruleFail(e);
+  }
+  db.ptSlotMarks.push(mark);
+  audit(db, staff, { action: 'pt_slot.mark', targetType: 'pt_slot', targetId: mark.id, storeId: coach.storeIds.length === 1 ? coach.storeIds[0]! : null, reason: note, before: null, after: mark });
+  return ok(mark);
+}
+
+/** 去掉标记：过了的不能去 */
+function removePtMark(db: MockDb, staff: Staff, id: string): ApiResponse {
+  const mark = db.ptSlotMarks.find(m => m.id === id);
+  if (!mark) return fail(404, 'mark-not-found', '没有这条标记');
+  const coach = ptCoach(db, mark.coachId);
+  const scope = ptScope(staff, mark.coachId, coach?.storeIds ?? []);
+  if (scope) return scope;
+  const blocked = unmarkPtSlotBlockedBy(mark, mockNow(db));
+  if (blocked) return fail(422, blocked, '这个时段已经过了');
+  db.ptSlotMarks = db.ptSlotMarks.filter(m => m.id !== id);
+  audit(db, staff, { action: 'pt_slot.unmark', targetType: 'pt_slot', targetId: id, storeId: coach?.storeIds.length === 1 ? coach.storeIds[0]! : null, before: mark, after: null });
+  return ok(null);
+}
+
+function ptBookingScope(db: MockDb, staff: Staff, id: string) {
+  const booking = db.ptBookings.find(b => b.id === id);
+  if (!booking) return fail(404, 'pt-booking-not-found', '没有这个私教预约');
+  return ptScope(staff, booking.coachId, [booking.storeId]) ?? { booking };
+}
+
+/** 确认等确认的预约：core 的 confirmPtBooking */
+function confirmPt(db: MockDb, staff: Staff, id: string): ApiResponse {
+  const scope = ptBookingScope(db, staff, id);
+  if (!('booking' in scope)) return scope;
+  const b = scope.booking;
+  let next: MockDb['ptBookings'][number];
+  try {
+    next = confirmPtBooking(b);
+  } catch (e) {
+    return ruleFail(e);
+  }
+  db.ptBookings[db.ptBookings.findIndex(x => x.id === id)] = next;
+  audit(db, staff, { action: 'pt_booking.confirm', targetType: 'pt_booking', targetId: id, storeId: b.storeId, before: { status: b.status }, after: { status: next.status } });
+  return ok(next);
+}
+
+/** 取消：会员要取消（pt_cancel）或教练取消、拒绝（pt_void），原因必填，退课时记流水 */
+function cancelPt(db: MockDb, staff: Staff, id: string, body: Partial<CancelPtBookingBody> | null): ApiResponse {
+  const scope = ptBookingScope(db, staff, id);
+  if (!('booking' in scope)) return scope;
+  const b = scope.booking;
+  const kind = body?.kind;
+  if (kind !== 'member' && kind !== 'coach') return badInput('kind', '选一下是会员要取消还是教练取消');
+  const reason = String(body?.reason ?? '');
+  let r: ReturnType<typeof deskCancelPtBooking>;
+  try {
+    r = deskCancelPtBooking({ booking: b, cards: db.cards, now: mockNow(db), rules: db.rules.ptRules, kind, reason });
+  } catch (e) {
+    if (e instanceof RuleError && e.code === 'pt-reason-required') return badInput('reason', e.message);
+    return ruleFail(e);
+  }
+  const at = nowAt(db);
+  db.ptBookings[db.ptBookings.findIndex(x => x.id === id)] = r.booking;
+  for (const ch of r.changes) {
+    db.cards[db.cards.findIndex(c => c.id === ch.card.id)] = ch.card;
+    db.ledger.push(ptLedgerEntry({ id: nextId('l-', db.ledger), change: ch, at, operator: { operatorType: 'staff', operatorId: staff.id }, note: r.booking.closeReason }));
+  }
+  audit(db, staff, {
+    action: 'pt_booking.cancel', targetType: 'pt_booking', targetId: id, storeId: b.storeId, reason: r.booking.closeReason, at,
+    before: { status: b.status }, after: { status: r.booking.status, kind, refunded: r.changes.reduce((n, c) => n + c.delta, 0) },
+  });
+  return ok(r.booking);
+}
+
+/** 私教规则 PUT /admin/settings/pt-rules；存在 db.rules 里，时间轴、小程序约私教 mock 合并后读同一份 */
+function savePtRules(db: MockDb, staff: Staff, body: any): ApiResponse {
+  if (!canDo(staff.role, 'settings.ptRules')) return fail(403, 'forbidden', '只有老板能改私教规则');
+  const errs = ptRulesErrors(body ?? {});
+  if (errs) {
+    const field = Object.keys(errs)[0] as keyof typeof errs;
+    return badInput(field, errs[field]!);
+  }
+  const before = db.rules.ptRules;
+  db.rules = { ...db.rules, ptRules: pickPtRules(body) };
+  auditChange(db, staff, { action: 'settings.pt_rules', targetType: 'settings', targetId: 'pt-rules', storeId: null }, before, db.rules.ptRules);
+  return ok(db.rules.ptRules);
+}
+
 /** 新建卡种：口径见 @climb/api 的 CreateProductBody，规则都在 @climb/core 的 product.ts */
 function createProduct(db: MockDb, staff: Staff, body: Partial<CreateProductBody> | null): ApiResponse {
   if (!canDo(staff.role, 'product.edit') || !canDo(staff.role, 'product.price')) return fail(403, 'forbidden', '没有新建卡种的权限');
@@ -1626,6 +1745,12 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
     },
   },
   { method: 'GET', path: /^\/admin\/auth\/me$/, auth: true, handle: ({ staff }) => ok(staff) },
+  { method: 'POST', path: /^\/admin\/pt-slots$/, auth: true, handle: ({ db, body, staff }) => createPtMark(db, staff!, body) },
+  { method: 'DELETE', path: /^\/admin\/pt-slots\/([^/]+)$/, auth: true, handle: ({ db, params, staff }) => removePtMark(db, staff!, decodeURIComponent(params[0]!)) },
+  { method: 'POST', path: /^\/admin\/pt-bookings\/([^/]+)\/confirm$/, auth: true, handle: ({ db, params, staff }) => confirmPt(db, staff!, decodeURIComponent(params[0]!)) },
+  { method: 'POST', path: /^\/admin\/pt-bookings\/([^/]+)\/cancel$/, auth: true, handle: ({ db, params, body, staff }) => cancelPt(db, staff!, decodeURIComponent(params[0]!), body) },
+  { method: 'GET', path: /^\/admin\/settings\/pt-rules$/, auth: true, handle: ({ db }) => ok(db.rules.ptRules) },
+  { method: 'PUT', path: /^\/admin\/settings\/pt-rules$/, auth: true, handle: ({ db, body, staff }) => savePtRules(db, staff!, body) },
   { method: 'GET', path: /^\/admin\/pt-slots$/, auth: true, handle: ({ db, query, staff }) => ptSlotsView(db, staff!, query) },
   { method: 'GET', path: /^\/admin\/coaches$/, auth: true, handle: ({ db }) => ok(listCoaches(db.staff)) },
   // 小程序的教练列表（mvp/miniapp 的 GET /coaches?store=）：在用、有教练资料的员工，id 是员工 id。小程序 mock 合并后从 db.staff 出

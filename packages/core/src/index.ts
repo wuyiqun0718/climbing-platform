@@ -25,3 +25,4 @@ export * from './classRoster';
 export * from './coach';
 export * from './pt';
 export * from './ptTimeline';
+export * from './ptDesk';
