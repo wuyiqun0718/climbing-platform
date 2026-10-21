@@ -4,6 +4,8 @@ import {
   type ApiResponse,
   type DashboardSummary,
   type ExpiringCardRow,
+  type FinanceRefundRow,
+  type FinanceSummary,
   type LoginResult,
   type NewcomerRow,
   type ReferralFunnel,
@@ -11,9 +13,9 @@ import {
   type Staff,
   type StoreCompareRow,
 } from '@climb/api';
-import { expiringPeriodCards } from '@climb/core';
+import { expiringPeriodCards, financeRangeError, summarizeRevenue, type RevenueChannel } from '@climb/core';
 import { monthOf } from '@climb/utils';
-import { canSeeStore } from '../../permissions';
+import { canSeePage, canSeeStore } from '../../permissions';
 import type { MockDb } from './db';
 
 /**
@@ -95,6 +97,13 @@ function storeCompare(db: MockDb): StoreCompareRow[] {
   });
 }
 
+/** 门店参数：没有这家店 404；只能看部分门店的员工必须指定自己的店，否则 403。返回要算的门店 ID */
+function storeScope(db: MockDb, staff: Staff, storeId: string | null): string[] | ApiResponse {
+  if (storeId && !db.stores.some(st => st.id === storeId)) return fail(404, 'store-not-found', '没有这家店');
+  if (storeId ? !canSeeStore(staff, storeId) : staff.storeIds.length > 0) return fail(403, 'forbidden', '没有这家店的权限');
+  return storeId ? [storeId] : db.stores.map(st => st.id);
+}
+
 const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handle: Handler }[] = [
   {
     method: 'POST',
@@ -121,10 +130,8 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
     auth: true,
     handle: ({ db, query, staff }) => {
       const storeId = query.get('store');
-      if (storeId && !db.stores.some(st => st.id === storeId)) return fail(404, 'store-not-found', '没有这家店');
-      // 只能看部分门店的员工，必须指定自己的店
-      if (storeId ? !canSeeStore(staff!, storeId) : staff!.storeIds.length > 0) return fail(403, 'forbidden', '没有这家店的权限');
-      const ids = storeId ? [storeId] : db.stores.map(st => st.id);
+      const ids = storeScope(db, staff!, storeId);
+      if (!Array.isArray(ids)) return ids;
       const sum = (k: StoreStat) => sumStats(db, ids, k);
       const res: DashboardSummary = {
         storeId,
@@ -139,6 +146,45 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
         expiring: expiringRows(db, ids),
         stores: storeId ? null : storeCompare(db),
       };
+      return ok(res);
+    },
+  },
+  {
+    method: 'GET',
+    path: /^\/admin\/finance$/,
+    auth: true,
+    handle: ({ db, query, staff }) => {
+      if (!canSeePage(staff!.role, 'finance')) return fail(403, 'forbidden', '没有财务权限');
+      const from = query.get('from') ?? '';
+      const to = query.get('to') ?? '';
+      const bad = financeRangeError(from, to);
+      if (bad) return fail(400, 'bad-range', bad);
+      const storeId = query.get('store');
+      const ids = storeScope(db, staff!, storeId);
+      if (!Array.isArray(ids)) return ids;
+      const orders = db.orders.filter(o => ids.includes(o.storeId));
+      const s = summarizeRevenue(orders, db.refunds, from, to);
+      const orderById = new Map(orders.map(o => [o.id, o]));
+      const memberName = (id: string) => db.members.find(m => m.id === id)?.name ?? '';
+      const refunds = s.refunds.map((r): FinanceRefundRow => {
+        const o = orderById.get(r.orderId)!;
+        const reason = db.refunds.find(x => x.id === r.id)?.reason ?? '';
+        return {
+          refundId: r.id,
+          orderId: o.id,
+          memberId: o.memberId,
+          memberName: memberName(o.memberId),
+          storeId: o.storeId,
+          channel: o.channel as RevenueChannel,
+          category: o.category,
+          productName: o.productName,
+          orderAmountCents: o.amountCents,
+          amountCents: r.amountCents,
+          refundedOn: r.refundedOn!,
+          reason,
+        };
+      });
+      const res: FinanceSummary = { ...s, storeId, from, to, refunds };
       return ok(res);
     },
   },

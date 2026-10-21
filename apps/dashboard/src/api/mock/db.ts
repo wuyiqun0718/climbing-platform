@@ -1,5 +1,5 @@
 import { MEMBER_SOURCES, type MemberSource, type Staff, type Store } from '@climb/api';
-import { defaultRules, type GymRules, type PeriodCard } from '@climb/core';
+import { defaultRules, type GymRules, type PeriodCard, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
 import { addDays, monthOf, type DateKey } from '@climb/utils';
 
 /** 看板「新客从哪来」用到的会员字段（对应 members 表） */
@@ -25,6 +25,17 @@ export interface MockReferral {
   usedOn: DateKey | null;
 }
 
+/** 订单（对应 orders 表，商品名和品类是下单时的快照） */
+export interface MockOrder extends RevenueOrder {
+  memberId: string;
+  productName: string;
+}
+
+/** 退款（对应 refunds 表） */
+export interface MockRefund extends RevenueRefund {
+  reason: string;
+}
+
 /** mock 后端的内存数据。每次 createMockDb() 都是一份新的，测试之间互不影响。 */
 export interface MockDb {
   stores: Store[];
@@ -35,6 +46,9 @@ export interface MockDb {
   referrals: MockReferral[];
   /** 会员的卡（目前只放了期限卡，给「7 天内到期」用） */
   cards: PeriodCard[];
+  /** 订单和退款（财务页用；看板的营收目前还是 storeStats 里的示例数字） */
+  orders: MockOrder[];
+  refunds: MockRefund[];
   /** 岩馆规则，mock 判断规则时传给 @climb/core */
   rules: GymRules;
   today: DateKey;
@@ -56,6 +70,7 @@ export function createMockDb(today: DateKey, rules: GymRules = defaultRules): Mo
       { id: 's-desk', name: '前台小葵', phone: '13800000003', role: 'desk', storeIds: ['bingang'], password: '123456', active: true },
     ],
     ...sampleMembers(today),
+    ...sampleOrders(today),
     storeStats: {
       bingang: { monthRevenueCents: 6_194_200, todayEntries: 45, lastWeekSameTimeEntries: 41, todayBookings: 9, activeMembers: 138 },
       huiju: { monthRevenueCents: 4_504_900, todayEntries: 33, lastWeekSameTimeEntries: 35, todayBookings: 7, activeMembers: 101 },
@@ -133,6 +148,55 @@ function sampleMembers(today: DateKey): Pick<MockDb, 'members' | 'referrals' | '
     referrals.push({ id: `r-${i}`, fromMemberId: from, createdOn, claimedByMemberId, usedOn });
   }
   return { members, referrals, cards };
+}
+
+/** 示例订单：三家店最近 70 天，每天几笔，渠道和品类照原型的比例大致铺开；再放几笔退款 */
+function sampleOrders(today: DateKey): Pick<MockDb, 'orders' | 'refunds'> {
+  let seed = 11;
+  const rand = (n: number) => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed % n;
+  };
+  const storeIds = ['bingang', 'huiju', 'huanqiu'];
+  const items: [string, RevenueCategory, number][] = [
+    ['月卡', 'period', 59_900], ['季卡', 'period', 159_900], ['年卡', 'period', 499_900],
+    ['10 次卡', 'count', 128_000], ['20 次卡', 'count', 229_900],
+    ['单次票', 'single', 9_900], ['私教 5 节', 'pt', 199_900], ['私教单节', 'pt', 41_000],
+    ['团课 10 次', 'class', 98_000], ['团课单节', 'class', 12_800], ['夜攀活动', 'event', 12_000],
+  ];
+  const orders: MockOrder[] = [];
+  let n = 0;
+  for (let d = -70; d <= 0; d++) {
+    const on = addDays(today, d);
+    for (const storeId of storeIds) {
+      for (let k = rand(5); k > 0; k--) {
+        const [productName, category, amountCents] = items[rand(items.length)];
+        // 美团只卖单次票；线下单在前台收；其余走微信
+        const r = rand(100);
+        const channel = category === 'single' && r < 60 ? 'meituan' : r < 78 ? 'wechat' : r < 88 ? 'desk_pos' : r < 95 ? 'desk_cash' : 'desk_transfer';
+        orders.push({ id: `o-${++n}`, storeId, memberId: `m-old-${rand(30)}`, productName, channel, category, amountCents, paidOn: on });
+      }
+    }
+  }
+  // 一笔没付款的、一笔青橙导入的，都不算营收
+  orders.push({ id: 'o-pending', storeId: 'bingang', memberId: 'm-old-0', productName: '月卡', channel: 'wechat', category: 'period', amountCents: 59_900, paidOn: null });
+  orders.push({ id: 'o-legacy', storeId: 'bingang', memberId: 'm-old-1', productName: '20 次卡', channel: 'legacy', category: 'count', amountCents: 229_900, paidOn: addDays(today, -3) });
+
+  const refunds: MockRefund[] = [];
+  const refundable = orders.filter(o => o.paidOn && o.channel !== 'legacy' && o.category !== 'single');
+  for (let i = 0; i < 8; i++) {
+    const o = refundable[Math.floor((refundable.length * (i + 0.5)) / 8)]; // 每笔退不同的订单
+    const after = addDays(o.paidOn!, 1 + rand(10));
+    refunds.push({
+      id: `rf-${i + 1}`,
+      orderId: o.id,
+      // 一半全退，一半退一部分（用过一部分的次卡，金额手填）
+      amountCents: i % 2 ? o.amountCents : Math.round(o.amountCents / 2),
+      refundedOn: i === 7 ? null : after > today ? today : after, // 最后一笔还在处理中
+      reason: i % 2 ? '买错了，没用过' : '搬家了，退剩下的次数',
+    });
+  }
+  return { orders, refunds };
 }
 
 const SURNAMES = ['林', '陈', '王', '赵', '周', '吴', '郑', '孙', '李', '何', '许', '高', '宋', '唐', '韩', '曹', '彭', '苏'];

@@ -184,3 +184,62 @@ describe('后台 mock', () => {
     expect((await api.dashboard({ store: 'bingang' })).stores).toBeNull();
   });
 });
+
+describe('后台 mock：财务', () => {
+  const range = { from: '2026-10-01', to: '2026-10-21' };
+  const sum = (rows: { grossCents: number; refundCents: number }[], k: 'grossCents' | 'refundCents') => rows.reduce((n, r) => n + r[k], 0);
+
+  it('合计 = 渠道分项之和 = 品类分项之和，净收入 = 营收 − 退款', async () => {
+    const { api, login } = setup();
+    await login('13800000001');
+    const f = await api.finance(range);
+    expect(f.grossCents).toBeGreaterThan(0);
+    expect(f.refundCents).toBeGreaterThan(0);
+    for (const rows of [f.byChannel, f.byCategory]) {
+      expect(sum(rows, 'grossCents')).toBe(f.grossCents);
+      expect(sum(rows, 'refundCents')).toBe(f.refundCents);
+    }
+    expect(f.netCents).toBe(f.grossCents - f.refundCents);
+    expect(f.refunds.reduce((n, r) => n + r.amountCents, 0)).toBe(f.refundCents);
+    expect(f.byChannel.find(b => b.key === 'meituan')!.grossCents).toBeGreaterThan(0);
+  });
+
+  it('全部门店 = 各店相加', async () => {
+    const { api, login } = setup();
+    await login('13800000001');
+    const all = await api.finance(range);
+    const each = await Promise.all(['bingang', 'huiju', 'huanqiu'].map(store => api.finance({ ...range, store })));
+    expect(each.reduce((n, f) => n + f.grossCents, 0)).toBe(all.grossCents);
+    expect(each.reduce((n, f) => n + f.refundCents, 0)).toBe(all.refundCents);
+  });
+
+  it('跟数据库里的订单对得上：没付款、青橙导入、范围外的不算', async () => {
+    const { api, login, db } = setup();
+    await login('13800000001');
+    db.orders = [
+      { id: 'a', storeId: 'bingang', memberId: 'm-old-0', productName: '月卡', channel: 'wechat', category: 'period', amountCents: 59_900, paidOn: '2026-10-01' },
+      { id: 'b', storeId: 'bingang', memberId: 'm-old-0', productName: '10 次卡', channel: 'desk_cash', category: 'count', amountCents: 128_000, paidOn: '2026-10-21' },
+      { id: 'c', storeId: 'bingang', memberId: 'm-old-0', productName: '月卡', channel: 'wechat', category: 'period', amountCents: 59_900, paidOn: null },
+      { id: 'd', storeId: 'bingang', memberId: 'm-old-0', productName: '20 次卡', channel: 'legacy', category: 'count', amountCents: 229_900, paidOn: '2026-10-02' },
+      { id: 'e', storeId: 'bingang', memberId: 'm-old-0', productName: '单次票', channel: 'meituan', category: 'single', amountCents: 9_900, paidOn: '2026-09-30' },
+    ];
+    db.refunds = [
+      { id: 'r1', orderId: 'b', amountCents: 64_000, refundedOn: '2026-10-21', reason: '退一半' },
+      { id: 'r2', orderId: 'e', amountCents: 9_900, refundedOn: '2026-10-01', reason: '没来' },
+    ];
+    const f = await api.finance({ ...range, store: 'bingang' });
+    expect(f).toMatchObject({ grossCents: 187_900, refundCents: 73_900, netCents: 114_000 });
+    expect(f.refunds.map(r => [r.refundId, r.channel, r.productName])).toEqual([['r1', 'desk_cash', '10 次卡'], ['r2', 'meituan', '单次票']]);
+  });
+
+  it('前台看不了；店长只能看自己的店；日期不对返回 400', async () => {
+    const { api, login } = setup();
+    await login('13800000003');
+    expect(await status(api.finance({ ...range, store: 'bingang' }))).toBe(403);
+    await login('13800000002');
+    expect(await status(api.finance({ ...range, store: 'bingang' }))).toBe(200);
+    expect(await status(api.finance({ ...range, store: 'huiju' }))).toBe(403);
+    expect(await status(api.finance(range))).toBe(403);
+    expect(await status(api.finance({ from: '2026-10-21', to: '2026-10-01', store: 'bingang' }))).toBe(400);
+  });
+});

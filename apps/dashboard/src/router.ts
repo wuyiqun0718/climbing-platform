@@ -19,6 +19,12 @@ export const NAV: readonly { path: string; name: PageKey; label: string }[] = [
 /** 这个角色能看到的导航 */
 export const navFor = (role: StaffRole) => NAV.filter(n => canSeePage(role, n.name));
 
+/** 已经做好的页面，其余先显示 TodoPage */
+const PAGES: Partial<Record<PageKey, () => Promise<unknown>>> = {
+  dashboard: () => import('./pages/DashboardPage.vue'),
+  finance: () => import('./pages/FinancePage.vue'),
+};
+
 declare module 'vue-router' {
   interface RouteMeta {
     label?: string;
@@ -37,7 +43,7 @@ export const router = createRouter({
       path: n.path,
       name: n.name,
       meta: { label: n.label, page: n.name },
-      component: n.name === 'dashboard' ? () => import('./pages/DashboardPage.vue') : () => import('./pages/TodoPage.vue'),
+      component: PAGES[n.name] ?? (() => import('./pages/TodoPage.vue')),
     })),
     // 会员详情（任务 11 再做页面），看板「7 天内到期」点进来
     { path: '/members/:id', name: 'member', meta: { label: '会员详情', page: 'members' as const }, component: () => import('./pages/TodoPage.vue') },

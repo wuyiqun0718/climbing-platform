@@ -1,3 +1,4 @@
+import type { RevenueBucket, RevenueCategory, RevenueChannel } from '@climb/core';
 import type { Cents, DateKey } from '@climb/utils';
 import { createHttp, type ClientOptions } from './client';
 
@@ -110,6 +111,58 @@ export interface ReferralFunnel {
   bought: number;
 }
 
+/**
+ * 财务页：按日期范围（含两头）、门店看营收和退款。口径见 @climb/core 的 summarizeRevenue
+ * （营收按收款日、退款按退款成功日单列、青橙导入的不算，等馆方确认）。
+ * 合计 = byChannel 之和 = byCategory 之和。只有 owner / manager 能看，只管部分门店的必须指定门店。
+ */
+export interface FinanceSummary {
+  storeId: string | null;
+  from: DateKey;
+  to: DateKey;
+  grossCents: Cents;
+  refundCents: Cents;
+  netCents: Cents;
+  byChannel: RevenueBucket<RevenueChannel>[];
+  byCategory: RevenueBucket<RevenueCategory>[];
+  /** 区间内退款成功的退款单，按退款日期倒序 */
+  refunds: FinanceRefundRow[];
+}
+
+export interface FinanceRefundRow {
+  refundId: string;
+  orderId: string;
+  memberId: string;
+  memberName: string;
+  storeId: string;
+  channel: RevenueChannel;
+  category: RevenueCategory;
+  /** 订单快照里的商品名 */
+  productName: string;
+  /** 原订单实付 */
+  orderAmountCents: Cents;
+  amountCents: Cents;
+  refundedOn: DateKey;
+  reason: string;
+}
+
+export const CHANNEL_TEXT: Record<RevenueChannel, string> = {
+  wechat: '微信支付',
+  desk_cash: '现金',
+  desk_pos: 'POS',
+  desk_transfer: '转账',
+  meituan: '美团、点评',
+};
+
+export const REVENUE_CATEGORY_TEXT: Record<RevenueCategory, string> = {
+  period: '期限卡',
+  count: '次卡',
+  single: '单次票',
+  pt: '私教',
+  class: '团课',
+  event: '活动',
+};
+
 export function createAdminApi(opts: ClientOptions) {
   const http = createHttp(opts);
   return {
@@ -122,6 +175,10 @@ export function createAdminApi(opts: ClientOptions) {
     },
     dashboard: (q: { store?: string } = {}) =>
       http<DashboardSummary>('GET', q.store ? `/admin/dashboard?store=${encodeURIComponent(q.store)}` : '/admin/dashboard'),
+    finance: (q: { from: DateKey; to: DateKey; store?: string }) => {
+      const store = q.store ? `&store=${encodeURIComponent(q.store)}` : '';
+      return http<FinanceSummary>('GET', `/admin/finance?from=${encodeURIComponent(q.from)}&to=${encodeURIComponent(q.to)}${store}`);
+    },
   };
 }
 
