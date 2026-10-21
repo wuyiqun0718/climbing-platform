@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, addMonths, daysBetween, endOfMonth, formatDotTime, formatYuan, formatYuanCompact, maskPhone } from './index';
+import { addDays, addMonths, isDateKey, daysBetween, endOfMonth, formatDotTime, formatYuan, formatYuanCompact, maskPhone } from './index';
 
 describe('date', () => {
+  it('合法日期：格式对且真实存在', () => {
+    expect(isDateKey('2026-10-21')).toBe(true);
+    expect(isDateKey('2028-02-29')).toBe(true);
+    expect(['2026-02-30', '2026-1-1', '2026/10/21', '', null, 20261021].map(isDateKey)).toEqual([false, false, false, false, false, false]);
+  });
+
   it('跨月加减天数', () => {
     expect(addDays('2026-10-31', 1)).toBe('2026-11-01');
     expect(addDays('2026-03-01', -1)).toBe('2026-02-28');

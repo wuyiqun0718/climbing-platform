@@ -1,5 +1,5 @@
 import { MEMBER_SOURCES, type DeskCheckInResult, type DeskOrderResult, type RefundResult, type EntryMethod, type VoidCheckInResult, type MemberSource, type Staff, type Store } from '@climb/api';
-import { REFUND_METHOD_BY_CHANNEL, defaultRules, type Card, type RefundMethod, type RefundStatus, type InsurancePolicy, type CountCard, type GymRules, type LedgerEntry, type Product, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
+import { REFUND_METHOD_BY_CHANNEL, defaultRules, insuranceForEntry, newPolicy, type Card, type RefundMethod, type RefundStatus, type InsurancePolicy, type CountCard, type GymRules, type LedgerEntry, type Product, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
 import { addDays, addMonths, daysBetween, monthOf, type DateKey } from '@climb/utils';
 
 /** 会员（对应 members 表），目前放了看板「新客从哪来」和会员列表用到的字段 */
@@ -33,6 +33,8 @@ export interface MockCheckIn {
   deducted: number;
   method: EntryMethod;
   voided: boolean;
+  /** 这次入场的保单（当天第一次入场投的，或同日再次入场沿用的），对应 check_ins.policy_id；没有保单记录的为 null */
+  policyId: string | null;
   /** 撤销的才有（对应 voided_at、voided_by_staff_id、void_reason） */
   void: { at: string; staffId: string; reason: string } | null;
 }
@@ -96,7 +98,7 @@ export interface MockDb {
   refunds: MockRefund[];
   /** 入场记录：每个到过店的会员最近几次；次卡扣的次数记在 ledger 里，跟卡上的剩余对得上 */
   checkIns: MockCheckIn[];
-  /** 入场保单（对应 insurance_policies），一人一天一张；示例入场记录没有配保单，只有 mock 里新登记的入场才有 */
+  /** 入场保单（对应 insurance_policies），一人一天一张；示例入场记录按 @climb/core 的 insuranceForEntry 配好（以前的已投保，撤销的那条已退保） */
   policies: InsurancePolicy[];
   /** 卡流水（对应 card_ledger），按写入顺序；改卡的地方都要在这里追加一笔 */
   ledger: LedgerEntry[];
@@ -130,7 +132,6 @@ export function createMockDb(today: DateKey, rules: GymRules = defaultRules): Mo
     deskCheckInRequests: {},
     checkInVoids: {},
     refundRequests: {},
-    policies: [],
     waiverVersion: '2026-01',
     storeStats: {
       bingang: { monthRevenueCents: 6_194_200, todayEntries: 45, lastWeekSameTimeEntries: 41, todayBookings: 9, activeMembers: 138 },
@@ -250,7 +251,7 @@ function newcomerCountCards(members: SeedMember[]): CountCard[] {
  * 用当天能用的卡（期限卡优先，其次次卡），没有就记单次票（美团来的记美团券）；
  * 大约十分之一是前台登记，有一条撤销了的（撤销的那条不是最晚的那次，lastEntryOn 不受影响）。
  */
-function withCheckIns<T extends Pick<MockDb, 'members' | 'cards'>>(data: T, staff: MockDb['staff'], today: DateKey): T & Pick<MockDb, 'checkIns'> {
+function withCheckIns<T extends Pick<MockDb, 'members' | 'cards'>>(data: T, staff: MockDb['staff'], today: DateKey): T & Pick<MockDb, 'checkIns' | 'policies'> {
   let seed = 31;
   const rand = (n: number) => {
     seed = (seed * 1103515245 + 12345) % 2147483648;
@@ -279,6 +280,7 @@ function withCheckIns<T extends Pick<MockDb, 'members' | 'cards'>>(data: T, staf
         deducted: card?.kind === 'count' ? 1 : 0,
         method: rand(10) === 0 ? 'desk' : 'scan',
         voided: false,
+        policyId: null,
         void: null,
       });
     }
@@ -290,7 +292,16 @@ function withCheckIns<T extends Pick<MockDb, 'members' | 'cards'>>(data: T, staf
     twice.voided = true;
     twice.void = { at: `${twice.on}T22:00:00+08:00`, staffId: desk, reason: '扫错了卡' };
   }
-  return { ...data, checkIns };
+  // 保单：一人一天一张，以前的都投保成功、今天的还在投保中；撤销的那条当天没有别的入场，保单已退保
+  const policies: InsurancePolicy[] = [];
+  for (const c of checkIns) {
+    const ins = insuranceForEntry(policies, c.memberId, c.on);
+    const policy = ins.policy ?? { ...newPolicy({ id: `ip-${policies.length + 1}`, memberId: c.memberId, storeId: c.storeId, on: c.on, checkInId: c.id }), status: c.on < today ? 'insured' as const : 'pending' as const };
+    if (ins.needed) policies.push(policy);
+    c.policyId = policy.id;
+    if (c.voided) policy.status = 'refunded';
+  }
+  return { ...data, checkIns, policies };
 }
 
 /**

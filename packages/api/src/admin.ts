@@ -269,8 +269,34 @@ export interface MemberEntryRow {
   deducted: number;
   method: EntryMethod;
   voided: boolean;
+  /** 这次入场的保单（core 的 entryPolicy：按入场记录上的 policyId，同日再次入场沿用当天那张）；没有保单记录的（上线前、导入的）为 null */
+  insurance: EntryInsurance | null;
   /** 撤销的才有：撤销时间（ISO 8601 带时区）、撤销人、原因；没撤销为 null */
   voidInfo: { at: string; byName: string; reason: string } | null;
+}
+
+/** 入场记录上的保单和它现在的状态（投保中、已投保、待退保……，文字见 core 的 POLICY_STATUS_TEXT） */
+export interface EntryInsurance {
+  policyId: string;
+  status: PolicyStatus;
+}
+
+/**
+ * 入场记录 GET /admin/check-ins?date=&store=（任务 20）：某一天、某家店（不带 store 是全部门店）的入场，扫码和前台登记的都有，撤销的也列出来。
+ * - date 是 YYYY-MM-DD，不带是今天；格式不对 400（data.field = date）。
+ * - 门店口径同财务页：没有这家店 404；只管部分门店的员工必须带自己的店，看别的店或全部门店 403。按入场的门店算（卡三店通用）。
+ * - 按入场先后倒序（后入场的在前）。一天几百条以内，先不分页。
+ * 撤销用 POST /admin/check-ins/:id/void（任务 16，前台也能），撤完重新拉这个列表。
+ */
+export interface CheckInList {
+  storeId: string | null;
+  date: DateKey;
+  items: CheckInListRow[];
+}
+
+export interface CheckInListRow extends MemberEntryRow {
+  memberId: string;
+  memberName: string;
 }
 
 /**
@@ -596,6 +622,13 @@ export function createAdminApi(opts: ClientOptions) {
       refund: (id: string, body: RefundBody) => http<RefundResult>('POST', `/admin/orders/${encodeURIComponent(id)}/refund`, body),
     },
     checkIns: {
+      list: (q: { date?: DateKey; store?: string } = {}) => {
+        const qs = new URLSearchParams();
+        if (q.date) qs.set('date', q.date);
+        if (q.store) qs.set('store', q.store);
+        const s = qs.toString();
+        return http<CheckInList>('GET', s ? `/admin/check-ins?${s}` : '/admin/check-ins');
+      },
       preview: (body: CheckInPreviewBody) => http<CheckInPreview>('POST', '/admin/check-ins/preview', body),
       create: (body: CreateDeskCheckInBody) => http<DeskCheckInResult>('POST', '/admin/check-ins', body),
       void: (id: string, body: VoidCheckInBody) => http<VoidCheckInResult>('POST', `/admin/check-ins/${encodeURIComponent(id)}/void`, body),

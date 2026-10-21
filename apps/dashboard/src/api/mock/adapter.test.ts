@@ -20,6 +20,9 @@ const member = (id: string, source: M['source'], store: string, firstVisitOn: st
   id, name: `会员${id}`, phone: '', source, homeStoreId: store, firstVisitOn, firstVisitStoreId: store, firstCardOn, lastEntryOn: null, waiverSignedOn: null,
 });
 
+/** 某个会员的保单（示例数据里别人也有保单） */
+const policiesOf = (db: MockDb, memberId: string) => db.policies.filter(p => p.memberId === memberId);
+
 const status = (p: Promise<unknown>) => p.then(() => 200, (e: ApiError) => e.status);
 
 describe('后台 mock', () => {
@@ -578,30 +581,30 @@ describe('后台 mock：手动登记入场', () => {
     expect((await api.checkIns.preview({ memberId: m.id, storeId: 'bingang' })).insurance).toEqual({ needed: true, policyId: null, status: null });
     const first = await api.checkIns.create(body());
     expect(first.insurance).toMatchObject({ needed: true, status: 'pending' });
-    expect(db.policies).toEqual([{ id: first.insurance.policyId, memberId: m.id, storeId: 'bingang', on: '2026-10-21', checkInId: first.checkIn.id, status: 'pending' }]);
+    expect(policiesOf(db, m.id)).toEqual([{ id: first.insurance.policyId, memberId: m.id, storeId: 'bingang', on: '2026-10-21', checkInId: first.checkIn.id, status: 'pending' }]);
 
     expect((await api.checkIns.preview({ memberId: m.id, storeId: 'bingang' })).insurance).toEqual({ needed: false, policyId: first.insurance.policyId, status: 'pending' });
     const second = await api.checkIns.create(body({ requestId: 'ci-req-2' }));
     expect(second.insurance).toEqual({ needed: false, policyId: first.insurance.policyId, status: 'pending' });
-    expect(db.policies).toHaveLength(1);
+    expect(policiesOf(db, m.id)).toHaveLength(1);
   });
 
   it('保险：同一个幂等键重复提交不重复投保', async () => {
     const { api, db, body } = await withCard();
     await api.checkIns.create(body());
     await api.checkIns.create(body());
-    expect(db.policies).toHaveLength(1);
+    expect(policiesOf(db, body().memberId)).toHaveLength(1);
   });
 
   it('保险：今天的保单待退保（撤销入场后）再入场新投一张', async () => {
     const { api, db, body } = await withCard();
     const first = await api.checkIns.create(body());
     db.checkIns.find(c => c.id === first.checkIn.id)!.voided = true;
-    db.policies[0]!.status = 'refund_pending';
+    db.policies.find(p => p.id === first.insurance.policyId)!.status = 'refund_pending';
     const again = await api.checkIns.create(body({ requestId: 'ci-req-2' }));
     expect(again).toMatchObject({ reentry: false, insurance: { needed: true, status: 'pending' } });
     expect(again.insurance.policyId).not.toBe(first.insurance.policyId);
-    expect(db.policies.map(p => p.checkInId)).toEqual([first.checkIn.id, again.checkIn.id]);
+    expect(policiesOf(db, body().memberId).map(p => p.checkInId)).toEqual([first.checkIn.id, again.checkIn.id]);
   });
 
   it('冻结的卡 422；别人的卡、没这个会员、没这家店 404；别的店 403；没有 requestId 400', async () => {
@@ -663,7 +666,7 @@ describe('后台 mock：撤销入场', () => {
     });
     expect(db.checkIns.find(c => c.id === third.checkIn.id)!.deducted).toBe(1);
     expect(db.ledger.at(-1)).toMatchObject({ cardId: card.id, reason: 'check_in_void', delta: 0, remainingAfter: 9 });
-    expect(db.policies).toHaveLength(1);
+    expect(policiesOf(db, m.id)).toHaveLength(1);
     expect(db.members.find(x => x.id === m.id)!.lastEntryOn).toBe('2026-10-21');
     expect(ledgerMismatch(db.cards.find(c => c.id === card.id)!, db.ledger)).toBeNull();
     // 转过去的那次再撤销，当天没有别的入场了，才退回
@@ -682,11 +685,11 @@ describe('后台 mock：撤销入场', () => {
   });
 
   it('撤销后再入场：重新扣次、新投保单', async () => {
-    const { api, db, enter, first } = await entered();
+    const { api, db, m, enter, first } = await entered();
     await api.checkIns.void(first.checkIn.id, { reason: '扫错了卡' });
     const again = await enter('ci-req-2');
     expect(again).toMatchObject({ deducted: 1, reentry: false, insurance: { needed: true, status: 'pending' } });
-    expect(db.policies.map(p => p.status)).toEqual(['refund_pending', 'pending']);
+    expect(policiesOf(db, m.id).map(p => p.status)).toEqual(['refund_pending', 'pending']);
   });
 
   it('体验券撤销后恢复成没用过，老带新记录也清掉到店日', async () => {
@@ -985,5 +988,66 @@ describe('后台 mock：卡种与价格', () => {
     expect(await bad(api.products.update('p-30', { priceCents: 0 }))).toBe('priceCents');
     expect(await bad(api.products.create({ ...half, name: '季卡' }))).toBe('name');
     expect(await bad(api.products.create({ ...half, days: undefined }))).toBe('days');
+  });
+});
+
+describe('后台 mock：入场记录', () => {
+  it('按日期、门店列出，后入场的在前；带会员名、卡、扣次、方式、保单', async () => {
+    const { api, login, db } = setup();
+    await login('13800000003');
+    const m = await api.members.create({ phone: '13912345678', name: '来爬的人', source: 'walkin', storeId: 'bingang' });
+    const { card } = await api.orders.create({ requestId: 'o1', memberId: m.id, productId: 'p-10x', storeId: 'bingang', channel: 'desk_cash', amountCents: 128_000, priceReason: '' });
+    const first = await api.checkIns.create({ requestId: 'c1', memberId: m.id, storeId: 'bingang', cardId: card.id });
+    const again = await api.checkIns.create({ requestId: 'c2', memberId: m.id, storeId: 'bingang', cardId: card.id });
+
+    const list = await api.checkIns.list({ date: '2026-10-21', store: 'bingang' });
+    expect(list).toMatchObject({ storeId: 'bingang', date: '2026-10-21' });
+    expect(list.items.slice(0, 2).map(r => r.id)).toEqual([again.checkIn.id, first.checkIn.id]);
+    expect(list.items[1]).toMatchObject({ memberId: m.id, memberName: '来爬的人', cardName: '10 次卡', deducted: 1, method: 'desk', voided: false, insurance: { policyId: first.insurance.policyId, status: 'pending' } });
+    // 同日再次入场沿用当天那张保单
+    expect(list.items[0]).toMatchObject({ deducted: 0, insurance: { policyId: first.insurance.policyId } });
+    expect(list.items.every(r => r.on === '2026-10-21' && r.storeId === 'bingang')).toBe(true);
+    const expected = db.checkIns.filter(c => c.on === '2026-10-21' && c.storeId === 'bingang').length;
+    expect(list.items).toHaveLength(expected);
+    // 不带日期是今天
+    expect((await api.checkIns.list({ store: 'bingang' })).items).toHaveLength(expected);
+  });
+
+  it('门店：只管部分门店的必须带自己的店；能看全部的不带就是全部门店', async () => {
+    const { api, login, db } = setup();
+    await login('13800000003');
+    expect(await status(api.checkIns.list({ date: '2026-10-21' }))).toBe(403);
+    expect(await status(api.checkIns.list({ date: '2026-10-21', store: 'huiju' }))).toBe(403);
+    expect(await status(api.checkIns.list({ date: '2026-10-21', store: 'nope' }))).toBe(404);
+    expect(await status(api.checkIns.list({ date: '2026-02-30', store: 'bingang' }))).toBe(400);
+    await login('13800000001');
+    // 找一天有两家店以上入场的
+    const day = db.checkIns.find(c => db.checkIns.some(o => o.on === c.on && o.storeId !== c.storeId))!.on;
+    const all = await api.checkIns.list({ date: day });
+    expect(all.storeId).toBeNull();
+    expect(new Set(all.items.map(r => r.storeId)).size).toBeGreaterThan(1);
+    expect(all.items).toHaveLength(db.checkIns.filter(c => c.on === day).length);
+  });
+
+  it('示例数据：每条入场都有保单，以前的已投保；撤销的那条有标记，保单已退保', async () => {
+    const { api, login, db } = setup();
+    await login('13800000001');
+    const voided = db.checkIns.find(c => c.voided)!;
+    const row = (await api.checkIns.list({ date: voided.on })).items.find(r => r.id === voided.id)!;
+    expect(row).toMatchObject({ voided: true, voidInfo: { reason: '扫错了卡' }, insurance: { status: 'refunded' } });
+    expect(db.checkIns.every(c => c.policyId)).toBe(true);
+    const past = db.checkIns.find(c => !c.voided && c.on < '2026-10-21')!;
+    expect((await api.checkIns.list({ date: past.on })).items.find(r => r.id === past.id)!.insurance).toMatchObject({ status: 'insured' });
+  });
+
+  it('在列表里撤销走撤销入场接口（前台也能），撤完列表里有标记，保单待退保', async () => {
+    const { api, login } = setup();
+    await login('13800000003');
+    const m = await api.members.create({ phone: '13912345678', name: '扫错的人', source: 'walkin', storeId: 'bingang' });
+    const { card } = await api.orders.create({ requestId: 'o1', memberId: m.id, productId: 'p-10x', storeId: 'bingang', channel: 'desk_cash', amountCents: 128_000, priceReason: '' });
+    const ci = await api.checkIns.create({ requestId: 'c1', memberId: m.id, storeId: 'bingang', cardId: card.id });
+    await api.checkIns.void(ci.checkIn.id, { reason: '扫错了卡' });
+    const row = (await api.checkIns.list({ store: 'bingang' })).items.find(r => r.id === ci.checkIn.id)!;
+    expect(row).toMatchObject({ voided: true, voidInfo: { byName: '前台小葵', reason: '扫错了卡' }, insurance: { status: 'refund_pending' } });
   });
 });

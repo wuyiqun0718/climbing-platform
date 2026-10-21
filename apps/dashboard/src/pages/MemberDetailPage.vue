@@ -6,6 +6,7 @@ import { formatDot, formatYuan, toDateKey } from '@climb/utils';
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from '../api';
+import { entryInsuranceText, voidMessage, voidResultText, voidText } from '../components/checkInVoid';
 import CardAdjustModal, { type CardAdjustMode } from '../components/CardAdjustModal.vue';
 import CardLedgerDrawer from '../components/CardLedgerDrawer.vue';
 import DeskCheckInModal from '../components/DeskCheckInModal.vue';
@@ -65,13 +66,13 @@ const orderColumns: Column<MemberOrderRow>[] = [
   { key: 'status', label: '状态', format: r => ORDER_STATUS_TEXT[r.status] },
 ];
 
-const voidText = (r: MemberEntryRow) => (r.voidInfo ? `已撤销（${r.voidInfo.byName}：${r.voidInfo.reason}）` : r.voided ? '已撤销' : '');
 const entryColumns: Column<MemberEntryRow>[] = [
   { key: 'on', label: '日期', format: r => formatDot(r.on) },
   { key: 'storeId', label: '门店', format: r => storeName(r.storeId) },
   { key: 'cardName', label: '用的卡' },
   { key: 'deducted', label: '扣次', num: true, format: r => (r.deducted ? `${r.deducted} 次` : '不扣') },
   { key: 'method', label: '方式', format: r => ENTRY_METHOD_TEXT[r.method] },
+  { key: 'insurance', label: '保险', format: entryInsuranceText },
   { key: 'voided', label: '', format: r => voidText(r) },
 ];
 
@@ -99,21 +100,9 @@ let lastVoid: VoidCheckInResult | null = null;
 const voidAction = (r: MemberEntryRow) => async (reason: string) => {
   lastVoid = await api.checkIns.void(r.id, { reason });
 };
-const voidMessage = (r: MemberEntryRow) =>
-  r.deducted
-    ? `${r.cardName}会退回 ${r.deducted} 次；同一天还有免扣次的入场的话，扣次转到那次，不退。`
-    : r.cardId
-      ? '这次没扣次，撤销不退次数。'
-      : '这次没用卡。';
 function onVoided() {
-  const r = lastVoid;
-  if (!r) return;
-  const parts = ['已撤销'];
-  if (r.moved) parts.push(`同一天还有一次入场，扣次转到那次${r.moved.card ? `（${r.moved.card.name}）` : ''}`);
-  if (r.restored) parts.push(`${r.card?.name ?? ''}退回 ${r.restored} 次`);
-  if (r.voucherRestored) parts.push('体验券恢复可用');
-  if (r.insurance?.status === 'refund_pending') parts.push('保单待退保');
-  toast.success(parts.join('，'));
+  if (!lastVoid) return;
+  toast.success(voidResultText(lastVoid));
   load();
 }
 

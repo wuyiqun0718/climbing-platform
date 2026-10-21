@@ -154,11 +154,12 @@
 - 完成标准：下架的卡种在小程序接口 `GET /products` 里消失（mock 共用一份数据）。
 - 补（2026-10-21）：规则在 core 的 `product.ts`，等馆方的占位（名称、卖点、标价、天数、次数、有效月数的上限）集中在文件开头：`newProductErrors` / `productPatchErrors` / `buildProduct` / `applyProductPatch`；品类和规格（天数、次数、有效月数）建好不能改，要换就新建、旧的下架；在售的不能重名；`productBlockedBy`（下架的不能买，前台开卡改用它）；`sortProducts`（按组 期限卡、次卡、单次票、私教、团课，组内按新加的 `Product.sort`，再按标价）、`productsForSale`（小程序 `GET /products`）。`shop.ts` 从小程序分支原样拷过来（单次票 = 1 次的次卡），小程序的 `groupProducts` 组内还是按价格排，合并后改用 `sortProducts`。权限新加 `product.price`（改价、新建都要，占位店长以上），别的改动是 `product.edit`。mock 加了不用登录的 `GET /products` 读同一份 `db.products`，小程序 mock 合并后要读同一份。已有订单和卡本来就存下单时的商品名、品类、标价，开好的卡不看卡种，所以改价、改名不影响；mock 单测覆盖。操作日志等 23。
 
-**20. 入场记录**
+**20. 入场记录** ✅
 - 依赖：4、3
 - 涉及文件：`src/pages/EntriesPage.vue`、契约 `GET /admin/check-ins?date=&store=`、mock
 - 内容：按日期、门店看；每条显示会员、卡、扣次、方式（扫码/前台登记）、是否投保、是否撤销；入口能撤销（16，前台也能）。
 - 完成标准：跟门店切换联动；撤销的记录有标记。
+- 补（2026-10-21）：入场记录加 `policyId`（跟小程序分支的 `insuranceHistory.ts` 一样，按入场记录上的保单挂，不按日期猜），core 的 `insurance.ts` 加 `entryPolicy`；入场行（会员详情、入场记录、登记和撤销结果）都多了 `insurance: { policyId, status } | null`，没有保单记录的（上线前、导入的）为 null。示例入场按 `insuranceForEntry` 配了保单（以前的已投保，撤销的那条已退保）。门店口径同财务页（`storeScope`：只管部分门店的必须带自己的店）；`date` 不带是今天，用 utils 新加的 `isDateKey` 校验。撤销直接调 16 的接口，页面文字抽到 `components/checkInVoid.ts`，会员详情和入场记录页共用。先不分页；记录里没有入场时间，同一天按写入先后倒序（真后端按 `created_at`）。
 
 **21. 分享记录**
 - 依赖：4

@@ -8,6 +8,8 @@ import {
   type CardChangeResult,
   type CardLedger,
   type CardLedgerRow,
+  type CheckInList,
+  type CheckInListRow,
   type CheckInPreview,
   type CreateDeskCheckInBody,
   type CreateDeskOrderBody,
@@ -69,6 +71,7 @@ import {
   checkInVoidLedgerEntry,
   voidCheckIn,
   insuranceForEntry,
+  entryPolicy,
   newPolicy,
   countsAsCardPurchase,
   deskOrderErrors,
@@ -98,7 +101,7 @@ import {
   type PeriodCard,
   type RevenueChannel,
 } from '@climb/core';
-import { addDays, formatYuan, maskPhone, monthOf } from '@climb/utils';
+import { addDays, formatYuan, isDateKey, maskPhone, monthOf } from '@climb/utils';
 import { MEMBERS_VISIBLE_ACROSS_STORES, canDo, canSeePage, canSeeStore } from '../../permissions';
 import type { MockCheckIn, MockDb, MockMember, MockOrder } from './db';
 
@@ -286,9 +289,30 @@ function createMember(db: MockDb, staff: Staff, body: Partial<CreateMemberBody> 
   return memberDetail(db, staff, m.id);
 }
 
-/** 会员详情、登记和撤销结果里的入场行：撤销人换成员工名字 */
-function entryRow(db: MockDb, { memberId: _m, void: v, ...c }: MockCheckIn): MemberEntryRow {
-  return { ...c, voidInfo: v ? { at: v.at, byName: db.staff.find(s => s.id === v.staffId)?.name ?? '', reason: v.reason } : null };
+/** 会员详情、入场记录、登记和撤销结果里的入场行：撤销人换成员工名字，保单按 @climb/core 的 entryPolicy */
+function entryRow(db: MockDb, { memberId: _m, void: v, policyId, ...c }: MockCheckIn): MemberEntryRow {
+  const policy = entryPolicy(db.policies, { policyId });
+  return {
+    ...c,
+    insurance: policy ? { policyId: policy.id, status: policy.status } : null,
+    voidInfo: v ? { at: v.at, byName: db.staff.find(s => s.id === v.staffId)?.name ?? '', reason: v.reason } : null,
+  };
+}
+
+/** 入场记录：口径见 @climb/api 的 CheckInList */
+function checkInList(db: MockDb, staff: Staff, date: string | null, storeId: string | null): ApiResponse {
+  const on = date ?? db.today;
+  if (!isDateKey(on)) return badInput('date', '日期格式不对');
+  const scope = storeScope(db, staff, storeId);
+  if (!Array.isArray(scope)) return scope;
+  const names = new Map(db.members.map(m => [m.id, m.name]));
+  const items = db.checkIns
+    .map((c, i) => ({ c, i }))
+    .filter(({ c }) => c.on === on && scope.includes(c.storeId))
+    .sort((a, b) => b.i - a.i)
+    .map(({ c }): CheckInListRow => ({ ...entryRow(db, c), memberId: c.memberId, memberName: names.get(c.memberId) ?? '' }));
+  const res: CheckInList = { storeId, date: on, items };
+  return ok(res);
 }
 
 /** 会员详情、开卡、退款结果里的订单行；已退和状态只算退成功的 */
@@ -456,10 +480,12 @@ function createDeskCheckIn(db: MockDb, staff: Staff, body: Partial<CreateDeskChe
     deducted,
     method: 'desk',
     voided: false,
+    policyId: null,
     void: null,
   };
   const ins = insuranceForEntry(db.policies, m.id, db.today);
   const policy = ins.policy ?? newPolicy({ id: nextId('ip-', db.policies), memberId: m.id, storeId: args.storeId, on: db.today, checkInId: checkIn.id });
+  checkIn.policyId = policy.id;
   const entry = checkInLedgerEntry({ id: nextId('l-', db.ledger), card, deducted, at: nowAt(db), checkInId: checkIn.id, operator: { operatorType: 'staff', operatorId: staff.id } });
 
   db.checkIns.push(checkIn);
@@ -967,6 +993,12 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
     path: /^\/admin\/orders\/([^/]+)\/refund$/,
     auth: true,
     handle: ({ db, params, body, staff }) => refundOrder(db, staff!, decodeURIComponent(params[0]!), body),
+  },
+  {
+    method: 'GET',
+    path: /^\/admin\/check-ins$/,
+    auth: true,
+    handle: ({ db, query, staff }) => checkInList(db, staff!, query.get('date'), query.get('store')),
   },
   {
     method: 'POST',
