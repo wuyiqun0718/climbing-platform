@@ -36,8 +36,13 @@ const rows = computed(() => {
   const p = product.value;
   if (!p) return [];
   const today = toDateKey(new Date());
-  const card = cardFromProduct({ id: 'preview', product: snapshotOf(p), memberId: '', today });
-  if (card.kind === 'period') return [['生效时间', '付款后立即生效'], ['到期时间', formatDot(card.expiresOn)]];
+  const { me, cards } = member.state;
+  const card = cardFromProduct({ id: 'preview', product: snapshotOf(p), memberId: me?.id ?? '', cards, today });
+  if (card.kind === 'period') {
+    // 手上的期限卡还没到期时，新卡接在后面
+    const starts = card.startsOn === today ? '付款后立即生效' : `${formatDot(card.startsOn)} 起（接在现有期限卡后面）`;
+    return [['生效时间', starts], ['到期时间', formatDot(card.expiresOn)]];
+  }
   if (isSingleTicket(p)) return [['有效期', '仅限今天']];
   return [['有效期至', formatDot(card.expiresOn)]];
 });

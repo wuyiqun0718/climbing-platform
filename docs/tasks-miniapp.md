@@ -10,6 +10,8 @@
 - 新的业务规则（冻结、团课取消、私教时段冲突……）先在 `@climb/core` 加函数和单测，再在页面里用。
 - 通用完成标准（每个任务都要满足，下面不再重复）：`pnpm typecheck`、`pnpm test` 通过；新页面在 `pnpm dev:h5` 里能走通；文案简体中文、口语；颜色只用主题变量；组件按 `.vue` 路径引入。
 - 标 ⏸ 的任务等馆方确认（`docs/mvp-plan.md` 第 9 节「要问馆方」），先按原型的占位规则做，规则集中放在 `gyms/benchmark` 的配置或 `@climb/core` 里，确认后只改一处。
+- 卡有 `status`（`normal`/`frozen`/`void`/`refunded`，不填算 `normal`）：只有 `normal` 的卡能入场、转赠、发老带新，`@climb/core` 已经拦了，页面上只负责显示状态。
+- 谁能改价、多店员工能不能看汇总还在讨论，那是后台的事；小程序这边不涉及。
 
 ## A. 基础
 
@@ -37,7 +39,7 @@
 | 9 ✅ | 首页：会员卡摘要、扫码入场大按钮、老带新/分享入口、今日团课、近期活动（后两块先占位） | 5 | `src/pages/index/index.vue`、`packages/ui-mp/*` | 和原型首页一致；没有卡时引导去购卡 |
 | 10 ✅ | 卡包列表：期限卡、次卡、好友送的次卡、体验券、课时卡分组展示，过期/用完的折叠 | 5 | `src/pages/cards/index.vue`、`packages/ui-mp/MemberCard.vue` | 五种卡都能正确显示剩余次数/天数 |
 | 11 ✅ | 契约 + mock + 页面：卡详情和使用记录 `GET /me/cards/:id/ledger` | 10 | `packages/api`、`src/mock/routes/cards.ts`、`src/pages/cards/detail.vue` | 入场、转赠、领取后流水里多一条，原因显示成中文 |
-| 12 | ⏸ 期限卡冻结：`@climb/core` 加冻结规则（一次几天、一年几次，先用占位值，放进 `GymRules`）；卡详情里申请冻结/解冻 | 11 | `packages/core/src/rules.ts`、`gyms/benchmark/src/index.ts`、`src/pages/cards/detail.vue` | 核心规则有单测；冻结中的卡不能入场 |
+| 12 | 期限卡自助冻结（已定）：`@climb/core` 加冻结规则，规则由岩馆在后台配置，放进 `GymRules`（每月几次、每年几次、每次最少/最多几天；默认每月 1 次，其余先占位）；契约 + mock：冻结、提前解冻（卡 `status` 改 `frozen`/`normal`，到期日顺延冻结的天数，流水记 `freeze`/`unfreeze`）；卡详情里选天数冻结、提前解冻，冻结中显示到哪天 | 11 | `packages/core/src/rules.ts`、`packages/core/src/gym.ts`、`gyms/benchmark/src/index.ts`、`packages/api`、`src/mock/routes/cards.ts`、`src/pages/cards/detail.vue` | 核心规则有单测（次数用完、天数超限被拒）；冻结中的卡不能入场、不能发老带新（`status` 已在 core 里拦）；改岩馆配置不用改代码 |
 
 ## D. 购卡和支付
 
@@ -52,8 +54,8 @@
 
 | # | 任务 | 依赖 | 涉及文件 | 完成标准 |
 |---|---|---|---|---|
-| 17 | 契约 + mock：`POST /check-ins/preview`（扫到的码 → 门店 + 可用的卡，调 `entryOptions`）、`POST /check-ins` 加幂等键和门店 | 1 | `packages/api`、`src/mock/routes/checkins.ts`、`packages/core`（入场带门店） | 单测：过期的码被拒；同一个幂等键提交两次只入场一次 |
-| 18 | 扫码：`uni.scanCode` 扫前台平板的动态码；H5 下用「模拟扫码」按钮选门店 | 17 | `src/pages/checkin/scan.ts`、`src/pages/index/index.vue` | 扫到不是本馆的码给出提示 |
+| 17 | 契约 + mock：`POST /check-ins/preview`（码里的门店 + 一次性 token → 门店 + 可用的卡，调 `entryOptions`）、`POST /check-ins` 带 token、幂等键和门店；token 入场成功后作废 | 1 | `packages/api`、`src/mock/routes/checkins.ts`、`packages/core`（入场带门店） | 单测：过期或用过的 token 被拒；同一个幂等键提交两次只入场一次；冻结中的卡不在可用列表里 |
+| 18 | 扫码进签到页（已定）：会员用微信扫前台平板的动态码（普通二维码跳转小程序 / 小程序码），直接打开签到页，从启动参数（`q` 或 `scene`）里解析门店和 token；没登录先登录再回来。首页的扫码按钮用 `uni.scanCode` 兜底，解析同一套；H5 下用「模拟扫码」按钮选门店 | 7, 17 | `src/pages/checkin/scan.ts`、`src/pages/checkin/confirm.vue`、`src/pages.json`、`src/pages/index/index.vue` | 解析有单测（两种码、坏码）；扫到不是本馆的码给出提示；微信扫一扫和小程序内扫码进到同一个签到页 |
 | 19 | 入场确认页：选卡（期限卡优先）、当日保险（标「卡里含」）、没卡时只能买单次票 | 17, 18 | `src/pages/checkin/confirm.vue` | 和原型一致；体验券在邀请人没入场时显示原因并禁用 |
 | 20 | 契约 + mock + 页面：风险告知书 `POST /waivers`，第一次入场必须先勾选同意；告知书文本按版本取 | 19 | `packages/api`、`src/mock/routes/waivers.ts`、`src/pages/checkin/waiver.vue` | 签过一次以后不再出现；告知书换版本后要重签 |
 | 21 | ⏸ 投保信息：第一次入场填身份证号（单独告知和同意，界面只显示脱敏号码），入场结果里带保单号；是否要身份证等保险公司对接方式定了再细化 | 20 | `src/pages/checkin/waiver.vue`、`packages/api`（入场返回的保险字段） | 身份证号格式校验；不保存在本地存储 |
@@ -97,7 +99,7 @@
 
 | # | 任务 | 依赖 | 涉及文件 | 完成标准 |
 |---|---|---|---|---|
-| 37 | 契约 + mock + 页面：攀爬日历 `GET /me/check-ins?month=` | 17 | `src/pages/me/calendar.vue` | 按月切换，入场的日子标出门店 |
+| 37 | 契约 + mock + 页面：攀爬日历 `GET /me/check-ins?month=` | 17 | `src/pages/me/calendar.vue` | 按月切换，入场的日子标出门店；被前台撤销的入场不算（卡详情流水里显示「撤销入场」，次数退回） |
 | 38 | 我的页面汇总：头像、会员信息、预约（团课 + 私教）、分享记录、订单、保险与告知书入口 | 16, 23, 30, 33 | `src/pages/me/index.vue` | 各入口都能进 |
 
 ## K. 美团 / 大众点评

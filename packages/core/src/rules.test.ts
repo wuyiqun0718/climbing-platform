@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaultRules } from './gym';
-import { applyEntry, claimShare, createReferral, entryOptions, referralQuotaLeft, RuleError, shareFromCountCard, type EntryContext } from './rules';
+import { applyEntry, claimShare, createReferral, entryOptions, isCardValid, isPeriodActive, referralQuotaLeft, RuleError, shareFromCountCard, type EntryContext } from './rules';
 import type { CountCard, PeriodCard, Share } from './types';
 
 const today = '2026-10-12';
@@ -69,5 +69,52 @@ describe('老带新', () => {
     expect(referralQuotaLeft([year], sent, 'jie', '2026-11-01', defaultRules)).toBe(1);
     expect(code(() => createReferral({ id: 'r2', cards: [year], sent, memberId: 'jie', today, rules: defaultRules }))).toBe('referral-quota-used');
     expect(code(() => createReferral({ id: 'r2', cards: [tenTimes], sent: [], memberId: 'jie', today, rules: defaultRules }))).toBe('no-period-card');
+  });
+});
+
+describe('卡的状态', () => {
+  const inactive = ['frozen', 'void', 'refunded'] as const;
+
+  it('冻结、作废、已退款的卡不出现在入场选项里，也不能入场', () => {
+    for (const status of inactive) {
+      expect(entryOptions([{ ...year, status }, { ...tenTimes, status }], ctx())).toEqual([]);
+      expect(code(() => applyEntry({ ...tenTimes, status }, ctx()))).toBe('card-inactive');
+    }
+    expect(entryOptions([{ ...year, status: 'normal' }], ctx())).toHaveLength(1);
+  });
+
+  it('非正常的期限卡不算在有效期内，不能发老带新', () => {
+    for (const status of inactive) {
+      const cards = [{ ...year, status }];
+      expect(isPeriodActive(cards[0], today)).toBe(false);
+      expect(referralQuotaLeft(cards, [], 'jie', today, defaultRules)).toBe(0);
+      expect(code(() => createReferral({ id: 'r1', cards, sent: [], memberId: 'jie', today, rules: defaultRules }))).toBe('no-period-card');
+    }
+  });
+
+  it('非正常的次卡不能转赠', () => {
+    for (const status of inactive) expect(code(() => shareFromCountCard({ id: 's1', card: { ...tenTimes, status }, quantity: 1, today }))).toBe('card-inactive');
+  });
+});
+
+describe('有效卡', () => {
+  it('正常、没过期、没用完的才算；还没开始的续费卡也算', () => {
+    expect(isCardValid(year, today)).toBe(true);
+    expect(isCardValid({ ...year, startsOn: '2026-11-01', expiresOn: '2026-11-30' }, today)).toBe(true);
+    expect(isCardValid({ ...year, expiresOn: '2026-10-11' }, today)).toBe(false);
+    expect(isCardValid({ ...year, expiresOn: today }, today)).toBe(true);
+    expect(isCardValid(tenTimes, today)).toBe(true);
+    expect(isCardValid({ ...tenTimes, remaining: 0 }, today)).toBe(false);
+  });
+
+  it('冻结、作废、已退款的不算', () => {
+    expect(isCardValid({ ...year, status: 'normal' }, today)).toBe(true);
+    for (const status of ['frozen', 'void', 'refunded'] as const) expect(isCardValid({ ...tenTimes, status }, today)).toBe(false);
+  });
+
+  it('体验券用过就不算', () => {
+    const v = { id: 'v1', kind: 'referral' as const, memberId: 'lu', fromMemberId: 'jie', shareId: 's1', name: '老带新体验券', expiresOn: '2026-10-31' };
+    expect(isCardValid(v, today)).toBe(true);
+    expect(isCardValid({ ...v, usedOn: today }, today)).toBe(false);
   });
 });

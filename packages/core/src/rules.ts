@@ -4,6 +4,7 @@ import type { Card, CountCard, EntryCard, GiftCard, PeriodCard, ReferralVoucher,
 
 export type RuleErrorCode =
   | 'card-not-usable'
+  | 'card-inactive'
   | 'inviter-not-checked-in'
   | 'invalid-quantity'
   | 'not-enough-remaining'
@@ -25,7 +26,22 @@ export class RuleError extends Error {
   }
 }
 
-export const isPeriodActive = (c: PeriodCard, today: DateKey) => c.startsOn <= today && c.expiresOn >= today;
+/** 卡的状态是不是正常（没冻结、作废、退款）；没填状态的算正常 */
+export const isCardNormal = (c: Card) => (c.status ?? 'normal') === 'normal';
+
+/** 期限卡今天能用：状态正常，且今天在有效期内 */
+export const isPeriodActive = (c: PeriodCard, today: DateKey) => isCardNormal(c) && c.startsOn <= today && c.expiresOn >= today;
+
+/**
+ * 有效卡：状态正常、没过期、没用完（次卡、课包还有剩余，体验券没用过）。续费买的、还没开始的期限卡也算。
+ * 和后台（mvp/dashboard）的同名函数一致。
+ */
+export function isCardValid(card: Card, today: DateKey): boolean {
+  if (!isCardNormal(card) || card.expiresOn < today) return false;
+  if (card.kind === 'period') return true;
+  if (card.kind === 'referral') return !card.usedOn;
+  return card.remaining > 0;
+}
 
 export interface EntryContext {
   today: DateKey;
@@ -47,6 +63,7 @@ export function entryOptions(cards: Card[], ctx: EntryContext): EntryOption[] {
   const { today } = ctx;
   const opts: EntryOption[] = [];
   for (const card of cards) {
+    if (!isCardNormal(card)) continue;
     if (card.kind === 'period' && isPeriodActive(card, today)) opts.push({ card, usable: true, deducts: 0 });
     if ((card.kind === 'count' || card.kind === 'gift') && card.remaining > 0 && card.expiresOn >= today) {
       opts.push({ card, usable: true, deducts: 1 });
@@ -65,6 +82,7 @@ export function entryOptions(cards: Card[], ctx: EntryContext): EntryOption[] {
  * reentry：这个会员今天已经入过场；规则允许时同日再次进出不扣次。
  */
 export function applyEntry<C extends EntryCard>(card: C, ctx: EntryContext, reentry = false): { card: C; deducted: number } {
+  if (!isCardNormal(card)) throw new RuleError('card-inactive', '这张卡冻结中或已经停用，不能用来入场');
   const opt = entryOptions([card], ctx)[0];
   if (!opt) throw new RuleError('card-not-usable', '这张卡现在不能用来入场');
   if (!opt.usable) throw new RuleError('inviter-not-checked-in', '邀请人今天还没入场，体验券暂时不能用');
@@ -94,6 +112,7 @@ export function createReferral(args: { id: string; cards: Card[]; sent: Share[];
 /** 从次卡里拆出几次送给朋友。送出的次数立即从原卡扣除。 */
 export function shareFromCountCard(args: { id: string; card: CountCard; quantity: number; today: DateKey }): { card: CountCard; share: Share } {
   const { card, quantity, today } = args;
+  if (!isCardNormal(card)) throw new RuleError('card-inactive', '这张卡冻结中或已经停用，不能转赠');
   if (!Number.isInteger(quantity) || quantity < 1) throw new RuleError('invalid-quantity', '至少送 1 次');
   if (card.expiresOn < today) throw new RuleError('card-expired', '这张次卡已经过期');
   if (quantity > card.remaining) throw new RuleError('not-enough-remaining', `这张卡只剩 ${card.remaining} 次`);

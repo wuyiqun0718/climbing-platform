@@ -1,7 +1,7 @@
 import { addDays, addMonths, type Cents, type DateKey } from '@climb/utils';
 import type { GymRules } from './gym';
-import { RuleError } from './rules';
-import type { Card, Product } from './types';
+import { isCardNormal, RuleError } from './rules';
+import type { Card, PeriodCard, Product } from './types';
 
 /** 和后端 orders.status 一致 */
 export type OrderStatus = 'pending' | 'paid' | 'closed' | 'refunded' | 'partially_refunded';
@@ -98,17 +98,27 @@ export function payOrder(order: Order, args: { at: string; transactionId: string
   return { order: { ...order, status: 'paid', paidAt: args.at, wxTransactionId: args.transactionId }, issue: true };
 }
 
+/** 期限卡从哪天开始：今天；手上还有状态正常、没到期（含还没开始）的期限卡，就接在最晚那张到期日的次日。和后台一致 */
+export function periodStartsOn(cards: readonly Card[], memberId: string, today: DateKey): DateKey {
+  const latest = cards
+    .filter((c): c is PeriodCard => c.kind === 'period' && c.memberId === memberId && c.expiresOn >= today && isCardNormal(c))
+    .reduce<DateKey | null>((max, c) => (max === null || c.expiresOn > max ? c.expiresOn : max), null);
+  return latest ? addDays(latest, 1) : today;
+}
+
 /**
- * 按商品快照发卡，从 today 开始算：
- * - 期限卡：今天起 days 天（含今天）
- * - 次卡、课包：今天起 validMonths 个月；没写有效期的（单次票）当天有效
+ * 按商品快照发卡：
+ * - 期限卡：从 periodStartsOn 起 days 天（含开始那天）
+ * - 次卡、课包：今天起 validMonths 个月，到期日 = addMonths(今天, validMonths) - 1 天；没写有效期的（单次票）当天有效
+ * cards 是这个会员现有的卡（算期限卡接续用）
  */
-export function cardFromProduct(args: { id: string; product: ProductSnapshot; memberId: string; today: DateKey }): Card {
+export function cardFromProduct(args: { id: string; product: ProductSnapshot; memberId: string; cards: readonly Card[]; today: DateKey }): Card {
   const { id, product: p, memberId, today } = args;
   const base = { id, memberId, productId: p.id, name: p.name };
   if (p.category === 'period') {
     if (!p.days) throw new Error(`期限卡 ${p.id} 没有天数`);
-    return { ...base, kind: 'period', startsOn: today, expiresOn: addDays(today, p.days - 1) };
+    const startsOn = periodStartsOn(args.cards, memberId, today);
+    return { ...base, kind: 'period', startsOn, expiresOn: addDays(startsOn, p.days - 1) };
   }
   const total = p.quantity ?? 1;
   const expiresOn = p.validMonths ? addDays(addMonths(today, p.validMonths), -1) : today;

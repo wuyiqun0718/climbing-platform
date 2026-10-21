@@ -72,7 +72,7 @@ export function createOrderRoutes(
       const { order: paid, issue } = payOrder(order, { at: helpers.now().toISOString(), transactionId, amountCents });
       if (!issue) return paid;
       // 改订单状态和发卡在后端是同一个事务（条件更新 pending → paid 成功才发）
-      const card = cardFromProduct({ id: helpers.nextId('card'), product: paid.product, memberId: paid.memberId, today: helpers.today() });
+      const card = cardFromProduct({ id: helpers.nextId('card'), product: paid.product, memberId: paid.memberId, cards: db.cards, today: helpers.today() });
       db.cards.push(card);
       helpers.record(card, remainingOf(card) ?? 0, 'purchase', { type: 'order', id: paid.id });
       return replaceOrder({ ...paid, cardId: card.id });

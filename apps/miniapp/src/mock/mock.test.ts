@@ -41,6 +41,15 @@ describe('mock 接口', () => {
     expect(await codeOf(ajie.checkIns.create({ qrToken: 'whatever', cardId: 'card-ajie-year' }))).toEqual({ status: 400, code: 'invalid-qr' });
   });
 
+  it('冻结中的卡不能入场，也不能转赠', async () => {
+    const { db, ajie } = setup();
+    for (const c of db.cards) if (c.memberId === MOCK_MEMBERS.ajie) c.status = 'frozen';
+    expect(await codeOf(ajie.checkIns.create({ qrToken: 'store:binggang', cardId: 'card-ajie-year' }))).toEqual({ status: 409, code: 'card-inactive' });
+    expect(await codeOf(ajie.checkIns.create({ qrToken: 'store:binggang', cardId: 'card-ajie-c10' }))).toEqual({ status: 409, code: 'card-inactive' });
+    expect(await codeOf(ajie.shares.createCount({ cardId: 'card-ajie-c10', quantity: 1 }))).toEqual({ status: 409, code: 'card-inactive' });
+    expect(db.checkIns.filter(c => c.memberId === MOCK_MEMBERS.ajie && c.on === TODAY)).toEqual([]);
+  });
+
   it('次卡转赠：送出立即扣次，朋友领到好友送的次卡，自己不能领、不能重复领', async () => {
     const { ajie, xiaolu } = setup();
     const share = await ajie.shares.createCount({ cardId: 'card-ajie-c10', quantity: 2 });

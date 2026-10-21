@@ -4,6 +4,7 @@ import type { RuleErrorCode } from '@climb/core';
 /** @climb/core 的规则错误：用 Record 写全，core 加了新的错误码这里会类型报错 */
 const RULE_MESSAGES: Record<RuleErrorCode, string> = {
   'card-not-usable': '这张卡现在不能用来入场',
+  'card-inactive': '这张卡冻结中或已经停用，现在不能用',
   'inviter-not-checked-in': '邀请你的朋友今天还没入场，等 TA 入场后体验券就能用了',
   'invalid-quantity': '至少送 1 次',
   'not-enough-remaining': '卡里剩的次数不够',

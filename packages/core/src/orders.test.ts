@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { defaultRules } from './gym';
 import { assertPayable, cardFromProduct, closeIfExpired, createOrder, isPayable, payOrder, snapshotOf } from './orders';
-import type { Product } from './types';
+import type { Card, PeriodCard, Product } from './types';
 
 const now = new Date('2026-10-21T10:00:00.000Z');
 const today = '2026-10-21';
@@ -58,10 +58,31 @@ describe('订单', () => {
 });
 
 describe('按商品发卡', () => {
-  const issue = (p: Product) => cardFromProduct({ id: 'k1', product: snapshotOf(p), memberId: 'jie', today });
+  const issue = (p: Product, cards: Card[] = []) => cardFromProduct({ id: 'k1', product: snapshotOf(p), memberId: 'jie', cards, today });
+  const period = (id: string, startsOn: string, expiresOn: string, extra: Partial<PeriodCard> = {}): PeriodCard =>
+    ({ id, kind: 'period', memberId: 'jie', productId: 'month', name: '月卡', startsOn, expiresOn, ...extra });
 
   it('期限卡今天起算，30 天含今天', () => {
     expect(issue(month)).toEqual({ id: 'k1', kind: 'period', memberId: 'jie', productId: 'month', name: '月卡', startsOn: today, expiresOn: '2026-11-19' });
+  });
+
+  it('手上有没到期的期限卡，接在最晚那张到期日的次日开始（含还没开始的续费卡）', () => {
+    const cards = [period('a', '2026-10-01', '2026-10-30'), period('b', '2026-10-31', '2026-11-29')];
+    expect(issue(month, cards)).toMatchObject({ startsOn: '2026-11-30', expiresOn: '2026-12-29' });
+  });
+
+  it('已过期、非正常状态、别人的期限卡不影响开始日', () => {
+    const cards: Card[] = [
+      period('a', '2026-09-01', '2026-10-19'),
+      period('b', '2026-10-01', '2026-12-31', { status: 'frozen' }),
+      period('c', '2026-10-01', '2026-12-31', { status: 'refunded' }),
+      period('d', '2026-10-01', '2026-12-31', { memberId: 'lu' }),
+    ];
+    expect(issue(month, cards)).toMatchObject({ startsOn: today, expiresOn: '2026-11-19' });
+  });
+
+  it('今天到期的期限卡也接在后面', () => {
+    expect(issue(month, [period('a', '2026-09-22', today)])).toMatchObject({ startsOn: '2026-10-22', expiresOn: '2026-11-20' });
   });
 
   it('次卡和课包按月算有效期，次数是满的', () => {
