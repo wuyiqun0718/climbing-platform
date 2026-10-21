@@ -8,7 +8,7 @@ import {
   DEFAULT_DESK_PAY_CHANNEL,
   DESK_PAY_CHANNELS,
   DESK_PRICE_REASON_MAX,
-  PRODUCT_REVENUE_CATEGORY,
+  productRevenueCategory,
   deskOrderErrors,
   parseYuanInput,
   type DeskOrderErrors,
@@ -186,7 +186,7 @@ async function submit() {
         <select v-model="productId" v-bind="f.attrs">
           <option value="" disabled>选一个</option>
           <option v-for="p in onSale" :key="p.id" :value="p.id">
-            {{ REVENUE_CATEGORY_TEXT[PRODUCT_REVENUE_CATEGORY[p.category]] }} · {{ p.name }} · {{ formatYuan(p.priceCents) }}
+            {{ REVENUE_CATEGORY_TEXT[productRevenueCategory(p)] }} · {{ p.name }} · {{ formatYuan(p.priceCents) }}
           </option>
         </select>
       </Field>

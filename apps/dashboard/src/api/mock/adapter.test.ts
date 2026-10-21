@@ -51,7 +51,7 @@ describe('后台 mock', () => {
     const stores = await api.stores.list();
     const each = await Promise.all(stores.map(s => api.dashboard({ store: s.id })));
     expect(all.todayEntries).toBe(each.reduce((n, d) => n + d.todayEntries, 0));
-    expect(all.monthRevenueCents).toBe(each.reduce((n, d) => n + d.monthRevenueCents, 0));
+    expect(all.monthRevenueCents).toBe(each.reduce((n, d) => n + d.monthRevenueCents!, 0));
     expect(all.activeMembers).toBe(each.reduce((n, d) => n + d.activeMembers, 0));
     expect(new Set(each.map(d => d.todayEntries)).size).toBe(each.length);
     expect(each[0]).toMatchObject({ storeId: 'bingang', today: '2026-10-21' });
@@ -924,7 +924,7 @@ describe('后台 mock：卡种与价格', () => {
     const { api, login } = setup();
     await login('13800000003');
     const list = await api.products.list();
-    expect(list.map(p => p.id)).toEqual(['p-30', 'p-90', 'p-365', 'p-10x', 'p-20x', 'p-summer', 'p-pt5', 'p-class10']);
+    expect(list.map(p => p.id)).toEqual(['p-30', 'p-90', 'p-365', 'p-10x', 'p-20x', 'p-summer', 'p-single', 'p-pt5', 'p-class10']);
     expect(list.find(p => p.id === 'p-summer')!.onSale).toBe(false);
   });
 
@@ -932,7 +932,7 @@ describe('后台 mock：卡种与价格', () => {
     const { api, login } = setup();
     await login('13800000002');
     const made = await api.products.create(half);
-    expect(made).toMatchObject({ ...half, sort: 9 });
+    expect(made).toMatchObject({ ...half, sort: 10 });
     const changed = await api.products.update(made.id, { priceCents: 279_900, perks: ['送一节体验课'], sort: 0 });
     expect(changed).toMatchObject({ priceCents: 279_900, perks: ['送一节体验课'], days: 180 });
     expect((await api.products.list()).filter(p => p.category === 'period').map(p => p.id)).toEqual([made.id, 'p-30', 'p-90', 'p-365']);

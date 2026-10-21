@@ -663,6 +663,7 @@ function sampleProducts(): Product[] {
     { id: 'p-20x', category: 'count', name: '20 次卡', priceCents: 229_900, quantity: 20, validMonths: 12, perks: ['可以分次送给朋友'], onSale: true, sort: 5 },
     { id: 'p-pt5', category: 'pt', name: '私教 5 节', priceCents: 199_900, quantity: 5, validMonths: 3, perks: ['可约任意教练'], onSale: true, sort: 6 },
     { id: 'p-class10', category: 'class', name: '团课 10 次', priceCents: 98_000, quantity: 10, validMonths: 4, perks: ['满员时优先候补'], onSale: true, sort: 7 },
+    { id: 'p-single', category: 'count', name: '单次票', priceCents: 9_900, quantity: 1, perks: ['当天有效'], onSale: true, sort: 9 },
     { id: 'p-summer', category: 'count', name: '暑期 5 次卡', priceCents: 49_900, quantity: 5, validMonths: 2, perks: [], onSale: false, sort: 8 },
   ];
 }

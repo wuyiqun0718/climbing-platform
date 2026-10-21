@@ -81,7 +81,7 @@ import {
   type VoidCheckInResult,
 } from '@climb/api';
 import {
-  PRODUCT_REVENUE_CATEGORY,
+  productRevenueCategory,
   RuleError,
   applyProductPatch,
   buildProduct,
@@ -772,7 +772,7 @@ function createDeskOrder(db: MockDb, staff: Staff, body: Partial<CreateDeskOrder
     storeId,
     memberId: m.id,
     productName: product.name,
-    category: PRODUCT_REVENUE_CATEGORY[product.category],
+    category: productRevenueCategory(product),
     channel: input.channel as CreateDeskOrderBody['channel'],
     amountCents: input.amountCents,
     paidOn: db.today,
@@ -789,7 +789,7 @@ function createDeskOrder(db: MockDb, staff: Staff, body: Partial<CreateDeskOrder
   db.orders.push(order);
   db.cards.push(card);
   db.ledger.push(entry);
-  if (countsAsCardPurchase(product.category) && !m.firstCardOn) {
+  if (countsAsCardPurchase(product) && !m.firstCardOn) {
     m.firstCardOn = db.today;
     m.homeStoreId = storeId;
   }
@@ -1933,7 +1933,7 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
       const res: DashboardSummary = {
         storeId,
         today: db.today,
-        monthRevenueCents: sum('monthRevenueCents'),
+        monthRevenueCents: canSeePage(staff!.role, 'finance') ? sum('monthRevenueCents') : null,
         todayEntries: sum('todayEntries'),
         lastWeekSameTimeEntries: sum('lastWeekSameTimeEntries'),
         todayBookings: classBookingsOn(db.classSessions, db.classBookings, db.today, ids) + ptBookingsOn(db.ptBookings, db.today, ids),

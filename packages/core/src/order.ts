@@ -27,8 +27,14 @@ export const DEFAULT_VALID_MONTHS = 12;
 /** 卡种品类对应的财务品类 */
 export const PRODUCT_REVENUE_CATEGORY: Record<ProductCategory, RevenueCategory> = { period: 'period', count: 'count', pt: 'pt', class: 'class' };
 
-/** 买了这种卡算不算「办卡」（看板新客办卡、归属门店用）：只算期限卡和次卡 */
-export const countsAsCardPurchase = (category: ProductCategory) => category === 'period' || category === 'count';
+/** 卖出去的商品记在财务的哪个品类：单次票（1 次的次卡，shop.ts 的 isSingleTicket）单独算「单次票」，其余按卡种品类 */
+export const productRevenueCategory = (p: Pick<Product, 'category' | 'quantity'>): RevenueCategory =>
+  p.category === 'count' && p.quantity === 1 ? 'single' : PRODUCT_REVENUE_CATEGORY[p.category];
+
+/**
+ * 买了这种卡算不算「办卡」（看板新客办卡、归属门店用）：只算期限卡和次卡，单次票不算（跟看板 NewcomerRow 的口径一致，等馆方）。
+ */
+export const countsAsCardPurchase = (p: Pick<Product, 'category' | 'quantity'>) => p.category === 'period' || (p.category === 'count' && p.quantity !== 1);
 
 export interface DeskOrderInput {
   channel: string;

@@ -74,7 +74,7 @@ const compareColumns: Column<StoreCompareRow>[] = [
 ];
 const revenueTotal = computed(() => (compareRows.value ?? []).reduce((n, r) => n + r.monthRevenueCents, 0));
 
-const show = (v: number | undefined, fmt: (n: number) => string | number = n => n) => (v === undefined ? '—' : fmt(v));
+const show = (v: number | null | undefined, fmt: (n: number) => string | number = n => n) => (v === undefined || v === null ? '—' : fmt(v));
 </script>
 
 <template>

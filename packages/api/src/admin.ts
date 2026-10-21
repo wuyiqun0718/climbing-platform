@@ -57,7 +57,8 @@ export interface DashboardSummary {
   /** 门店 ID；不传表示全部门店 */
   storeId: string | null;
   today: DateKey;
-  monthRevenueCents: Cents;
+  /** 本月营收；没有财务权限的（permissions.ts 的 finance 页，前台）为 null，营收只给能看财务的人 */
+  monthRevenueCents: Cents | null;
   todayEntries: number;
   /** 上周同一天、截至同一时刻的入场人次 */
   lastWeekSameTimeEntries: number;

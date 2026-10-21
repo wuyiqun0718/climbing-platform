@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { addDays, addMonths } from '@climb/utils';
 import { ledgerMismatch } from './ledger';
-import { DEFAULT_VALID_MONTHS, DESK_PRICE_REASON_MAX, deskOrderErrors, issueCard, parseYuanInput, periodStartsOn, purchaseLedgerEntry } from './order';
+import { DEFAULT_VALID_MONTHS, DESK_PRICE_REASON_MAX, countsAsCardPurchase, deskOrderErrors, issueCard, parseYuanInput, periodStartsOn, productRevenueCategory, purchaseLedgerEntry } from './order';
 import type { Card, Product } from './types';
 
 const product = (p: Partial<Product> & Pick<Product, 'category'>): Product => ({ id: 'p', name: '卡', priceCents: 59_900, perks: [], onSale: true, ...p });
@@ -74,5 +74,16 @@ describe('线下收款开卡', () => {
     expect(multi.expiresOn).toBe('2027-10-20');
     const singleWithMonths = issueCard({ id: 'c', product: product({ category: 'pt', quantity: 1, validMonths: 3 }), memberId: 'm', cards: [], today });
     expect(singleWithMonths.expiresOn).toBe('2027-01-20');
+  });
+});
+
+describe('品类和办卡口径', () => {
+  it('单次票在财务里单独算「单次票」，也不算办卡；次卡、期限卡算办卡；课包不算', () => {
+    const single = product({ category: 'count', quantity: 1 });
+    expect(productRevenueCategory(single)).toBe('single');
+    expect(productRevenueCategory(ten)).toBe('count');
+    expect(productRevenueCategory(month)).toBe('period');
+    expect(productRevenueCategory(product({ category: 'pt', quantity: 1 }))).toBe('pt');
+    expect([single, ten, month, product({ category: 'pt', quantity: 5 })].map(countsAsCardPurchase)).toEqual([false, true, true, false]);
   });
 });
