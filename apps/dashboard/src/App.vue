@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { StaffRole } from '@climb/api';
+import { ToastHost } from '@climb/ui-web';
 import gym from '@gym';
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -55,6 +56,7 @@ function logout() {
       <RouterView />
     </main>
   </div>
+  <ToastHost />
 </template>
 
 <style scoped>
