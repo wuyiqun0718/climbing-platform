@@ -6,6 +6,7 @@ import { formatDot, formatYuan, toDateKey } from '@climb/utils';
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from '../api';
+import CardLedgerDrawer from '../components/CardLedgerDrawer.vue';
 import { session } from '../session';
 import { createLatest } from './dashboard';
 
@@ -44,6 +45,9 @@ const cards = computed(() =>
     return { card: c, text: cardText(c, today), state, stateText: CARD_STATE_TEXT[state], dim: state !== 'normal' && state !== 'not_started' };
   }),
 );
+
+// 点卡看流水
+const ledgerCard = ref<Card | null>(null);
 
 const orderColumns: Column<MemberOrderRow>[] = [
   { key: 'paidOn', label: '付款日期', format: r => (r.paidOn ? formatDot(r.paidOn) : '没付款') },
@@ -102,6 +106,7 @@ const back = () => (window.history.state?.back ? router.back() : router.push({ n
     <p v-if="!cards.length" class="state">还没有卡</p>
     <ul v-else class="cards">
       <li v-for="c in cards" :key="c.card.id" :class="{ dim: c.dim }">
+        <button type="button" class="card-btn" :aria-label="`${c.card.name}，看流水`" @click="ledgerCard = c.card">
         <div class="card-h">
           <span class="kind">{{ c.text.kind }}</span>
           <span class="badge" :class="`st-${c.state}`">{{ c.stateText }}</span>
@@ -109,8 +114,12 @@ const back = () => (window.history.state?.back ? router.back() : router.push({ n
         <strong class="name">{{ c.card.name }}</strong>
         <span class="value"><b>{{ c.text.value }}</b> {{ c.text.unit }}</span>
         <small>{{ c.text.meta }}</small>
+        <span class="more">看流水 →</span>
+        </button>
       </li>
     </ul>
+
+    <CardLedgerDrawer :card-id="ledgerCard?.id ?? null" :title="ledgerCard?.name ?? ''" @close="ledgerCard = null" />
 
     <h2>最近订单</h2>
     <section class="panel">
@@ -138,7 +147,9 @@ h2 { margin: 22px 0 10px; font-family: var(--font-display); font-size: 22px; fon
 .info dd.warn { color: var(--ink); background: var(--accent-soft); padding: 2px 6px; border-radius: var(--radius-sm); }
 .num { font-family: var(--font-number); font-variant-numeric: tabular-nums; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
-.cards li { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
+.cards li { display: flex; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
+.card-btn { display: flex; flex: 1; flex-direction: column; gap: 2px; padding: 12px 14px; font: inherit; color: inherit; text-align: left; background: none; border: 0; border-radius: inherit; cursor: pointer; }
+.more { margin-top: 4px; font-size: 12px; font-weight: 600; color: var(--ink-muted); }
 .cards li.dim { opacity: 0.6; }
 .card-h { display: flex; justify-content: space-between; align-items: center; }
 .kind { font-size: 12px; font-weight: 700; }

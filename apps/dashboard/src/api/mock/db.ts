@@ -1,5 +1,5 @@
 import { MEMBER_SOURCES, type EntryMethod, type MemberSource, type Staff, type Store } from '@climb/api';
-import { defaultRules, type Card, type CountCard, type GymRules, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
+import { defaultRules, type Card, type CountCard, type GymRules, type LedgerEntry, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
 import { addDays, addMonths, daysBetween, monthOf, type DateKey } from '@climb/utils';
 
 /** 会员（对应 members 表），目前放了看板「新客从哪来」和会员列表用到的字段 */
@@ -68,11 +68,10 @@ export interface MockDb {
   /** 订单和退款（财务页用；看板的营收目前还是 storeStats 里的示例数字） */
   orders: MockOrder[];
   refunds: MockRefund[];
-  /**
-   * 入场记录：每个到过店的会员最近几次。示例数据没有回头去扣卡上的次数（卡流水在任务 12），
-   * 所以次卡的剩余和这里的扣次对不上，任务 15 起新登记的入场会真的扣。
-   */
+  /** 入场记录：每个到过店的会员最近几次；次卡扣的次数记在 ledger 里，跟卡上的剩余对得上 */
   checkIns: MockCheckIn[];
+  /** 卡流水（对应 card_ledger），按写入顺序；改卡的地方都要在这里追加一笔 */
+  ledger: LedgerEntry[];
   /** 当前的告知书版本（对应 waiver_versions 里最新的一版） */
   waiverVersion: string;
   /** 岩馆规则，mock 判断规则时传给 @climb/core */
@@ -81,6 +80,12 @@ export interface MockDb {
 }
 
 export function createMockDb(today: DateKey, rules: GymRules = defaultRules): MockDb {
+  // 示例账号，密码都是 123456
+  const staff: MockDb['staff'] = [
+    { id: 's-owner', name: '馆长', phone: '13800000001', role: 'owner', storeIds: [], password: '123456', active: true },
+    { id: 's-manager', name: '店长阿凯', phone: '13800000002', role: 'manager', storeIds: ['bingang'], password: '123456', active: true },
+    { id: 's-desk', name: '前台小葵', phone: '13800000003', role: 'desk', storeIds: ['bingang'], password: '123456', active: true },
+  ];
   return {
     today,
     rules,
@@ -89,13 +94,8 @@ export function createMockDb(today: DateKey, rules: GymRules = defaultRules): Mo
       { id: 'huiju', name: '汇聚店' },
       { id: 'huanqiu', name: '环球港店' },
     ],
-    // 示例账号，密码都是 123456
-    staff: [
-      { id: 's-owner', name: '馆长', phone: '13800000001', role: 'owner', storeIds: [], password: '123456', active: true },
-      { id: 's-manager', name: '店长阿凯', phone: '13800000002', role: 'manager', storeIds: ['bingang'], password: '123456', active: true },
-      { id: 's-desk', name: '前台小葵', phone: '13800000003', role: 'desk', storeIds: ['bingang'], password: '123456', active: true },
-    ],
-    ...withCheckIns(sampleMembers(today), today),
+    staff,
+    ...withLedger(withCheckIns(sampleMembers(today), today), staff, today),
     ...sampleOrders(today),
     waiverVersion: '2026-01',
     storeStats: {
@@ -252,6 +252,62 @@ function withCheckIns<T extends Pick<MockDb, 'members' | 'cards'>>(data: T, toda
   const twice = checkIns.find((c, i) => c.memberId.startsWith('m-old-') && checkIns[i + 1]?.memberId === c.memberId);
   if (twice) twice.voided = true;
   return { ...data, checkIns };
+}
+
+/**
+ * 示例卡流水，跟卡和入场记录对得上：每张卡先记一笔买卡（期限卡次数记 0）；次卡每次扣次的入场 -1，撤销的再 +1；
+ * 示例里已用完的那张把剩下的送给了朋友，冻结的那张记一笔冻结。次卡的剩余以流水算出来的为准（覆盖 newcomerCountCards 里的示例数）。
+ * 前台登记、撤销的操作人用这家店的前台，冻结用店长（没有就记馆长）。
+ */
+function withLedger<T extends Pick<MockDb, 'members' | 'cards' | 'checkIns'>>(data: T, staff: MockDb['staff'], today: DateKey): T & Pick<MockDb, 'ledger'> {
+  let seed = 41;
+  const rand = (n: number) => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed % n;
+  };
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const at = (on: DateKey, h: number) => `${on}T${pad(h)}:${pad(rand(60))}:00+08:00`;
+  const staffOf = (role: 'desk' | 'manager', storeId: string) => (staff.find(s => s.role === role && s.storeIds.includes(storeId)) ?? staff.find(s => s.role === 'owner')!).id;
+  const deskStaff = (storeId: string) => staffOf('desk', storeId);
+  const members = new Map(data.members.map(m => [m.id, m]));
+  const ledger: LedgerEntry[] = [];
+  let n = 0;
+
+  const cards = data.cards.map((card): Card => {
+    const add = (e: Omit<LedgerEntry, 'id' | 'cardId' | 'expiresOnAfter' | 'ref' | 'note'> & Partial<Pick<LedgerEntry, 'ref' | 'note'>>) =>
+      ledger.push({ id: `l-${++n}`, cardId: card.id, expiresOnAfter: card.expiresOn, ref: null, note: '', ...e });
+    const m = members.get(card.memberId)!;
+    if (card.kind === 'period') {
+      const on = card.startsOn <= today ? card.startsOn : today;
+      add({ at: at(on, 10), delta: 0, remainingAfter: null, reason: 'purchase', operatorType: 'member', operatorId: m.id });
+      return card;
+    }
+    if (card.kind !== 'count') return card;
+    let remaining = card.total;
+    let lastOn = m.firstCardOn!;
+    add({ at: at(lastOn, 10), delta: card.total, remainingAfter: remaining, reason: 'purchase', operatorType: 'member', operatorId: m.id });
+    for (const ci of data.checkIns.filter(c => c.cardId === card.id && c.deducted > 0)) {
+      const op = ci.method === 'desk' ? { operatorType: 'staff' as const, operatorId: deskStaff(ci.storeId) } : { operatorType: 'member' as const, operatorId: m.id };
+      remaining -= ci.deducted;
+      add({ at: at(ci.on, 12 + rand(10)), delta: -ci.deducted, remainingAfter: remaining, reason: 'check_in', ref: { type: 'check_in', id: ci.id }, ...op });
+      if (ci.voided) {
+        remaining += ci.deducted;
+        const ref = { type: 'check_in' as const, id: ci.id };
+        add({ at: at(ci.on, 22), delta: ci.deducted, remainingAfter: remaining, reason: 'check_in_void', ref, operatorType: 'staff', operatorId: deskStaff(ci.storeId), note: '扫错了卡' });
+      }
+      lastOn = ci.on;
+    }
+    if (card.remaining === 0 && remaining > 0) {
+      add({ at: at(lastOn, 23), delta: -remaining, remainingAfter: 0, reason: 'share_out', operatorType: 'member', operatorId: m.id });
+      remaining = 0;
+    }
+    if (card.status === 'frozen') {
+      const on = addDays(today, -3) > lastOn ? addDays(today, -3) : lastOn;
+      add({ at: at(on, 20), delta: 0, remainingAfter: remaining, reason: 'freeze', operatorType: 'staff', operatorId: staffOf('manager', m.homeStoreId), note: '手腕受伤，先停一段' });
+    }
+    return { ...card, remaining };
+  });
+  return { ...data, cards, ledger };
 }
 
 /** 示例订单：三家店最近 70 天，每天几笔，渠道和品类照原型的比例大致铺开；再放几笔退款 */

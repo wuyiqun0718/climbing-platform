@@ -54,6 +54,12 @@ export function formatDot(key: DateKey): string {
   return key.replace(/-/g, '.');
 }
 
+/** ISO 时间按本地时区显示成 2026.10.12 14:05 */
+export function formatDotTime(iso: string): string {
+  const d = new Date(iso);
+  return `${formatDot(toDateKey(d))} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export function weekdayOf(key: DateKey): string {
   return WEEKDAYS[fromDateKey(key).getDay()];
 }

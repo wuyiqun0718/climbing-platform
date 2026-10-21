@@ -4,6 +4,8 @@ import {
   MEMBER_RECENT_LIMIT,
   type ApiRequest,
   type ApiResponse,
+  type CardLedger,
+  type CardLedgerRow,
   type DashboardSummary,
   type ExpiringCardRow,
   type FinanceRefundRow,
@@ -181,6 +183,25 @@ function memberDetail(db: MockDb, staff: Staff, id: string): ApiResponse {
   return ok(res);
 }
 
+/** 卡流水：口径见 @climb/api 的 CardLedger */
+function cardLedger(db: MockDb, staff: Staff, id: string): ApiResponse {
+  const card = db.cards.find(c => c.id === id);
+  if (!card) return fail(404, 'card-not-found', '没有这张卡');
+  const m = db.members.find(x => x.id === card.memberId);
+  if (!m) return fail(404, 'member-not-found', '没有这个会员');
+  if (!MEMBERS_VISIBLE_ACROSS_STORES && !canSeeStore(staff, m.homeStoreId)) return fail(403, 'forbidden', '没有这家店的权限');
+  const operatorName = (type: CardLedgerRow['operatorType'], opId: string | null) =>
+    type === 'system' ? '系统' : type === 'staff' ? (db.staff.find(s => s.id === opId)?.name ?? '') : (db.members.find(x => x.id === opId)?.name ?? '');
+  // 写入顺序就是同一时刻的先后
+  const entries = db.ledger
+    .map((e, i) => ({ e, i }))
+    .filter(({ e }) => e.cardId === id)
+    .sort((a, b) => a.e.at.localeCompare(b.e.at) || a.i - b.i)
+    .map(({ e }): CardLedgerRow => ({ ...e, operatorName: operatorName(e.operatorType, e.operatorId) }));
+  const res: CardLedger = { card, memberName: m.name, entries };
+  return ok(res);
+}
+
 const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handle: Handler }[] = [
   {
     method: 'POST',
@@ -280,6 +301,12 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
     path: /^\/admin\/members\/([^/]+)$/,
     auth: true,
     handle: ({ db, params, staff }) => memberDetail(db, staff!, decodeURIComponent(params[0]!)),
+  },
+  {
+    method: 'GET',
+    path: /^\/admin\/cards\/([^/]+)\/ledger$/,
+    auth: true,
+    handle: ({ db, params, staff }) => cardLedger(db, staff!, decodeURIComponent(params[0]!)),
   },
 ];
 

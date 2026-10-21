@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, addMonths, daysBetween, endOfMonth, formatYuan, formatYuanCompact, maskPhone } from './index';
+import { addDays, addMonths, daysBetween, endOfMonth, formatDotTime, formatYuan, formatYuanCompact, maskPhone } from './index';
 
 describe('date', () => {
   it('跨月加减天数', () => {
@@ -10,6 +10,9 @@ describe('date', () => {
     expect(endOfMonth('2026-02-10')).toBe('2026-02-28');
     expect(daysBetween('2026-10-12', '2026-10-31')).toBe(19);
     expect(addMonths('2026-10-12', 6)).toBe('2027-04-12');
+  });
+  it('ISO 时间按本地时区显示', () => {
+    expect(formatDotTime(new Date(2026, 9, 12, 14, 5).toISOString())).toBe('2026.10.12 14:05');
   });
 });
 

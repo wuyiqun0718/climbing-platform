@@ -1,4 +1,4 @@
-import type { Card, PayChannel, RevenueBucket, RevenueCategory, RevenueChannel } from '@climb/core';
+import type { Card, LedgerEntry, PayChannel, RevenueBucket, RevenueCategory, RevenueChannel } from '@climb/core';
 import type { Cents, DateKey } from '@climb/utils';
 import { createHttp, type ClientOptions } from './client';
 
@@ -233,6 +233,22 @@ export interface MemberEntryRow {
   voided: boolean;
 }
 
+/**
+ * 卡流水 GET /admin/cards/:id/ledger。没有这张卡 404；能看哪些会员的卡同会员详情。
+ * entries 按发生时间正序，同一时刻按写入顺序；最后一笔的变化后剩余、到期日 = 卡上的（对账见 @climb/core 的 ledgerMismatch）。
+ * 原因、变化量、变化后的文字用 @climb/core 的 LEDGER_REASON_TEXT / ledgerDeltaText / ledgerAfterText，跟小程序使用记录一致。
+ */
+export interface CardLedger {
+  card: Card;
+  memberName: string;
+  entries: CardLedgerRow[];
+}
+
+export interface CardLedgerRow extends LedgerEntry {
+  /** 操作人：员工名字、会员名字；system 为「系统」 */
+  operatorName: string;
+}
+
 export const PAY_CHANNEL_TEXT: Record<PayChannel, string> = {
   wechat: '微信支付',
   desk_cash: '现金',
@@ -278,6 +294,9 @@ export function createAdminApi(opts: ClientOptions) {
         return http<PageOf<MemberListRow>>('GET', s ? `/admin/members?${s}` : '/admin/members');
       },
       get: (id: string) => http<MemberDetail>('GET', `/admin/members/${encodeURIComponent(id)}`),
+    },
+    cards: {
+      ledger: (id: string) => http<CardLedger>('GET', `/admin/cards/${encodeURIComponent(id)}/ledger`),
     },
   };
 }

@@ -1,4 +1,5 @@
 import { ApiError, createAdminApi } from '@climb/api';
+import { ledgerMismatch } from '@climb/core';
 import { describe, expect, it } from 'vitest';
 import { createMockAdapter } from './adapter';
 import { createMockDb, type MockDb } from './db';
@@ -369,5 +370,41 @@ describe('后台 mock：会员详情', () => {
       expect(card.memberId).toBe(c.memberId);
       expect(card.expiresOn >= c.on).toBe(true);
     }
+  });
+
+  it('卡流水：每张卡最后一笔的剩余、到期日 = 卡上的，每笔都接得上', async () => {
+    const { api, login, db } = setup();
+    await login('13800000001');
+    for (const card of db.cards) {
+      const res = await api.cards.ledger(card.id);
+      const last = res.entries[res.entries.length - 1]!;
+      expect(last.remainingAfter).toBe('remaining' in card ? card.remaining : null);
+      expect(last.expiresOnAfter).toBe(card.expiresOn);
+      expect(ledgerMismatch(res.card, res.entries)).toBeNull();
+      expect(res.entries.map(e => e.at)).toEqual([...res.entries.map(e => e.at)].sort());
+    }
+    // 示例数据里有扣次、送朋友、冻结
+    const reasons = new Set(db.ledger.map(e => e.reason));
+    for (const r of ['purchase', 'check_in', 'share_out', 'freeze'] as const) expect(reasons.has(r)).toBe(true);
+  });
+
+  it('卡流水：次卡扣次的入场各有一笔 -1，前台登记的操作人是员工', async () => {
+    const { api, login, db } = setup();
+    await login('13800000001');
+    const ci = db.checkIns.find(c => c.deducted > 0 && c.method === 'desk')!;
+    const res = await api.cards.ledger(ci.cardId!);
+    const row = res.entries.find(e => e.ref?.id === ci.id)!;
+    expect(row).toMatchObject({ reason: 'check_in', delta: -1, operatorType: 'staff' });
+    expect(row.operatorName).not.toBe('');
+    expect(res.entries.filter(e => e.reason === 'check_in')).toHaveLength(db.checkIns.filter(c => c.cardId === ci.cardId && c.deducted > 0).length);
+    expect(res.memberName).toBe(db.members.find(m => m.id === ci.memberId)!.name);
+  });
+
+  it('卡流水：没有这张卡 404，没登录 401', async () => {
+    const { api, login } = setup();
+    expect(await status(api.cards.ledger('c-old-0'))).toBe(401);
+    await login('13800000003');
+    expect(await status(api.cards.ledger('nope'))).toBe(404);
+    expect(await status(api.cards.ledger('c-old-0'))).toBe(200);
   });
 });
