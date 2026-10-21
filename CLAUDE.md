@@ -6,6 +6,7 @@
 
 - `docs/project-context.md`：项目背景、已经定下的决定和原因、等客户确认的问题、当前进度、下一步
 - `docs/sales-pitch.md`：去跟 BENCHMARK 老板谈的思路
+- `docs/mvp-plan.md`：MVP 执行计划：范围、前置事项、技术选型、数据模型、接口、里程碑、待定问题
 - `README.md`：仓库结构、常用命令、按岩馆打包的机制、代码约定
 
 ## 约定
