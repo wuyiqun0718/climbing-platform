@@ -76,7 +76,7 @@
 | # | 任务 | 依赖 | 涉及文件 | 完成标准 |
 |---|---|---|---|---|
 | 28 ✅ | `@climb/core` 加团课类型和规则：人数上限、候补、取消截止（先用占位：开课前 2 小时）、扣团课次数 | — | `packages/core/src/types.ts`、`packages/core/src/classes.ts` + 单测 | 满员进候补；截止后不能取消；取消退回次数 |
-| 29 | 契约 + mock：课表 `GET /classes?store=&from=`、预约、取消、我的预约 | 1, 28 | `packages/api`、`src/mock/routes/classes.ts` | 单测覆盖预约和取消 |
+| 29 ✅ | 契约 + mock：课表 `GET /classes?store=&from=`、预约、取消、我的预约 | 1, 28 | `packages/api`、`src/mock/routes/classes.ts` | 单测覆盖预约和取消 |
 | 30 | 团课页面：按门店和日期看课表、预约（没课包时引导购买）、取消 | 13, 29 | `src/pages/classes/*` | 和原型一致；首页「今日团课」接上真实数据 |
 
 ## H. 私教

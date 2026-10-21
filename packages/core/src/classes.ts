@@ -108,6 +108,20 @@ export function sessionSeats(session: ClassSession, bookings: ClassBooking[]) {
   return { booked, waitlisted, left: Math.max(0, session.capacity - booked) };
 }
 
+/** 这节课的候补队伍：按下单时间排，补位也按这个顺序 */
+export function waitlistQueue(sessionId: string, bookings: ClassBooking[]): ClassBooking[] {
+  return bookings
+    .filter(b => b.sessionId === sessionId && b.status === 'waitlisted')
+    .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id < b.id ? -1 : 1));
+}
+
+/** 候补排第几（从 1 开始）；不在候补里为 null */
+export function waitlistPosition(booking: ClassBooking, bookings: ClassBooking[]): number | null {
+  if (booking.status !== 'waitlisted') return null;
+  const i = waitlistQueue(booking.sessionId, bookings).findIndex(b => b.id === booking.id);
+  return i < 0 ? null : i + 1;
+}
+
 /** 这张卡能不能约这节课：团课课包、状态正常、上课那天没过期、次数够 */
 export function isClassCardUsable(card: Card, memberId: string, session: ClassSession): card is LessonCard {
   return card.kind === 'class' && card.memberId === memberId && isCardNormal(card) && card.expiresOn >= session.on && card.remaining >= session.credits;
@@ -188,9 +202,7 @@ export function fillFromWaitlist(args: { session: ClassSession; bookings: ClassB
   let cards = args.cards;
   const changes: CardChange[] = [];
   if (session.status === 'cancelled' || now.getTime() >= sessionStartsAt(session).getTime()) return { bookings: [], changes };
-  const queue = bookings
-    .filter(b => b.sessionId === session.id && b.status === 'waitlisted')
-    .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id < b.id ? -1 : 1));
+  const queue = waitlistQueue(session.id, bookings);
   const promoted: ClassBooking[] = [];
   for (const w of queue) {
     if (sessionSeats(session, bookings).left <= 0) break;

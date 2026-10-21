@@ -1,4 +1,4 @@
-import type { Card, CheckIn, EntryCard, EntryOption, InsurancePolicy, LedgerEntry, Order, Product, ReferralRecordState, ReferralStatus, ReferralWait, RuleErrorCode, Share, ShareDisplayStatus, WaiverHistory, WaiverSignature, WaiverVersion } from '@climb/core';
+import type { Card, CheckIn, ClassBooking, ClassBookingStatus, ClassSession, EntryCard, EntryOption, InsurancePolicy, LedgerEntry, Order, Product, ReferralRecordState, ReferralStatus, ReferralWait, RuleErrorCode, Share, ShareDisplayStatus, WaiverHistory, WaiverSignature, WaiverVersion } from '@climb/core';
 import { createHttp, type ClientOptions } from './client';
 
 export * from './client';
@@ -154,6 +154,37 @@ export interface ClaimResult {
 }
 
 /**
+ * `GET /classes` 课表里的一节课：ClassSession（后台 `GET /admin/classes` 读写的是同一份结构），
+ * 加上门店、教练名字和名额（@climb/core sessionSeats），还有当前会员在这节课上的预约。
+ * 只返回正常（scheduled）和被岩馆取消（cancelled，带 cancelReason）的课。
+ */
+export interface ClassSessionView extends ClassSession {
+  storeName: string;
+  coachName: string | null;
+  booked: number;
+  waitlisted: number;
+  /** 还剩几个名额 */
+  left: number;
+  /** 我在这节课上占着的预约（已约或候补）；没登录或没约为 null */
+  myBooking: { id: string; status: Extract<ClassBookingStatus, 'booked' | 'waitlisted'>; position: number | null } | null;
+}
+
+/** 我的一条团课预约：预约本身，加上那节课、用的课包、候补排第几、能不能自己取消 */
+export interface MyClassBooking extends ClassBooking {
+  session: Pick<ClassSessionView, 'id' | 'name' | 'storeId' | 'storeName' | 'coachName' | 'on' | 'startTime' | 'minutes' | 'status' | 'cancelReason'>;
+  cardName: string;
+  /** 候补排第几（从 1 开始，@climb/core waitlistPosition）；不是候补为 null */
+  position: number | null;
+  /** 自助取消截止时间（ISO），开课前 classRules.cancelBeforeMinutes 分钟；候补开课前都能取消 */
+  cancelDeadline: string;
+  /** 现在能不能自己取消（@climb/core cancelBlockedBy）；能为 null */
+  cancelBlockedBy: RuleErrorCode | null;
+}
+
+/** `POST /class-bookings/:id/cancel` 的返回：取消后的预约。退次、候补补位都在后端一起做好 */
+export type CancelClassBookingResult = MyClassBooking;
+
+/**
  * 接口定义（后端还没开始写，路径是约定稿）。
  * 新增接口时在这里加方法，两个端都能直接用上。
  */
@@ -211,6 +242,30 @@ export function createApi(opts: ClientOptions) {
       get: (id: string) => http<CheckInResult>('GET', `/check-ins/${encodeURIComponent(id)}`),
       /** 老带新领取人：是不是在等邀请人入场、邀请人到了没有。邀请人入场后的提醒走订阅消息（任务 40），这里给页面刷新用 */
       referralWait: () => http<ReferralWaitInfo | null>('GET', '/check-ins/referral-wait'),
+    },
+    classes: {
+      /**
+       * 课表：from（默认今天）起 days 天（默认 7），按日期、开始时间排；store 不填为三家店都看。
+       * 没登录也能看，myBooking 为 null
+       */
+      list: (q: { store?: string; from?: string; days?: number } = {}) => {
+        const qs = Object.entries(q)
+          .filter(([, v]) => v !== undefined && v !== '')
+          .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
+          .join('&');
+        return http<ClassSessionView[]>('GET', qs ? `/classes?${qs}` : '/classes');
+      },
+      /**
+       * 约课：有名额约上并扣团课课包（流水 class_book），满员按规则排候补（不扣次）。cardId 不填用最先到期的课包。
+       * idempotencyKey 由页面点「预约」时生成一次，重试、连点都带同一个，只约一次、返回同一条。
+       * 不能约返回 409（class-no-card / class-full / class-already-booked …，@climb/core bookBlockedBy）
+       */
+      book: (sessionId: string, body: { cardId?: string; idempotencyKey: string }) =>
+        http<MyClassBooking>('POST', `/classes/${encodeURIComponent(sessionId)}/bookings`, body),
+      /** 取消自己的预约：截止前取消退次（class_cancel），空出的名额由候补第一位补上（扣次记 class_book）；截止后返回 409 class-cancel-too-late */
+      cancel: (bookingId: string) => http<CancelClassBookingResult>('POST', `/class-bookings/${encodeURIComponent(bookingId)}/cancel`),
+      /** 我的预约：所有状态都返回，按开课时间排，最近要上的在前，上过的、取消的在后 */
+      mine: () => http<MyClassBooking[]>('GET', '/me/class-bookings'),
     },
     shares: {
       /**

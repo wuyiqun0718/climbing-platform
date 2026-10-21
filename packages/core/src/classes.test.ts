@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  bookClass, cancelBooking, cancelDeadline, cancelSession, classCardOptions, fillFromWaitlist, isLateForClass, sessionSeats,
+  bookClass, cancelBooking, cancelDeadline, cancelSession, classCardOptions, fillFromWaitlist, isLateForClass, sessionSeats, waitlistPosition,
   type ClassBooking, type ClassSession,
 } from './classes';
 import { defaultClassRules, defaultRules, defineGym, type ClassRules } from './gym';
@@ -89,6 +89,8 @@ describe('约课', () => {
     expect(remaining(cards, 'c')).toBe(5);
     expect(sessionSeats(session, bookings)).toEqual({ booked: 2, waitlisted: 1, left: 0 });
     expect(code(() => book(['a', 'b', 'c'], { r: { ...rules, waitlist: false } }))).toBe('class-full');
+    const four = book(['a', 'b', 'c', 'd']).bookings;
+    expect(four.map(b => waitlistPosition(b, four))).toEqual([null, null, 1, 2]);
     expect(code(() => book(['a', 'b', 'c', 'd'], { r: { ...rules, waitlistMax: 1 } }))).toBe('class-waitlist-full');
   });
 

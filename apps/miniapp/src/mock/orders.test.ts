@@ -68,6 +68,7 @@ describe('mock 订单', () => {
   it('示例数据里阿杰有前台和小程序的订单，含一单退款', async () => {
     const { ajie } = setup();
     expect((await ajie.me.orders()).map(o => [o.product.id, o.channel, o.status])).toEqual([
+      ['class10', 'wechat', 'paid'],
       ['c10', 'wechat', 'paid'],
       ['pt-trial', 'wechat', 'refunded'],
       ['year', 'desk_pos', 'paid'],

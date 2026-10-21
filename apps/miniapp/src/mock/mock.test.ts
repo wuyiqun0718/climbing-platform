@@ -26,7 +26,7 @@ describe('mock 接口', () => {
     const { guest, ajie } = setup();
     expect((await guest.products.list()).length).toBeGreaterThan(0);
     expect(await codeOf(guest.me.cards())).toEqual({ status: 401, code: 'unauthorized' });
-    expect((await ajie.me.cards()).map(c => c.kind)).toEqual(['period', 'count']);
+    expect((await ajie.me.cards()).map(c => c.kind)).toEqual(['period', 'count', 'class']);
   });
 
   it('次卡入场扣 1 次，同一天再次入场不扣', async () => {

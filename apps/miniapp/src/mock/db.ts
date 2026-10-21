@@ -1,4 +1,4 @@
-import { ledgerEntry, snapshotOf, type Card, type CheckIn, type EntryQr, type InsurancePolicy, type LedgerEntry, type Order, type Product, type Share, type WaiverSignature, type WaiverVersion } from '@climb/core';
+import { ledgerEntry, snapshotOf, type Card, type CheckIn, type ClassBooking, type ClassSession, type ClassType, type EntryQr, type InsurancePolicy, type LedgerEntry, type Order, type Product, type Share, type WaiverSignature, type WaiverVersion } from '@climb/core';
 import { addDays, type DateKey } from '@climb/utils';
 
 export interface MockMember {
@@ -24,6 +24,17 @@ export interface MockCheckIn extends CheckIn {
   policyId: string;
 }
 
+/** 教练（员工），团课和私教用；后台员工账号（mvp/dashboard 任务 22）建 */
+export interface MockCoach {
+  id: string;
+  name: string;
+}
+
+/** 团课预约：后端 class_bookings 表里多存一个幂等键 */
+export interface MockClassBooking extends ClassBooking {
+  idempotencyKey?: string;
+}
+
 export interface MockDb {
   members: MockMember[];
   stores: MockStore[];
@@ -42,6 +53,11 @@ export interface MockDb {
   /** 卡的流水，只追加 */
   ledger: LedgerEntry[];
   orders: Order[];
+  coaches: MockCoach[];
+  /** 团课课程种类、排好的课、预约；后台 /admin/class-types、/admin/classes 读写同一份 */
+  classTypes: ClassType[];
+  classSessions: ClassSession[];
+  classBookings: MockClassBooking[];
   /** 自增序号，用来生成 id */
   seq: number;
 }
@@ -75,13 +91,14 @@ export const MOCK_WAIVER: WaiverVersion = {
 };
 
 /**
- * 示例数据，跟原型一致：年卡会员阿杰（还有一张 10 次卡），第一次来的小鹿什么卡都没有。
+ * 示例数据，跟原型一致：年卡会员阿杰（还有一张 10 次卡、一张团课 10 次），第一次来的小鹿什么卡都没有。
  * 另有一位从青橙导入的老会员老周（20 次卡剩 8 次），还没登录过小程序，没有 openid。
  * 价格是原型里的占位价（docs/project-context.md 第 7 节）。
  */
 export function seedDb(today: DateKey): MockDb {
   const year: Card = { id: 'card-ajie-year', kind: 'period', memberId: MOCK_MEMBERS.ajie, productId: 'year', name: '年卡', startsOn: addDays(today, -209), expiresOn: addDays(today, 155) };
   const c10: Card = { id: 'card-ajie-c10', kind: 'count', memberId: MOCK_MEMBERS.ajie, productId: 'c10', name: '10 次卡', total: 10, remaining: 6, expiresOn: addDays(today, 118) };
+  const k10: Card = { id: 'card-ajie-class10', kind: 'class', memberId: MOCK_MEMBERS.ajie, productId: 'class10', name: '团课 10 次', total: 10, remaining: 10, expiresOn: addDays(today, 170) };
   const c20: Card = { id: 'card-laozhou-c20', kind: 'count', memberId: MOCK_MEMBERS.laozhou, productId: 'c20', name: '20 次卡', total: 20, remaining: 8, expiresOn: addDays(today, 200) };
   // 阿杰的 10 次卡：买了以后带朋友来用过 4 次，流水和入场记录对得上
   const c10Visits = [[-50, 'binggang'], [-36, 'huiju'], [-21, 'binggang'], [-7, 'huanqiugang']] as const;
@@ -96,6 +113,7 @@ export function seedDb(today: DateKey): MockDb {
     ...checkIns.map((ci, i) => ledgerEntry({
       id: `led-seed-${i + 3}`, card: { ...c10, remaining: 9 - i }, delta: -1, reason: 'check_in', on: ci.on, at: at(ci.on), ref: { type: 'check_in', id: ci.id },
     })),
+    ledgerEntry({ id: 'led-seed-8', card: k10, delta: 10, reason: 'purchase', on: addDays(today, -10), at: at(addDays(today, -10)), ref: { type: 'order', id: 'order-seed-4' } }),
     ledgerEntry({ id: 'led-seed-7', card: c20, delta: 8, reason: 'import', on: addDays(today, -3), at: at(addDays(today, -3)), note: '青橙导入' }),
   ];
   const p = (id: string, category: Product['category'], name: string, yuan: number, extra: Partial<Product> = {}): Product => ({
@@ -128,7 +146,9 @@ export function seedDb(today: DateKey): MockDb {
     order('order-seed-1', 'year', year.startsOn, { channel: 'desk_pos', storeId: 'binggang', cardId: year.id }),
     order('order-seed-2', 'pt-trial', addDays(today, -80), { status: 'refunded', wxTransactionId: 'mock-wx-order-seed-2' }),
     order('order-seed-3', 'c10', addDays(today, -62), { wxTransactionId: 'mock-wx-order-seed-3', cardId: c10.id }),
+    order('order-seed-4', 'class10', addDays(today, -10), { wxTransactionId: 'mock-wx-order-seed-4', cardId: k10.id }),
   ];
+  const { classTypes, classSessions } = seedClasses(today);
   return {
     members: [
       { id: MOCK_MEMBERS.ajie, name: '阿杰', phone: '13800000001', openid: 'wx-ajie', source: 'walkin' },
@@ -141,7 +161,7 @@ export function seedDb(today: DateKey): MockDb {
       { id: 'huanqiugang', name: '环球港店' },
     ],
     products,
-    cards: [year, c10, c20],
+    cards: [year, c10, k10, c20],
     shares: [],
     checkIns,
     entryQrs: [],
@@ -151,8 +171,54 @@ export function seedDb(today: DateKey): MockDb {
     waivers: [{ id: 'waiver-sign-seed-1', memberId: MOCK_MEMBERS.ajie, waiverVersionId: MOCK_WAIVER.id, signedAt: at(addDays(today, -62)) }],
     ledger,
     orders,
+    coaches: MOCK_COACHES,
+    classTypes,
+    classSessions,
+    classBookings: [],
     seq: 0,
   };
+}
+
+export const MOCK_COACHES: MockCoach[] = [
+  { id: 'coach-max', name: 'Max' },
+  { id: 'coach-kiki', name: 'Kiki' },
+  { id: 'coach-may', name: 'May' },
+];
+
+/**
+ * 团课示例：跟原型的课表一样，从今天起 7 天，每种课按星期几开。
+ * 后天滨港店的「先锋攀登体验」被岩馆取消了，用来看取消的样子。
+ */
+function seedClasses(today: DateKey) {
+  const t = (id: string, name: string, minutes: number, capacity: number, coachId: string): ClassType => ({ id, name, minutes, capacity, credits: 1, coachId, active: true });
+  const classTypes = [
+    t('ct-bouldering', '抱石入门', 90, 8, 'coach-kiki'),
+    t('ct-lead', '先锋攀登体验', 120, 6, 'coach-may'),
+    t('ct-core', '核心与指力', 60, 10, 'coach-max'),
+    t('ct-stretch', '拉伸与灵活性', 60, 12, 'coach-kiki'),
+  ];
+  const plan: { type: string; storeId: string; startTime: string; weekdays: number[] }[] = [
+    { type: 'ct-bouldering', storeId: 'huanqiugang', startTime: '19:00', weekdays: [1, 3, 5, 0] },
+    { type: 'ct-lead', storeId: 'binggang', startTime: '14:00', weekdays: [6, 0, 3] },
+    { type: 'ct-core', storeId: 'binggang', startTime: '20:00', weekdays: [1, 2, 4, 5] },
+    { type: 'ct-stretch', storeId: 'huiju', startTime: '18:30', weekdays: [2, 4, 6] },
+  ];
+  const classSessions: ClassSession[] = [];
+  for (let i = 0; i < 7; i++) {
+    const on = addDays(today, i);
+    const weekday = new Date(`${on}T00:00:00`).getDay();
+    for (const p of plan) {
+      if (!p.weekdays.includes(weekday)) continue;
+      const type = classTypes.find(x => x.id === p.type)!;
+      classSessions.push({
+        id: `cls-${on}-${p.type.slice(3)}`, classTypeId: type.id, name: type.name, storeId: p.storeId, on, startTime: p.startTime,
+        minutes: type.minutes, capacity: type.capacity, credits: type.credits, coachId: type.coachId, status: 'scheduled',
+      });
+    }
+  }
+  const lead = classSessions.find(c => c.classTypeId === 'ct-lead' && c.on > addDays(today, 1));
+  if (lead) Object.assign(lead, { status: 'cancelled', cancelReason: '教练临时有事，这节停一次' });
+  return { classTypes, classSessions };
 }
 
 /** mock 数据存哪：小程序和 H5 里是 uni 本地存储，测试里用内存 */
@@ -164,7 +230,7 @@ export interface MockStorage {
 const DB_KEY = 'mock:db';
 const WX_KEY = 'mock:wx';
 /** 示例数据的结构改了就加 1，存着的旧数据会被丢掉、重新生成 */
-const DB_VERSION = 8;
+const DB_VERSION = 9;
 
 /** 读存着的数据；没有或者版本不对就用示例数据重新生成 */
 export function loadDb(storage: MockStorage, today: DateKey): MockDb {
