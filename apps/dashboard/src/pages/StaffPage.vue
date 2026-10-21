@@ -6,7 +6,7 @@
  */
 import type { StaffRow } from '@climb/api';
 import { STAFF_ROLE_TEXT } from '@climb/core';
-import { DataTable, errorText, useToast, type Column } from '@climb/ui-web';
+import { DataTable, errorText, useToast, type Column, UiButton } from '@climb/ui-web';
 import { formatYuan } from '@climb/utils';
 import { onMounted, ref } from 'vue';
 import { api } from '../api';
@@ -78,17 +78,17 @@ async function toggle(r: StaffRow) {
       <h1>员工</h1>
       <p>停用的账号不能登录，已经登录的会马上退出；点一行修改或重置密码</p>
     </div>
-    <button type="button" class="create" @click="openForm(null)">新增员工</button>
+    <UiButton variant="primary" @click="openForm(null)">新增员工</UiButton>
   </header>
   <StaffForm v-model:open="formOpen" :staff="editing" :all="rows" @saved="onSaved" />
   <p v-if="error" class="state error" role="alert">
-    {{ error }}<button type="button" class="retry" @click="load">重试</button>
+    {{ error }}<UiButton size="sm" @click="load">重试</UiButton>
   </p>
   <section class="panel">
     <DataTable :columns="columns" :rows="rows" row-key="id" :loading="loading" empty="还没有员工" clickable @row-click="(r: StaffRow) => openForm(r)">
       <template #cell-active="{ row }">
         <span class="status" :class="{ off: !row.active }">{{ row.active ? '在用' : '已停用' }}</span>
-        <button v-if="!isMe(row)" type="button" class="link" :disabled="toggling !== null" @click.stop="toggle(row)" @keydown.enter.stop>{{ row.active ? '停用' : '启用' }}</button>
+        <UiButton variant="link" v-if="!isMe(row)" :disabled="toggling !== null" @click.stop="toggle(row)" @keydown.enter.stop>{{ row.active ? '停用' : '启用' }}</UiButton>
       </template>
     </DataTable>
   </section>
@@ -98,12 +98,8 @@ async function toggle(r: StaffRow) {
 .page-h { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0 16px; }
 .page-h h1 { margin: 0; font-family: var(--font-display); font-size: 34px; font-weight: 400; }
 .page-h p { margin: 4px 0 16px; font-size: 13px; color: var(--ink-muted); }
-.create { flex: none; padding: 6px 14px; white-space: nowrap; font: inherit; font-weight: 600; color: var(--on-brand); background: var(--brand); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
 .status { margin-right: 10px; font-size: 13px; }
 .off { color: var(--ink-muted); }
-.link { padding: 0; font: inherit; font-size: 13px; color: var(--brand); background: none; border: 0; cursor: pointer; text-decoration: underline; }
-.link:disabled { cursor: default; opacity: 0.5; }
 .state { margin: 0 0 16px; font-size: 13px; color: var(--ink-muted); }
 .state.error { display: flex; align-items: center; gap: 12px; padding: 10px 14px; color: var(--ink); background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }
-.retry { padding: 2px 10px; font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
 </style>

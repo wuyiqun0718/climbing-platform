@@ -4,7 +4,7 @@
  * 页面只有老板能进（权限 settings 页、settings.freezeRules）。
  */
 import { FREEZE_DAYS_LIMIT, freezeRulesErrors, type FreezeRules, type FreezeRulesErrors } from '@climb/core';
-import { Field, errorText } from '@climb/ui-web';
+import { Field, errorText, UiButton } from '@climb/ui-web';
 import { onMounted, reactive, ref } from 'vue';
 import { api } from '../api';
 import { badField } from '../components/memberForm';
@@ -100,7 +100,7 @@ async function submit() {
       </Field>
       <p v-if="submitErr" class="err" role="alert">{{ submitErr }}</p>
       <div class="actions">
-        <button type="submit" class="btn primary" :disabled="busy">{{ busy ? '保存中…' : '保存' }}</button>
+        <UiButton variant="primary" type="submit" :disabled="busy">{{ busy ? '保存中…' : '保存' }}</UiButton>
         <span v-if="saved" class="muted" role="status">已保存</span>
       </div>
     </form>
@@ -121,18 +121,4 @@ async function submit() {
 .check { display: inline-flex; flex: none; align-items: center; gap: 6px; font-size: 13.5px; white-space: nowrap; }
 .err { margin: 0; padding: 9px 12px; font-size: 13px; background: var(--accent-soft); border-radius: var(--radius-sm); }
 .actions { display: flex; align-items: center; gap: 12px; }
-.btn {
-  height: 34px;
-  padding: 0 14px;
-  font: inherit;
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-.btn:disabled { cursor: default; opacity: 0.5; }
-.btn.primary { color: var(--on-brand); background: var(--brand); border: var(--stroke) solid var(--ink); }
 </style>

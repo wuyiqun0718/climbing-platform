@@ -17,8 +17,12 @@ const props = withDefaults(
     empty?: string;
     /** 行可点（比如进详情），点了 emit row-click */
     clickable?: boolean;
+    /** 放在已经有边框的面板里：表格自己不再画框，一张表只留一个框 */
+    plain?: boolean;
+    /** 长列表限高，表格内部滚动，表头吸顶，比如 'calc(100vh - 240px)' */
+    maxHeight?: string;
   }>(),
-  { loading: false, empty: '没有数据', clickable: false },
+  { loading: false, empty: '没有数据', clickable: false, plain: false, maxHeight: undefined },
 );
 
 const emit = defineEmits<{ 'row-click': [row: T, index: number] }>();
@@ -57,7 +61,7 @@ function onRow(row: T, index: number) {
 </script>
 
 <template>
-  <div class="wrap" :aria-busy="loading">
+  <div class="wrap" :class="{ plain, scroll: !!maxHeight }" :style="maxHeight ? { maxHeight } : undefined" :aria-busy="loading">
     <table class="tbl" :class="{ dim: loading && rows.length > 0 }">
       <thead>
         <tr>
@@ -107,7 +111,9 @@ function onRow(row: T, index: number) {
   border: var(--stroke) solid var(--ink);
   border-radius: var(--radius-lg);
 }
-.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; transition: opacity 0.15s; }
+.wrap.plain { background: transparent; border: 0; border-radius: 0; }
+.wrap.scroll { overflow: auto; }
+.tbl { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13.5px; transition: opacity 0.15s; }
 .tbl.dim { opacity: 0.5; }
 th {
   padding: 10px 14px;
@@ -116,6 +122,11 @@ th {
   color: var(--ink-muted);
   white-space: nowrap;
   border-bottom: var(--stroke) solid var(--ink);
+  /* 吸顶相对最近的滚动容器：限了高就是表格自己，否则 .wrap 横向滚动时只是不动 */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface);
 }
 td { padding: 11px 14px; white-space: nowrap; vertical-align: middle; border-bottom: 1px solid var(--line); }
 tbody tr:last-child td { border-bottom: 0; }

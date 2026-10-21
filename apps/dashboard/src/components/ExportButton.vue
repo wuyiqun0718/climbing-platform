@@ -4,7 +4,7 @@
  * 导出什么、手机号打不打码、门店权限都由接口按列表同一套规则定；没有导出权限（permissions.ts 的 data.export）不显示。
  */
 import type { ExportFilters, ExportKind } from '@climb/api';
-import { errorText, useToast } from '@climb/ui-web';
+import { errorText, useToast, UiButton } from '@climb/ui-web';
 import { computed, ref } from 'vue';
 import { api } from '../api';
 import { canDo } from '../permissions';
@@ -35,10 +35,5 @@ async function run() {
 </script>
 
 <template>
-  <button v-if="can" type="button" class="export" :disabled="busy || disabled" @click="run">{{ busy ? '导出中…' : (label ?? '导出 Excel') }}</button>
+  <UiButton v-if="can" :disabled="busy || disabled" @click="run">{{ busy ? '导出中…' : (label ?? '导出 Excel') }}</UiButton>
 </template>
-
-<style scoped>
-.export { flex: none; padding: 6px 14px; white-space: nowrap; font: inherit; font-weight: 600; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
-.export:disabled { cursor: default; opacity: 0.5; }
-</style>

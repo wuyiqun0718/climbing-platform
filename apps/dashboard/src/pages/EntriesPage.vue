@@ -5,7 +5,7 @@
  * 「分享」tab 是分享记录（任务 21，components/ShareRecords.vue）；选的 tab 放在地址的 ?tab=shares 里。
  */
 import { ENTRY_METHOD_TEXT, type CheckInList, type CheckInListRow, type VoidCheckInResult } from '@climb/api';
-import { ConfirmButton, DataTable, errorText, useToast, type Column } from '@climb/ui-web';
+import { ConfirmButton, DataTable, StatTile, errorText, useToast, type Column, Tabs, UiButton } from '@climb/ui-web';
 import { formatDot, isDateKey, toDateKey } from '@climb/utils';
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -26,6 +26,7 @@ const latest = createLatest();
 const router = useRouter();
 const route = useRoute();
 const tab = computed(() => (route.query.tab === 'shares' ? 'shares' : 'entries'));
+const TABS = [{ key: 'entries', label: '入场' }, { key: 'shares', label: '分享' }] as const;
 const setTab = (t: 'entries' | 'shares') => router.replace({ query: t === 'shares' ? { tab: t } : {} });
 const toast = useToast();
 
@@ -49,6 +50,10 @@ watch(() => [session.state.staff?.id, session.state.storeId, date.value, tab.val
 
 const live = computed(() => data.value?.items.filter(r => !r.voided).length ?? 0);
 const voidedCount = computed(() => (data.value?.items.length ?? 0) - live.value);
+// 汇总条：没撤销的按入场方式分；保单数看入场记录上有没有 policyId
+const liveRows = computed(() => data.value?.items.filter(r => !r.voided) ?? []);
+const byMethod = (m: CheckInListRow['method']) => liveRows.value.filter(r => r.method === m).length;
+const insured = computed(() => liveRows.value.filter(r => r.insurance).length);
 
 const columns = computed<Column<CheckInListRow>[]>(() => [
   { key: 'memberName', label: '会员', format: r => r.memberName || '（没填名字）' },
@@ -83,16 +88,24 @@ function onVoided() {
       <ExportButton kind="check-ins" :filters="{ date, ...(session.state.storeId ? { store: session.state.storeId } : {}) }" :disabled="!isDateKey(date)" />
     </div>
   </header>
-  <nav class="tabs" role="tablist">
-    <button type="button" role="tab" :aria-selected="tab === 'entries'" :class="{ on: tab === 'entries' }" @click="setTab('entries')">入场</button>
-    <button type="button" role="tab" :aria-selected="tab === 'shares'" :class="{ on: tab === 'shares' }" @click="setTab('shares')">分享</button>
-  </nav>
+  <Tabs class="tabs" :options="TABS" :model-value="tab" @update:model-value="setTab" />
   <ShareRecords v-if="tab === 'shares'" />
   <template v-else>
     <p v-if="error" class="state error" role="alert">
-      {{ error }}<button type="button" class="retry" @click="load">重试</button>
+      {{ error }}<UiButton size="sm" @click="load">重试</UiButton>
     </p>
-    <p v-else-if="data" class="state">{{ formatDot(data.date) }} 入场 {{ live }} 人次{{ voidedCount ? `，撤销 ${voidedCount} 条` : '' }}</p>
+    <template v-else-if="data">
+      <section class="tiles" :class="{ loading }">
+        <StatTile hero label="入场" :value="live" unit="人次" :note="formatDot(data.date)" />
+        <StatTile label="扫码" :value="byMethod('scan')" unit="人次" note="会员在小程序出码" />
+        <StatTile label="前台登记" :value="byMethod('desk')" unit="人次" note="前台手动登记" />
+        <StatTile label="撤销" :value="voidedCount" unit="条" note="不算进入场人次" />
+      </section>
+      <p v-if="live" class="ins">
+        <b>这天入场的 {{ live }} 人次里，{{ insured }} 人次有当日保单</b>
+        <span>{{ insured < live ? `另外 ${live - insured} 人次没有保单记录，看下面「保险」列。` : '每次入场都有保单记录。' }}</span>
+      </p>
+    </template>
     <section class="panel">
       <DataTable
         :columns="columns"
@@ -131,9 +144,12 @@ function onVoided() {
 .date input { padding: 5px 8px; font: inherit; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); }
 .state { margin: 0 0 16px; font-size: 13px; color: var(--ink-muted); }
 .state.error { display: flex; align-items: center; gap: 12px; padding: 10px 14px; color: var(--ink); background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }
-.retry { padding: 2px 10px; font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
-.tabs { display: flex; gap: 4px; margin-bottom: 16px; }
-.tabs button { padding: 5px 14px; font: inherit; font-size: 13.5px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); cursor: pointer; }
-.tabs button.on { font-weight: 700; border-color: var(--ink); }
+.tabs { margin-bottom: 16px; }
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; transition: opacity 0.15s; }
+.tiles.loading { opacity: 0.55; }
+.ins { display: flex; flex-direction: column; gap: 2px; margin: 0 0 16px; padding: 12px 16px; font-size: 13px; background: var(--brand-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
+.ins b { font-size: 14.5px; }
+.ins span { color: var(--ink-muted); }
+@media (max-width: 1100px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .voided { font-size: 12px; color: var(--ink-muted); }
 </style>

@@ -7,7 +7,7 @@
  * 右侧实时入场列表（任务 38）：增量轮询 GET /desk/feed（deskFeed.ts），首次入场的高亮，提醒前台讲安全须知；撤销的从列表去掉。
  */
 import { ApiError } from '@climb/api';
-import { errorText } from '@climb/ui-web';
+import { errorText, UiButton } from '@climb/ui-web';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { api, deskApi, deskDevice } from '../api';
 import { canDo, canSeeStore } from '../permissions';
@@ -90,10 +90,10 @@ const unbound = computed(() => display.value.kind === 'unbound' || (state.value.
           <option value="" disabled>选门店</option>
           <option v-for="st in stores" :key="st.id" :value="st.id">{{ st.name }}</option>
         </select>
-        <button type="submit" class="btn" :disabled="binding || !storeId">{{ binding ? '绑定中…' : '绑定这家店' }}</button>
+        <UiButton variant="primary" type="submit" :disabled="binding || !storeId">{{ binding ? '绑定中…' : '绑定这家店' }}</UiButton>
       </form>
       <p v-if="bindErr" class="warn" role="alert">{{ bindErr }}</p>
-      <button v-if="unbound" type="button" class="link" @click="forget">清掉这台平板上的绑定</button>
+      <UiButton variant="link" v-if="unbound" @click="forget">清掉这台平板上的绑定</UiButton>
     </section>
 
     <div v-else class="layout">
@@ -156,8 +156,6 @@ h1 { margin: 0; font-family: var(--font-display); font-size: 40px; font-weight: 
 .offline { max-width: 520px; padding: 32px; background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
 .row { display: flex; gap: 8px; }
 .row select { padding: 6px 10px; font: inherit; }
-.btn { padding: 8px 16px; font: inherit; font-weight: 600; color: var(--on-brand); text-decoration: none; background: var(--brand); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
-.btn:disabled { opacity: 0.5; cursor: default; }
+.btn { padding: 8px 16px; font: inherit; font-weight: 600; color: var(--on-brand); text-decoration: none; background: var(--brand); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); }
 .warn { margin: 0; padding: 8px 12px; background: var(--accent-soft); border-radius: var(--radius-sm); }
-.link { padding: 0; font: inherit; color: var(--brand); background: none; border: 0; cursor: pointer; text-decoration: underline; }
 </style>

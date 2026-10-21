@@ -16,7 +16,7 @@ import {
   type ProductInput,
   type ProductPatch,
 } from '@climb/core';
-import { Field, Modal, errorText } from '@climb/ui-web';
+import { Field, Modal, errorText, UiButton } from '@climb/ui-web';
 import { formatYuan } from '@climb/utils';
 import { computed, reactive, ref, useId, watch } from 'vue';
 import { api } from '../api';
@@ -145,8 +145,8 @@ async function submit() {
       <p v-if="err" class="err" role="alert">{{ err }}</p>
     </form>
     <template #footer>
-      <button type="button" class="btn" :disabled="busy" @click="emit('update:open', false)">取消</button>
-      <button type="submit" class="btn primary" :form="formId" :disabled="busy">{{ busy ? '保存中…' : '保存' }}</button>
+      <UiButton :disabled="busy" @click="emit('update:open', false)">取消</UiButton>
+      <UiButton variant="primary" type="submit" :form="formId" :disabled="busy">{{ busy ? '保存中…' : '保存' }}</UiButton>
     </template>
   </Modal>
 </template>
@@ -157,19 +157,4 @@ async function submit() {
 .note { margin: 0; font-size: 13px; color: var(--ink-muted); }
 .check { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
 .err { margin: 0; padding: 9px 12px; font-size: 13px; background: var(--accent-soft); border-radius: var(--radius-sm); }
-.btn {
-  height: 34px;
-  padding: 0 14px;
-  font: inherit;
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-.btn:hover:not(:disabled) { border-color: var(--ink); }
-.btn:disabled { cursor: default; opacity: 0.5; }
-.btn.primary { color: var(--on-brand); background: var(--brand); border-color: var(--brand); }
 </style>

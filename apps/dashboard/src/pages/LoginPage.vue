@@ -54,14 +54,14 @@ async function submit() {
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <button type="submit" :disabled="submitting">{{ submitting ? '登录中…' : '登录' }}</button>
       <p class="hint">忘记密码找馆长重置。</p>
-      <p v-if="usingMock" class="hint">演示数据：13800000001（馆长）、13800000002（店长）、13800000003（前台），密码都是 123456</p>
+      <p v-if="usingMock" class="hint">演示数据：<span class="nowrap">13800000001（馆长）</span>、<span class="nowrap">13800000002（店长）</span>、<span class="nowrap">13800000003（前台）</span>，密码都是 123456</p>
     </form>
   </div>
 </template>
 
 <style scoped>
 .wrap { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; }
-.card { width: min(380px, 100%); display: grid; gap: 14px; padding: 28px 24px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); }
+.card { width: min(380px, 100%); display: grid; gap: 14px; padding: 28px 24px; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
 .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
 .brand img { width: 44px; height: 44px; border-radius: var(--radius-sm); }
 .brand h1 { margin: 0; font-family: var(--font-display); font-size: 24px; font-weight: 400; }
@@ -70,7 +70,8 @@ async function submit() {
 .field input { padding: 11px 12px; font: inherit; font-weight: 400; font-size: 15px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); }
 .field input:focus { border-color: var(--ink); outline: none; }
 .error { margin: 0; padding: 9px 12px; font-size: 13px; background: var(--accent-soft); border-radius: var(--radius-sm); }
-button { padding: 12px; font: inherit; font-weight: 700; color: var(--on-brand); background: var(--brand); border: 0; border-radius: var(--radius-sm); cursor: pointer; }
+button { padding: 12px; font: inherit; font-weight: 700; color: var(--on-brand); background: var(--brand); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
 button:disabled { opacity: 0.6; cursor: default; }
 .hint { margin: 0; font-size: 12px; color: var(--ink-muted); }
+.nowrap { white-space: nowrap; }
 </style>

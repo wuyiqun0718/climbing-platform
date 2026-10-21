@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { CHANNEL_TEXT, REFUND_METHOD_TEXT, REVENUE_CATEGORY_TEXT, type FinanceRefundRow, type FinanceSummary } from '@climb/api';
 import { financeRangeError, type RevenueBucket } from '@climb/core';
-import { DataTable, StatTile, errorText, type Column } from '@climb/ui-web';
+import { BarList, DataTable, StatTile, errorText, type BarRow, type Column, Tabs, UiButton } from '@climb/ui-web';
 import { formatDot, formatYuan, toDateKey } from '@climb/utils';
 import { computed, ref, watch } from 'vue';
 import { api } from '../api';
@@ -61,6 +61,11 @@ const bucketColumns = (first: string): Column<Bucket>[] => [
 ];
 const channelRows = computed<Bucket[]>(() => (data.value?.byChannel ?? []).map(b => ({ ...b, label: CHANNEL_TEXT[b.key] })));
 const categoryRows = computed<Bucket[]>(() => (data.value?.byCategory ?? []).map(b => ({ ...b, label: REVENUE_CATEGORY_TEXT[b.key] })));
+// 表上面的横条：条长按这一组里最多的那项，右边是营收和占比
+function bars(rows: Bucket[]): BarRow[] {
+  const max = Math.max(0, ...rows.map(r => r.grossCents));
+  return rows.map(r => ({ key: r.key, label: r.label, value: formatYuan(r.grossCents), note: `占 ${pct(r.grossCents, data.value?.grossCents ?? 0)}%`, width: pct(r.grossCents, max), inner: 100 }));
+}
 
 const refundColumns = computed<Column<FinanceRefundRow>[]>(() => [
   { key: 'refundedOn', label: '退款日期', format: r => formatDot(r.refundedOn) },
@@ -83,16 +88,14 @@ const show = (v: number | undefined) => (v === undefined ? '—' : formatYuan(v)
     <p>{{ formatDot(from) }} 到 {{ formatDot(to) }}，{{ storeName }}</p>
   </header>
   <div class="filters">
-    <button v-for="p in RANGE_PRESETS" :key="p.key" type="button" class="chip" :class="{ on: activePreset === p.key }" @click="usePreset(p.key)">
-      {{ p.label }}
-    </button>
+    <Tabs variant="chips" label="日期区间" :options="RANGE_PRESETS" :model-value="activePreset" @update:model-value="usePreset" />
     <label>从 <input v-model="from" type="date" :max="to" required /></label>
     <label>到 <input v-model="to" type="date" :min="from" required /></label>
     <span v-if="rangeError" class="bad" role="alert">{{ rangeError }}</span>
     <ExportButton kind="orders" :filters="{ from, to, ...(session.state.storeId ? { store: session.state.storeId } : {}) }" label="导出订单" :disabled="!!rangeError" />
   </div>
   <p v-if="error" class="state error" role="alert">
-    {{ error }}<button type="button" class="retry" @click="load">重试</button>
+    {{ error }}<UiButton size="sm" @click="load">重试</UiButton>
   </p>
   <section class="grid" :class="{ loading }" :aria-busy="loading">
     <StatTile hero label="营收" :value="show(data?.grossCents)" note="按收款日，退款前" />
@@ -103,17 +106,19 @@ const show = (v: number | undefined) => (v === undefined ? '—' : formatYuan(v)
   <section v-if="data" class="grid two" :class="{ loading }">
     <div class="panel">
       <h2>按收款方式</h2>
-      <DataTable :columns="bucketColumns('收款方式')" :rows="channelRows" row-key="key" />
+      <BarList class="bars" :rows="bars(channelRows)" />
+      <DataTable plain :columns="bucketColumns('收款方式')" :rows="channelRows" row-key="key" />
     </div>
     <div class="panel">
       <h2>按品类</h2>
-      <DataTable :columns="bucketColumns('品类')" :rows="categoryRows" row-key="key" />
+      <BarList class="bars" :rows="bars(categoryRows)" />
+      <DataTable plain :columns="bucketColumns('品类')" :rows="categoryRows" row-key="key" />
     </div>
   </section>
   <section v-if="data" class="panel wide" :class="{ loading }">
     <h2>退款</h2>
     <p class="sub">微信订单原路退回；线下收的钱线下退，这里只记录</p>
-    <DataTable :columns="refundColumns" :rows="data.refunds" row-key="refundId" empty="这段时间没有退款" />
+    <DataTable plain :columns="refundColumns" :rows="data.refunds" row-key="refundId" empty="这段时间没有退款" />
   </section>
 </template>
 
@@ -122,19 +127,17 @@ const show = (v: number | undefined) => (v === undefined ? '—' : formatYuan(v)
 .page-h p { margin: 4px 0 16px; font-size: 13px; color: var(--ink-muted); }
 .filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 16px; font-size: 13px; }
 .filters input { padding: 4px 8px; font: inherit; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); }
-.chip { padding: 4px 12px; font: inherit; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: 999px; cursor: pointer; }
-.chip.on { background: var(--accent-soft); font-weight: 600; }
 .bad { color: var(--ink); font-weight: 600; }
 .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; transition: opacity 0.15s; }
 .grid.loading, .panel.loading { opacity: 0.55; }
 .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 16px; }
 .state { margin: 0 0 16px; font-size: 13px; color: var(--ink-muted); }
 .state.error { display: flex; align-items: center; gap: 12px; padding: 10px 14px; color: var(--ink); background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }
-.retry { padding: 4px 10px; font: inherit; font-weight: 600; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
 .panel { min-width: 0; padding: 16px 18px; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
 .panel h2 { margin: 0 0 12px; font-family: var(--font-display); font-size: 20px; font-weight: 400; }
 .panel .sub { margin: -10px 0 12px; font-size: 12px; color: var(--ink-muted); }
 .panel.wide { margin-top: 16px; }
+.bars { margin-bottom: 16px; }
 @media (max-width: 1100px) { .grid.two { grid-template-columns: 1fr; } }
 @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
 </style>

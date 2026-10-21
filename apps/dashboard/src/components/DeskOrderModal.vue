@@ -15,7 +15,7 @@ import {
   type DeskPayChannel,
   type Product,
 } from '@climb/core';
-import { Field, Modal, errorText } from '@climb/ui-web';
+import { Field, Modal, errorText, UiButton } from '@climb/ui-web';
 import { formatYuan } from '@climb/utils';
 import { computed, ref, useId, watch } from 'vue';
 import { api } from '../api';
@@ -162,13 +162,13 @@ async function submit() {
     <form :id="formId" class="form" novalidate @submit.prevent="submit">
       <section v-if="picked" class="picked">
         <span>会员：<b>{{ picked.name || '没填名字' }}</b></span>
-        <button v-if="!member" type="button" class="btn sm" :disabled="busy" @click="picked = null">换一个</button>
+        <UiButton size="sm" v-if="!member" :disabled="busy" @click="picked = null">换一个</UiButton>
       </section>
       <section v-else class="pick">
         <Field label="会员" required hint="输手机号（后四位也行）或名字" :error="searchErr" v-slot="f">
           <div class="row">
             <input v-model="q" v-bind="f.attrs" autocomplete="off" autofocus @keydown.enter.prevent="search" />
-            <button type="button" class="btn" :disabled="searching || !q.trim()" @click="search">{{ searching ? '搜索中…' : '搜索' }}</button>
+            <UiButton :disabled="searching || !q.trim()" @click="search">{{ searching ? '搜索中…' : '搜索' }}</UiButton>
           </div>
         </Field>
         <ul v-if="found?.length" class="found">
@@ -179,7 +179,7 @@ async function submit() {
           </li>
         </ul>
         <p v-else-if="found" class="hint">没找到这个人。</p>
-        <button type="button" class="btn sm" @click="formOpen = true">当场建档</button>
+        <UiButton size="sm" @click="formOpen = true">当场建档</UiButton>
       </section>
 
       <Field label="卡种" required :error="productsErr" v-slot="f">
@@ -209,8 +209,8 @@ async function submit() {
       <p v-if="submitErr" class="err" role="alert">{{ submitErr }}</p>
     </form>
     <template #footer>
-      <button type="button" class="btn" :disabled="busy" @click="close">取消</button>
-      <button type="submit" class="btn primary" :form="formId" :disabled="busy">{{ busy ? '提交中…' : '确认收款，开卡' }}</button>
+      <UiButton :disabled="busy" @click="close">取消</UiButton>
+      <UiButton variant="primary" type="submit" :form="formId" :disabled="busy">{{ busy ? '提交中…' : '确认收款，开卡' }}</UiButton>
     </template>
   </Modal>
 
@@ -232,20 +232,4 @@ async function submit() {
 .hint { margin: 0; }
 .num { font-family: var(--font-number); font-variant-numeric: tabular-nums; }
 .err { margin: 0; padding: 9px 12px; font-size: 13px; background: var(--accent-soft); border-radius: var(--radius-sm); }
-.btn {
-  height: 34px;
-  padding: 0 14px;
-  font: inherit;
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-.btn.sm { height: 28px; padding: 0 10px; font-size: 12.5px; }
-.btn:hover:not(:disabled) { border-color: var(--ink); }
-.btn:disabled { cursor: default; opacity: 0.5; }
-.btn.primary { color: var(--on-brand); background: var(--brand); border-color: var(--brand); }
 </style>

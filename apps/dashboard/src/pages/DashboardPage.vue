@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { MEMBER_SOURCE_TEXT, type DashboardSummary, type StoreCompareRow } from '@climb/api';
-import { BarList, DataTable, StatTile, errorText, type BarRow, type Column } from '@climb/ui-web';
+import { BarList, DataTable, StatTile, errorText, type BarRow, type Column, UiButton } from '@climb/ui-web';
 import { formatDot, formatYuan, toDateKey, weekdayOf } from '@climb/utils';
 import gym from '@gym';
 import { computed, ref, watch } from 'vue';
@@ -73,6 +73,7 @@ const compareColumns: Column<StoreCompareRow>[] = [
   { key: 'newcomersBought', label: '其中办卡', num: true, format: r => `${r.newcomersBought}（${pct(r.newcomersBought, r.newcomers)}%）` },
 ];
 const revenueTotal = computed(() => (compareRows.value ?? []).reduce((n, r) => n + r.monthRevenueCents, 0));
+const revenueMax = computed(() => Math.max(0, ...(compareRows.value ?? []).map(r => r.monthRevenueCents)));
 
 const show = (v: number | null | undefined, fmt: (n: number) => string | number = n => n) => (v === undefined || v === null ? '—' : fmt(v));
 </script>
@@ -83,7 +84,7 @@ const show = (v: number | null | undefined, fmt: (n: number) => string | number 
     <p>{{ formatDot(today) }} {{ weekdayOf(today) }}，{{ gym.name }} {{ storeName }}</p>
   </header>
   <p v-if="error" class="state error" role="alert">
-    {{ error }}<button type="button" class="retry" @click="load">重试</button>
+    {{ error }}<UiButton size="sm" @click="load">重试</UiButton>
   </p>
   <section class="grid" :class="{ loading }" :aria-busy="loading">
     <StatTile hero label="本月营收" :value="show(data?.monthRevenueCents, formatYuan)" note="本月 1 日到今天" />
@@ -109,12 +110,15 @@ const show = (v: number | null | undefined, fmt: (n: number) => string | number 
   <section v-if="compareRows" class="panel wide" :class="{ loading }">
     <h2>门店对比</h2>
     <p class="sub">点门店名只看这家店</p>
-    <DataTable :columns="compareColumns" :rows="compareRows" row-key="storeId">
+    <DataTable plain :columns="compareColumns" :rows="compareRows" row-key="storeId">
       <template #cell-storeId="{ row }">
-        <button type="button" class="link" @click="session.setStore(row.storeId)">{{ storeNameOf(row.storeId) }}</button>
+        <UiButton variant="link" @click="session.setStore(row.storeId)">{{ storeNameOf(row.storeId) }}</UiButton>
       </template>
       <template #cell-monthRevenueCents="{ row }">
-        {{ formatYuan(row.monthRevenueCents) }} <small class="muted">{{ pct(row.monthRevenueCents, revenueTotal) }}%</small>
+        <span class="cmp-rev">
+          <span class="cmp-bar" aria-hidden="true"><i :style="{ width: `${pct(row.monthRevenueCents, revenueMax)}%` }" /></span>
+          {{ formatYuan(row.monthRevenueCents) }} <small class="muted">{{ pct(row.monthRevenueCents, revenueTotal) }}%</small>
+        </span>
       </template>
     </DataTable>
   </section>
@@ -124,7 +128,8 @@ const show = (v: number | null | undefined, fmt: (n: number) => string | number 
     <ul v-if="data.expiring.length" class="expiring">
       <li v-for="x in data.expiring" :key="x.cardId">
         <RouterLink :to="{ name: 'member', params: { id: x.memberId } }">{{ x.memberName }}</RouterLink>
-        <small>{{ x.cardName }}，{{ allStores ? `${storeNameOf(x.storeId)}，` : '' }}{{ expiryText(today, x.expiresOn) }}</small>
+        <small>{{ x.cardName }}{{ allStores ? `，${storeNameOf(x.storeId)}` : '' }}</small>
+        <span class="when">{{ expiryText(today, x.expiresOn) }}</span>
       </li>
     </ul>
     <p v-else class="sub">{{ allStores ? '' : '这家店' }} {{ gym.rules.expiryReminderDays }} 天内没有到期的期限卡</p>
@@ -138,7 +143,6 @@ const show = (v: number | null | undefined, fmt: (n: number) => string | number 
 .grid.loading { opacity: 0.55; }
 .state { margin: 0 0 16px; font-size: 13px; color: var(--ink-muted); }
 .state.error { display: flex; align-items: center; gap: 12px; padding: 10px 14px; color: var(--ink); background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }
-.retry { padding: 4px 10px; font: inherit; font-weight: 600; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
 .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 16px; }
 .panel { min-width: 0; padding: 16px 18px; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
 .panel h2 { margin: 0; font-family: var(--font-display); font-size: 20px; font-weight: 400; }
@@ -149,12 +153,15 @@ const show = (v: number | null | undefined, fmt: (n: number) => string | number 
 .note .k2 { margin-left: 8px; background: var(--brand); }
 .panel.wide { margin-top: 16px; }
 .panel.loading { opacity: 0.55; }
-.link { padding: 0; font: inherit; font-weight: 600; color: var(--ink); background: none; border: 0; text-decoration: underline; cursor: pointer; }
 .muted { color: var(--ink-muted); }
-.expiring { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px 16px; margin: 0; padding: 0; list-style: none; }
-.expiring li { display: flex; flex-direction: column; padding: 8px 0; border-bottom: 1px solid var(--neutral-soft); }
-.expiring a { font-weight: 600; color: var(--ink); }
-.expiring small { font-size: 12px; color: var(--ink-muted); }
+.cmp-rev { display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.cmp-bar { flex: none; width: 120px; height: 12px; overflow: hidden; background: var(--neutral-soft); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.cmp-bar i { display: block; height: 100%; background: var(--brand); }
+.expiring { margin: 0; padding: 0; list-style: none; }
+.expiring li { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.expiring a { font-size: 14px; font-weight: 700; color: var(--ink); }
+.expiring small { grid-row: 2; font-size: 12px; color: var(--ink-muted); }
+.expiring .when { grid-row: 1 / span 2; grid-column: 2; align-self: center; font-size: 12px; font-weight: 600; }
 @media (max-width: 1100px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .grid, .grid.two { grid-template-columns: 1fr; } }
 </style>

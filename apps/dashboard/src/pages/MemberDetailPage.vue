@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ApiError, ENTRY_METHOD_TEXT, type RefundResult, type DeskCheckInResult, type DeskOrderResult, type VoidCheckInResult, MEMBER_SOURCE_TEXT, PAY_CHANNEL_TEXT, REVENUE_CATEGORY_TEXT, type MemberDetail, type MemberEntryRow, type MemberOrderRow } from '@climb/api';
 import { CARD_STATE_TEXT, cardState, cardText, type Card, ORDER_STATUS_LABELS } from '@climb/core';
-import { ConfirmButton, DataTable, errorText, useToast, type Column } from '@climb/ui-web';
+import { ConfirmButton, DataTable, errorText, useToast, type Column, UiButton } from '@climb/ui-web';
 import { formatDot, formatYuan, toDateKey } from '@climb/utils';
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -145,8 +145,8 @@ const back = () => (window.history.state?.back ? router.back() : router.push({ n
     <div class="title">
       <h1>{{ data?.name ?? '会员详情' }}</h1>
       <span class="actions">
-        <button v-if="data && canCheckIn" type="button" class="primary" @click="checkInOpen = true">登记入场</button>
-        <button v-if="data && canOrder" type="button" class="primary" @click="orderOpen = true">收款开卡</button>
+        <UiButton variant="primary" v-if="data && canCheckIn" @click="checkInOpen = true">登记入场</UiButton>
+        <UiButton variant="primary" v-if="data && canOrder" @click="orderOpen = true">收款开卡</UiButton>
       </span>
     </div>
   </header>
@@ -155,7 +155,7 @@ const back = () => (window.history.state?.back ? router.back() : router.push({ n
 
   <p v-if="notFound" class="state" role="alert">没有这个会员，可能已经被合并或删除了。</p>
   <p v-else-if="error" class="state error" role="alert">
-    {{ error }}<button type="button" class="retry" @click="load">重试</button>
+    {{ error }}<UiButton size="sm" @click="load">重试</UiButton>
   </p>
   <p v-else-if="loading && !data" class="state">加载中…</p>
 
@@ -172,7 +172,8 @@ const back = () => (window.history.state?.back ? router.back() : router.push({ n
         <div>
           <dt>风险告知书</dt>
           <dd :class="{ warn: !data.waiver }">
-            {{ data.waiver ? `${formatDot(data.waiver.signedOn)} 签的（${data.waiver.version} 版）` : '还没签，第一次入场时让会员在小程序里签' }}
+            <span v-if="data.waiver" class="nowrap">{{ formatDot(data.waiver.signedOn) }} 签的（{{ data.waiver.version }} 版）</span>
+            <template v-else>还没签，第一次入场时让会员在小程序里签</template>
           </dd>
         </div>
       </dl>
@@ -193,10 +194,10 @@ const back = () => (window.history.state?.back ? router.back() : router.push({ n
         <span class="more">看流水 →</span>
         </button>
         <div v-if="editable(c.card) && (canAdjust || canFreeze)" class="card-ops">
-          <button v-if="canAdjust" type="button" class="link" @click="openAdjust(c.card, 'adjust')">调整</button>
+          <UiButton variant="link" v-if="canAdjust" @click="openAdjust(c.card, 'adjust')">调整</UiButton>
           <template v-if="canFreeze && c.card.kind === 'period'">
-            <button v-if="c.card.status === 'frozen'" type="button" class="link" @click="openAdjust(c.card, 'unfreeze')">解冻</button>
-            <button v-else-if="c.state === 'normal'" type="button" class="link" @click="openAdjust(c.card, 'freeze')">冻结</button>
+            <UiButton variant="link" v-if="c.card.status === 'frozen'" @click="openAdjust(c.card, 'unfreeze')">解冻</UiButton>
+            <UiButton variant="link" v-else-if="c.state === 'normal'" @click="openAdjust(c.card, 'freeze')">冻结</UiButton>
           </template>
         </div>
       </li>
@@ -207,10 +208,10 @@ const back = () => (window.history.state?.back ? router.back() : router.push({ n
 
     <h2>最近订单</h2>
     <section class="panel">
-      <DataTable :columns="orderColumns" :rows="data.recentOrders" row-key="id" empty="还没有订单">
+      <DataTable plain :columns="orderColumns" :rows="data.recentOrders" row-key="id" empty="还没有订单">
         <template #cell-status="{ row }">
           {{ ORDER_STATUS_LABELS[row.status] }}
-          <button v-if="canRefund && refundable(row)" type="button" class="link" @click="openRefund(row)">退款</button>
+          <UiButton variant="link" v-if="canRefund && refundable(row)" @click="openRefund(row)">退款</UiButton>
         </template>
       </DataTable>
     </section>
@@ -218,7 +219,7 @@ const back = () => (window.history.state?.back ? router.back() : router.push({ n
 
     <h2>最近入场</h2>
     <section class="panel">
-      <DataTable :columns="entryColumns" :rows="data.recentEntries" row-key="id" empty="还没入过场">
+      <DataTable plain :columns="entryColumns" :rows="data.recentEntries" row-key="id" empty="还没入过场">
         <template #cell-voided="{ row }">
           <span v-if="row.voided" class="voided">{{ voidText(row) }}</span>
           <ConfirmButton
@@ -241,24 +242,22 @@ const back = () => (window.history.state?.back ? router.back() : router.push({ n
 .page-h h1 { margin: 4px 0 16px; font-family: var(--font-display); font-size: 34px; font-weight: 400; }
 .title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .actions { display: flex; gap: 8px; }
-.primary { padding: 6px 14px; font: inherit; font-weight: 600; color: var(--on-brand); background: var(--brand); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
 .back { padding: 0; font: inherit; font-size: 13px; color: var(--ink-muted); background: none; border: 0; cursor: pointer; }
 h2 { margin: 22px 0 10px; font-family: var(--font-display); font-size: 22px; font-weight: 400; }
 .state { margin: 0 0 16px; font-size: 13px; color: var(--ink-muted); }
 .state.error { display: flex; align-items: center; gap: 12px; padding: 10px 14px; color: var(--ink); background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }
-.retry { padding: 4px 10px; font: inherit; font-weight: 600; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
 .panel { min-width: 0; padding: 16px 18px; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
-.info dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px 24px; margin: 0; }
+.info dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px 24px; margin: 0; }
 .info dt { font-size: 12px; color: var(--ink-muted); }
 .info dd { margin: 2px 0 0; font-weight: 600; }
 .info dd.warn { color: var(--ink); background: var(--accent-soft); padding: 2px 6px; border-radius: var(--radius-sm); }
+.nowrap { white-space: nowrap; }
 .voided { font-size: 12px; color: var(--ink-muted); }
 .num { font-family: var(--font-number); font-variant-numeric: tabular-nums; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
 .cards li { display: flex; flex-direction: column; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
 .card-btn { display: flex; flex: 1; flex-direction: column; gap: 2px; padding: 12px 14px; font: inherit; color: inherit; text-align: left; background: none; border: 0; border-radius: inherit; cursor: pointer; }
 .card-ops { display: flex; gap: 14px; padding: 0 14px 10px; }
-.link { padding: 0; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--ink); text-decoration: underline; background: none; border: 0; cursor: pointer; }
 .more { margin-top: 4px; font-size: 12px; font-weight: 600; color: var(--ink-muted); }
 .cards li.dim { opacity: 0.6; }
 .card-h { display: flex; justify-content: space-between; align-items: center; }

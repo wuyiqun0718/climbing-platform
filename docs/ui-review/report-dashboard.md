@@ -126,6 +126,8 @@
 
 ### 7. 表格外面又套了一层 2px 黑框
 
+> **已修**：`after/owner-members.png`、`after/owner-members-empty.png`、`after/owner-finance.png`、`after/owner-dashboard.png`、`after/owner-member-detail.png`。`DataTable` 加了 `plain`，放在 `.panel` 里的表只剩面板一个框；产品页按问题 17 改成单层卡片后也用 `plain`。
+
 - 页面：会员 `/members`、财务 `/finance`、看板「门店对比」`/`、会员详情的订单和入场 `/members/:id`。
 - 截图：`before/owner-members.png`、`before/owner-members-empty.png`、`before/owner-finance.png`、`before/owner-dashboard.png`、`before/owner-member-detail.png`。没有这个问题的对照：`before/owner-products.png`、`before/owner-staff.png`、`before/owner-entries-1021.png`（这些页的表格自己就是唯一的框）。
 - 现象：1440 下会员列表面板实测 **1168px 宽、border 2px、padding 16px 18px**，里面的 `DataTable` `.wrap` 又是 **1128px、border 2px**。两层黑框中间有约 18px 的白边。财务「按收款方式」同样：外层面板 576px，内表 536px。
@@ -136,6 +138,8 @@
 - 改法：一张表只留一个框。推荐给 `DataTable` 加 `plain`（或 `nested`）属性，为 true 时 `.wrap` 不要 border、不要 radius、背景透明。上述四个页面里，已经放在 `.panel` 里的表打开它。面板继续负责标题、2px 黑框和圆角。不要把产品页、员工页、入场页的表再套进带框的 `.panel`（它们现在是对的）。
 
 ### 8. 按钮、页签、分页、链接各写各的
+
+> **已修**：`after/owner-members.png`、`after/owner-courses.png`、`after/owner-entries.png`、`after/owner-finance.png`、`after/owner-products.png`、`after/owner-member-detail.png`。`packages/ui-web` 新增 `UiButton`（primary / secondary / link，`danger` 只给 primary 用，深色字块）和 `Tabs`（tabs 下划线页签 / chips 黑底药丸）。页面里的 `.btn`、`.create`、`.primary`、`.retry`、`.export`、`.link` 全部换成 `UiButton`，弹窗底部按钮、`ConfirmButton` 也是；入场页签、财务区间、私教日期用 `Tabs`；`Pager` 边框改成 2px ink。链接统一黑色加粗下划线，不再用品牌色。
 
 - 页面：几乎所有已实现页。宽屏就能看出来，不必等窄屏。
 - 截图：`before/owner-members.png`（绿底 + 2px 黑框的「新建会员」，白底黑框的「导出」）、`before/owner-courses.png`（「上一周」是 1px 灰边，「加一节课」是绿底但边框不是黑的）、「新建团课课程」又是 2px 黑框）、`before/owner-entries.png`（页签是小药丸）、`before/owner-finance.png`（「本月 / 上月」是 2px 黑描边药丸，选中底是 `var(--accent-soft)`）、`before/owner-products.png`（「下架」是品牌绿色链接）、`before/owner-member-detail.png`（「调整」是黑色下划线）。
@@ -157,12 +161,16 @@
 
 ### 9. 会员详情「风险告知书」把版本号拆到下一行
 
+> **已修**：`after/owner-member-detail.png`、`after/desk-member-detail.png`。`minmax(240px, 1fr)`，日期和版本包在 `.nowrap` 里，1440 下「风险告知书」自然落到第二行，整句不断开。
+
 - 页面：`/members/:id`。
 - 截图：`before/owner-member-detail.png`、`before/owner-member-freeze.png`、`before/desk-member-detail.png`。三张都是「2026.10.17 签的（2026-01」一行，「版）」单独一行。
 - 文件：`MemberDetailPage.vue` `.info dl { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }`。1440 下去掉侧栏后大约排得下 5 列，最后一列约 200px，装不下「2026.10.17 签的（2026-01版）」。
 - 改法：`minmax(200px, 1fr)` 改成 `minmax(240px, 1fr)`。日期和版本用一个 `<span style="white-space: nowrap">` 包住（或 class `.nowrap`），避免在「版」前面断开。若仍然挤，让「风险告知书」这一项 `grid-column: 1 / -1` 单独占一行。未签的 `.warn` 底色 `var(--accent-soft)` 可以保留。
 
 ### 10. 课程排期和原型不是同一种版面，规则区没有卡片
+
+> **已修**：`after/owner-courses.png`、`after/owner-narrow-768-courses.png`、`after/owner-narrow-390-courses.png`。团课改成 7 列周视图（今天列头 ink 底，每节一张卡，人数条 `var(--brand)`，名单 / 取消在卡片里，点卡片改课），窄屏整周横滑，没有另留表格降级。规则区补了面板，小节标题用展示字体 20px。私教空闲格虚线、不写字；会员约的显示名字并加 2px ink 描边；日期切换用 `Tabs` chips。
 
 - 页面：`/courses`。
 - 截图：`before/owner-courses.png`、`before/owner-courses-pt-slot.png`。原型：`prototype/courses.png`、`prototype/courses-pt.png`、`prototype/drawer-class.png`。
@@ -178,6 +186,8 @@
 
 ### 11. 看板和财务比原型少了图和实时动态
 
+> **部分修**：`after/owner-dashboard.png`、`after/owner-finance.png`、`after/owner-narrow-768-finance.png`、`after/owner-narrow-390-finance.png`。做了：门店对比营收列加 CSS 比例条；到期改成带分隔线的列表（名字 14px 加粗、说明 12px、右侧到期天数）；财务两个面板在表上方加 `BarList` 横条。**没做**：近 30 天营收柱、营收构成条、今日时段入场、今日团课、实时动态、近 12 个月柱、品类涨跌——`DashboardSummary` / `FinanceSummary` 没有这些字段，要先改接口；「提醒续费」没有对应接口，不放空按钮。
+
 - 页面：`/`、`/finance`。
 - 截图：`before/owner-dashboard.png`、`before/owner-dashboard-bingang.png`、`before/desk-dashboard.png`（前台营收是「—」，这是权限，不是样式错）、`before/owner-finance.png`。原型：`prototype/dash.png`、`prototype/dash-store.png`、`prototype/finance.png`。
 - 已经对齐的：四张指标卡、绿底主卡、新客/老带新横条、2px 黑框、标题用展示字体。前台主卡里的「—」可以保留。
@@ -186,6 +196,8 @@
 - 改法：这一条不要新加图表依赖。若要补，放在 `DashboardPage.vue` / `FinancePage.vue`，颜色用 `var(--chart-1)` … `var(--chart-5)` 和 `packages/ui-web/src/BarList.vue`。门店对比的营收列可以先做一条 CSS 比例条（原型 `.cmp-bar`），不必上图表库。到期列表用和原型一样的行：名字加粗 14px，说明 12px `var(--ink-muted)`，行间 `border-top: 1px solid var(--line)`。
 
 ### 12. 入场页没有汇总条，页签也不是原型那种
+
+> **部分修**：`after/owner-entries.png`、`after/owner-entries-1021.png`、`after/owner-narrow-768-entries.png`、`after/owner-narrow-390-entries.png`。表上方加了四格 `StatTile`（入场、扫码、前台登记、撤销）和 `var(--brand-soft)` 的保单说明条（按入场记录有没有保单统计）。**没做**：原型的「期限卡 / 次卡和单次票 / 好友赠送和老带新」分法——`CheckInListRow` 只有 `cardName` 没有卡种，按名字猜不可靠；「时间」列同样没有字段，按报告不留空列。
 
 - 页面：`/entries`、`/entries?tab=shares`。
 - 截图：`before/owner-entries.png`（2026-10-22，0 条）、`before/owner-entries-1021.png`（2026-10-21，27 条，表本身是齐的）、`before/owner-entries-shares.png`。原型：`prototype/entries.png`、`prototype/entries-shares.png`。
@@ -197,6 +209,8 @@
 
 ### 13. 会员列表没有原型的筛选和卡状态
 
+> **部分修**：`after/owner-members.png`、`after/owner-members-empty.png`。加了头像（名字最后一个字，`var(--brand-soft)` 底）、没有有效卡标灰、最近入场超过 30 天加 `var(--neutral-soft)` 的「N 天没来」芯片（只是显示）。**没做**：「全部 / 期限卡 / 次卡 / 7 天内到期 / 30 天没来」筛选、到期芯片、本月到店、提醒续费 / 发回访券——会员列表接口只有 `q` 和 `page`，行里也没有卡种和到期日，要先改接口；只筛当前页会误导。
+
 - 页面：`/members`。
 - 截图：`before/owner-members.png`、`before/owner-members-empty.png`、`before/owner-members-page2.png`。原型：`prototype/members.png`、`prototype/members-empty.png`。
 - 现象：原型有「全部 / 期限卡 / 次卡 / 7 天内到期 / 30 天没来」药丸，行内有头像、卡名、到期芯片（快到期是警告色）、本月到店、来源，以及「提醒续费 / 发回访券」。实现是搜索框加一张表（名字、打码手机号、来源、首次到店、有效卡张数、最近入场）。空状态文案是通顺的，分页也正常。搜索框 `max-width: 420px`，和表的宽度差一截，可以保留。
@@ -204,12 +218,16 @@
 
 ### 14. 活动页是一整屏空白说明
 
+> **已修（占位页）**：`after/owner-events.png`、`after/manager-events.png`、`after/desk-events.png`。`TodoPage.vue` 用和其它页一样的页头，下面一张单层 2px 框的说明卡，不再像白屏。真正的 `EventsPage.vue`（活动卡片、报名进度、发布弹窗）是功能任务，这次没做。
+
 - 页面：`/events`。老板、店长、前台导航里都有。
 - 截图：`before/owner-events.png`（店长、前台同页，`before/manager-events.png`、`before/desk-events.png`）。原型：`prototype/events.png`、`prototype/drawer-event.png`。
 - 现象：`TodoPage.vue` 只有一句「这个页面还没开始做」。原型是活动卡片：左边日期色块、标题、时间地点、费用、报名进度、状态药丸，右上角「发布活动」。
 - 改法：任务没做完之前，不要让导航点进去像坏掉的白屏。`TodoPage.vue` 的标题用和其它页一样的页头（展示字体 34px、副文案 13px `var(--ink-muted)`，上下间距跟 `MembersPage.vue` `.page-h`）。真做的时候新建 `EventsPage.vue`，在 `router.ts` 的 `PAGES.events` 换掉 `TodoPage`。卡片用问题 7 的单层 2px 黑框。日期块用 `var(--brand)` / `var(--accent)` / `var(--neutral-soft)` 轮换，不要在组件里写死色值。进度条是一个灰轨 `var(--neutral-soft)` 加 `var(--brand)` 填充。发布用 `Modal.vue`，不要再做一套抽屉。
 
 ### 15. 侧栏颜色写死，标题没有用展示字体
+
+> **已修**：`after/owner-dashboard.png`（及所有宽屏截图的侧栏）。`App.vue` 不再有十六进制色值，次要字、分隔线、悬停都由 `var(--surface)` 经 `color-mix` 调透明度；品牌名用展示字体、字重 400、`letter-spacing: 0.04em`。导航图标没加。
 
 - 页面：所有已登录页的左侧栏。
 - 截图：`before/owner-dashboard.png`。原型：`prototype/dash.png`（标志是反色字标 + 「门店后台」，导航有图标，底部是头像）。
@@ -226,6 +244,8 @@
 
 ### 16. 登录卡的演示账号在「店长」两个字中间换行
 
+> **已修**：`after/login.png`、`after/login-narrow-390.png`。三个演示账号各包一个 `.nowrap`；卡片和登录按钮边框改成 2px ink。
+
 - 页面：`/login`。
 - 截图：`before/login.png`、`before/login-error-phone.png`、`before/login-error-password.png`、`before/login-narrow-390.png`。
 - 现象：卡片宽约 380px。演示那一行折成「13800000002（店」和「长）、13800000003（前台）」。错误态（手机号不是 11 位、密码错误）的米色提示条本身是齐的，用的 `var(--accent-soft)`，可以保留。登录卡边框是 `1px solid var(--line)`，和后台其它 2px 黑框不一致。
@@ -234,12 +254,16 @@
 
 ### 17. 卡种页是表格，原型是行内改价
 
+> **已修**：`after/owner-products.png`。每组一张单层卡片，组名放进卡片页眉（展示字体 20px），表格用 `plain`。没改成行内改价。
+
 - 页面：`/products`。
 - 截图：`before/owner-products.png`、`before/owner-products-new.png`。原型：`prototype/products.png`。
 - 现象：实现按期限卡 / 次卡 / 单次票 / 私教课 / 团课分表，下架行是灰色字，对齐正常，没有溢出。原型是每张卡一个价格输入框和开关，右上角「保存修改」。这是交互不同，不是坏掉。
 - 改法：不必改回行内输入。若要靠近原型，只把分组标题放进问题 7 那种单层卡片的页眉（现在 `ProductsPage.vue` `.panel h2` 是 15px 系统字体，浮在表上方）。价格列已经是 `num` + `formatYuan`，保持右对齐和 `var(--font-number)`。
 
 ### 18. 分享记录很长，表头不跟着走；入场「今天」经常是空的
+
+> **已修**：`after/owner-entries-shares.png`（视口截图，表内滚过 600px，表头仍在）。`DataTable` 的 `th` 吸顶，新增 `maxHeight`：分享记录限高 `calc(100vh - 260px)` 在表内滚动，表头跟着走（`.wrap` 本身是横向滚动容器，不限高时吸顶对页面滚动不起作用）。入场默认日期和空状态按报告不改。
 
 - 页面：`/entries?tab=shares`，以及 `/entries` 默认日期。
 - 截图：`before/owner-entries-shares.png`、`before/owner-entries.png`、`before/owner-entries-empty.png`、`before/owner-entries-1021.png`。

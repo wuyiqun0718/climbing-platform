@@ -5,7 +5,7 @@
  */
 import { MEMBER_SOURCE_TEXT, type MemberDetail, type MemberExistsError } from '@climb/api';
 import { DEFAULT_DESK_MEMBER_SOURCE, DESK_MEMBER_SOURCES, MEMBER_NAME_MAX, newMemberErrors, normalizePhone, type MemberSource, type NewMemberErrors } from '@climb/core';
-import { Field, Modal, errorText } from '@climb/ui-web';
+import { Field, Modal, errorText, UiButton } from '@climb/ui-web';
 import { computed, ref, useId, watch } from 'vue';
 import { api } from '../api';
 import { storeOptions } from '../permissions';
@@ -96,7 +96,7 @@ function openExisting() {
       </Field>
       <p v-if="exists" class="exists" role="alert">
         <span>{{ exists.message }}</span>
-        <button type="button" class="btn" @click="openExisting">查看这个会员</button>
+        <UiButton @click="openExisting">查看这个会员</UiButton>
       </p>
       <Field label="名字" hint="可以先不填，会员在小程序里补" :error="errs.name" v-slot="f">
         <input v-model="name" v-bind="f.attrs" :maxlength="MEMBER_NAME_MAX" autocomplete="off" @input="errs.name = undefined" />
@@ -114,8 +114,8 @@ function openExisting() {
       <p v-if="submitErr" class="err" role="alert">{{ submitErr }}</p>
     </form>
     <template #footer>
-      <button type="button" class="btn" :disabled="busy" @click="close">取消</button>
-      <button type="submit" class="btn primary" :form="formId" :disabled="busy">{{ busy ? '提交中…' : '建档' }}</button>
+      <UiButton :disabled="busy" @click="close">取消</UiButton>
+      <UiButton variant="primary" type="submit" :form="formId" :disabled="busy">{{ busy ? '提交中…' : '建档' }}</UiButton>
     </template>
   </Modal>
 </template>
@@ -124,19 +124,4 @@ function openExisting() {
 .form { display: grid; gap: 14px; }
 .exists { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -4px 0 0; padding: 9px 12px; font-size: 13px; background: var(--accent-soft); border-radius: var(--radius-sm); }
 .err { margin: 0; padding: 9px 12px; font-size: 13px; background: var(--accent-soft); border-radius: var(--radius-sm); }
-.btn {
-  height: 34px;
-  padding: 0 14px;
-  font: inherit;
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-.btn:hover:not(:disabled) { border-color: var(--ink); }
-.btn:disabled { cursor: default; opacity: 0.5; }
-.btn.primary { color: var(--on-brand); background: var(--brand); border-color: var(--brand); }
 </style>

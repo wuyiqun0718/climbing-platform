@@ -1,11 +1,11 @@
 <script setup lang="ts">
 /**
- * 团课课表（任务 26）：按周、按门店（跟顶部门店切换联动）看课；加一节课、改时间人数、复制上周、取消一节课（要写原因）。
+ * 团课课表（任务 26）：按周、按门店（跟顶部门店切换联动）看课，一天一列，今天的列头反色；加一节课、改时间人数、复制上周、取消一节课（要写原因）。
  * 排好就发布，小程序约课看的是同一份课表。规则都在 @climb/core 的 classSchedule.ts / classes.ts，接口拦下的直接显示接口的说法。
  */
 import type { AdminClassRow, ClassWeek } from '@climb/api';
 import { weekStartOf, type ClassType } from '@climb/core';
-import { ConfirmButton, DataTable, Field, Modal, errorText, useToast, type Column } from '@climb/ui-web';
+import { ConfirmButton, Field, Modal, errorText, useToast, UiButton } from '@climb/ui-web';
 import { addDays, formatDot, toDateKey, weekdayOf } from '@climb/utils';
 import { computed, reactive, ref, useId, watch } from 'vue';
 import { api } from '../api';
@@ -39,15 +39,17 @@ async function load() {
 }
 watch(() => [session.state.staff?.id, storeId.value, week.value], () => session.state.staff && load(), { immediate: true });
 
-const columns = computed<Column<AdminClassRow>[]>(() => [
-  { key: 'on', label: '日期', format: s => `${formatDot(s.on)} ${weekdayOf(s.on)}` },
-  { key: 'startTime', label: '时间', format: s => `${s.startTime}（${s.minutes} 分钟）` },
-  ...(storeId.value === null ? [{ key: 'storeId', label: '门店', format: (s: AdminClassRow) => storeNameOf(s.storeId) }] : []),
-  { key: 'name', label: '课程' },
-  { key: 'coachName', label: '教练', format: s => s.coachName ?? '—' },
-  { key: 'booked', label: '已约 / 上限', num: true, format: s => `${s.booked} / ${s.capacity}${s.waitlisted ? `，候补 ${s.waitlisted}` : ''}` },
-  { key: 'status', label: '' },
-]);
+// 一周七列，每列按开始时间排
+const today = toDateKey(new Date());
+const days = computed(() =>
+  Array.from({ length: 7 }, (_, i) => {
+    const on = addDays(week.value, i);
+    const sessions = (data.value?.sessions ?? []).filter(s => s.on === on).sort((a, b) => a.startTime.localeCompare(b.startTime));
+    return { on, sessions };
+  }),
+);
+const seatsWidth = (s: AdminClassRow) => `${s.capacity ? Math.min(100, Math.round((s.booked / s.capacity) * 100)) : 0}%`;
+const editable = (s: AdminClassRow) => canSchedule.value && s.status !== 'cancelled';
 
 // 加一节课、改一节课：同一个弹窗
 const formId = useId();
@@ -124,34 +126,54 @@ async function copyLastWeek() {
 
 <template>
   <div class="bar">
-    <button type="button" class="btn" @click="week = addDays(week, -7)">上一周</button>
+    <UiButton @click="week = addDays(week, -7)">上一周</UiButton>
     <strong>{{ formatDot(week) }} – {{ formatDot(addDays(week, 6)) }}</strong>
-    <button type="button" class="btn" @click="week = addDays(week, 7)">下一周</button>
+    <UiButton @click="week = addDays(week, 7)">下一周</UiButton>
     <span class="grow" />
     <template v-if="canSchedule">
-      <button type="button" class="btn" :disabled="copying" @click="copyLastWeek">复制上周课表</button>
-      <button type="button" class="btn primary" @click="openForm(null)">加一节课</button>
+      <UiButton :disabled="copying" @click="copyLastWeek">复制上周课表</UiButton>
+      <UiButton variant="primary" @click="openForm(null)">加一节课</UiButton>
     </template>
   </div>
-  <p v-if="error" class="state error" role="alert">{{ error }}<button type="button" class="btn" @click="load">重试</button></p>
-  <section class="panel">
-    <DataTable :columns="columns" :rows="data?.sessions ?? []" row-key="id" :loading="loading" empty="这周还没排课" :clickable="canSchedule" @row-click="(s: AdminClassRow) => canSchedule && s.status !== 'cancelled' && openForm(s)">
-      <template #cell-status="{ row }">
-        <button type="button" class="link" @click.stop="openRoster(row)" @keydown.enter.stop>名单</button>
-        <span v-if="row.status === 'cancelled'" class="off">已取消：{{ row.cancelReason }}</span>
-        <span v-else-if="canSchedule" @click.stop @keydown.enter.stop>
+  <p v-if="error" class="state error" role="alert">{{ error }}<UiButton size="sm" @click="load">重试</UiButton></p>
+  <p v-else-if="loading && !data" class="state">加载中…</p>
+  <section v-if="data" class="week" :class="{ loading }" :aria-busy="loading">
+    <div v-for="d in days" :key="d.on" class="col">
+      <div class="col-h" :class="{ today: d.on === today }">
+        <b>{{ weekdayOf(d.on) }}</b>
+        <small>{{ formatDot(d.on).slice(5) }}</small>
+      </div>
+      <p v-if="!d.sessions.length" class="none">没排课</p>
+      <article v-for="s in d.sessions" :key="s.id" class="item" :class="{ cancelled: s.status === 'cancelled' }">
+        <component
+          :is="editable(s) ? 'button' : 'div'"
+          :type="editable(s) ? 'button' : undefined"
+          class="item-main"
+          :aria-label="editable(s) ? `改 ${s.name} ${formatDot(s.on)} ${s.startTime}` : undefined"
+          @click="editable(s) && openForm(s)"
+        >
+          <time class="num">{{ s.startTime }} · {{ s.minutes }} 分钟</time>
+          <b>{{ s.name }}</b>
+          <small>{{ s.coachName ?? '没指定教练' }}{{ storeId === null ? `，${storeNameOf(s.storeId)}` : '' }}</small>
+          <span class="seats" aria-hidden="true"><i :style="{ width: seatsWidth(s) }" /></span>
+          <small class="num">已约 {{ s.booked }} / {{ s.capacity }}{{ s.waitlisted ? `，候补 ${s.waitlisted}` : '' }}</small>
+        </component>
+        <p v-if="s.status === 'cancelled'" class="off">已取消：{{ s.cancelReason }}</p>
+        <div class="ops">
+          <UiButton variant="link" @click="openRoster(s)">名单</UiButton>
           <ConfirmButton
+            v-if="editable(s)"
             label="取消"
             title="取消这节课"
             variant="link"
             danger
-            :message="`已约的 ${row.booked} 人退回次数，候补的作废。`"
-            :action="cancelAction(row)"
+            :message="`已约的 ${s.booked} 人退回次数，候补的作废。`"
+            :action="cancelAction(s)"
             @done="load"
           />
-        </span>
-      </template>
-    </DataTable>
+        </div>
+      </article>
+    </div>
   </section>
 
   <ClassRoster v-model:open="rosterOpen" :session-id="rosterId" @changed="load" />
@@ -185,8 +207,8 @@ async function copyLastWeek() {
       <p v-if="formErr" class="state error" role="alert">{{ formErr }}</p>
     </form>
     <template #footer>
-      <button type="button" class="btn" :disabled="busy" @click="formOpen = false">取消</button>
-      <button type="submit" class="btn primary" :form="formId" :disabled="busy">{{ busy ? '保存中…' : '保存' }}</button>
+      <UiButton :disabled="busy" @click="formOpen = false">取消</UiButton>
+      <UiButton variant="primary" type="submit" :form="formId" :disabled="busy">{{ busy ? '保存中…' : '保存' }}</UiButton>
     </template>
   </Modal>
 </template>
@@ -196,11 +218,28 @@ async function copyLastWeek() {
 .grow { flex: 1; }
 .form { display: grid; gap: 14px; }
 .form input, .form select { font: inherit; }
-.off { font-size: 12px; color: var(--ink-muted); }
-.link { margin-right: 10px; padding: 0; font: inherit; font-size: 13px; color: var(--brand); background: none; border: 0; cursor: pointer; text-decoration: underline; }
-.btn { flex: none; min-height: 32px; padding: 0 12px; font: inherit; font-size: 13px; font-weight: 600; white-space: nowrap; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
-.btn:disabled { cursor: default; opacity: 0.5; }
-.btn.primary { color: var(--on-brand); background: var(--brand); }
-.panel { margin-bottom: 24px; }
+.off { margin: 0; font-size: 12px; color: var(--ink-muted); }
+.state { margin: 0 0 12px; font-size: 13px; color: var(--ink-muted); }
+/* 七列装不下（窄屏）就整周横滑，列宽不再往下压 */
+.week { display: grid; grid-template-columns: repeat(7, minmax(138px, 1fr)); gap: 10px; min-width: 0; margin-bottom: 24px; padding-bottom: 4px; overflow-x: auto; transition: opacity 0.15s; }
+.week.loading { opacity: 0.55; }
+.col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.col-h { display: flex; align-items: baseline; justify-content: space-between; padding: 6px 10px; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }
+.col-h.today { color: var(--surface); background: var(--ink); }
+.col-h b { font-size: 14px; }
+.col-h small { font: 600 12px var(--font-number); }
+.none { margin: 0; padding: 12px; font-size: 12px; color: var(--ink-muted); text-align: center; border: var(--stroke) dashed var(--line); border-radius: var(--radius-md); }
+.item { display: flex; flex-direction: column; gap: 6px; padding: 9px 10px; font-size: 12px; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }
+.item.cancelled { background: var(--neutral-soft); }
+.item.cancelled .item-main { opacity: 0.6; }
+.item-main { display: flex; flex-direction: column; gap: 2px; padding: 0; font: inherit; color: inherit; text-align: left; background: none; border: 0; }
+button.item-main { cursor: pointer; }
+.item-main b { font-size: 14px; }
+.item-main small { color: var(--ink-muted); }
+.num { font-family: var(--font-number); font-variant-numeric: tabular-nums; }
+time.num { font-weight: 700; }
+.seats { display: block; height: 6px; margin: 4px 0 2px; overflow: hidden; background: var(--neutral-soft); border-radius: 3px; }
+.seats i { display: block; height: 100%; background: var(--brand); }
+.ops { display: flex; gap: 12px; }
 .state.error { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; padding: 10px 14px; font-size: 13px; background: var(--accent-soft); border-radius: var(--radius-md); }
 </style>

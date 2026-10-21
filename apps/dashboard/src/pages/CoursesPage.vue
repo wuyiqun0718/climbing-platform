@@ -4,7 +4,7 @@
  * 和团课规则（取消截止、候补、迟到，占位，等馆方）；私教时间轴（任务 29，components/CoachTimeline.vue，只读）。校验都在 @climb/core 的 classTypes.ts，这里只负责显示和提交。
  */
 import { classRulesErrors, type ClassRules, type ClassRulesErrors, type ClassType } from '@climb/core';
-import { DataTable, Field, errorText, useToast, type Column } from '@climb/ui-web';
+import { DataTable, Field, errorText, useToast, type Column, UiButton } from '@climb/ui-web';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { api } from '../api';
 import ClassSchedule from '../components/ClassSchedule.vue';
@@ -139,17 +139,17 @@ async function saveRules() {
   <header class="sub-h">
     <h2>团课课程</h2>
     <p>停用后不能再排新课，已经排了的照常上；改了只影响以后排的课</p>
-    <button v-if="canEdit" type="button" class="create" @click="openForm(null)">新建团课课程</button>
+    <UiButton variant="primary" v-if="canEdit" @click="openForm(null)">新建团课课程</UiButton>
   </header>
   <ClassTypeForm v-model:open="formOpen" :type="editing" :types="types" :coaches="coaches" @saved="onSaved" />
   <p v-if="error" class="state error" role="alert">
-    {{ error }}<button type="button" class="retry" @click="load">重试</button>
+    {{ error }}<UiButton size="sm" @click="load">重试</UiButton>
   </p>
   <section class="panel">
     <DataTable :columns="columns" :rows="types" row-key="id" :loading="loading" empty="还没有团课课程" :clickable="canEdit" @row-click="(t: ClassType) => canEdit && openForm(t)">
       <template #cell-active="{ row }">
         <span class="status" :class="{ off: !row.active }">{{ row.active ? '启用' : '已停用' }}</span>
-        <button v-if="canEdit" type="button" class="link" :disabled="toggling !== null" @click.stop="toggle(row)" @keydown.enter.stop>{{ row.active ? '停用' : '启用' }}</button>
+        <UiButton variant="link" v-if="canEdit" :disabled="toggling !== null" @click.stop="toggle(row)" @keydown.enter.stop>{{ row.active ? '停用' : '启用' }}</UiButton>
       </template>
     </DataTable>
   </section>
@@ -178,7 +178,7 @@ async function saveRules() {
         <Field label="开课后多少分钟内签到不算迟到" :error="rulesErrs.lateGraceMinutes" v-slot="f">
           <input v-model="rules.lateGraceMinutes" v-bind="f.attrs" type="number" min="0" step="1" />
         </Field>
-        <button v-if="canRules" type="submit" class="create">{{ rulesBusy ? '保存中…' : '保存规则' }}</button>
+        <UiButton variant="primary" v-if="canRules" type="submit" class="save">{{ rulesBusy ? '保存中…' : '保存规则' }}</UiButton>
       </fieldset>
       <p v-if="rulesErr" class="state error" role="alert">{{ rulesErr }}</p>
     </form>
@@ -189,23 +189,21 @@ async function saveRules() {
 .page-h { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0 16px; }
 .page-h h1 { margin: 0; font-family: var(--font-display); font-size: 34px; font-weight: 400; }
 .page-h p { margin: 4px 0 16px; font-size: 13px; color: var(--ink-muted); }
-.create { flex: none; padding: 6px 14px; white-space: nowrap; font: inherit; font-weight: 600; color: var(--on-brand); background: var(--brand); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; justify-self: start; }
 .panel { margin-bottom: 24px; }
 .sub-h { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 8px; }
-.sub-h h2 { margin: 0; font-size: 16px; }
+.sub-h h2 { margin: 0; font-family: var(--font-display); font-size: 20px; font-weight: 400; }
 .sub-h p { flex: 1; margin: 0; font-size: 13px; color: var(--ink-muted); }
-.card h2 { margin: 0 0 4px; font-size: 16px; }
+.card { padding: 16px 18px; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
+.card h2 { margin: 0 0 4px; font-family: var(--font-display); font-size: 20px; font-weight: 400; }
+.save { justify-self: start; }
 .sub { margin: 0 0 12px; font-size: 13px; color: var(--ink-muted); }
 .rules fieldset { display: grid; gap: 12px; max-width: 360px; margin: 0; padding: 0; border: 0; }
 .rules input { font: inherit; }
 .check { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
 .status { margin-right: 10px; font-size: 13px; }
 .off { color: var(--ink-muted); }
-.link { padding: 0; font: inherit; font-size: 13px; color: var(--brand); background: none; border: 0; cursor: pointer; text-decoration: underline; }
-.link:disabled { cursor: default; opacity: 0.5; }
 .state { margin: 0 0 16px; font-size: 13px; color: var(--ink-muted); }
 .state.error { display: flex; align-items: center; gap: 12px; padding: 10px 14px; color: var(--ink); background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }
-.retry { flex: none; padding: 2px 10px; white-space: nowrap; font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
 @media (max-width: 900px) {
   .sub-h { align-items: flex-start; }
   .sub-h p { flex-basis: 100%; order: 3; }

@@ -6,7 +6,7 @@
  * 入口只给教练本人或店长以上（permissions.ts 的 canHandlePt）。
  */
 import type { AdminPtSlot, PtTimelineView } from '@climb/api';
-import { ConfirmButton, Field, Modal, errorText, useToast } from '@climb/ui-web';
+import { ConfirmButton, Field, Modal, errorText, useToast, Tabs, UiButton } from '@climb/ui-web';
 import { addDays, formatDot, toDateKey, weekdayOf } from '@climb/utils';
 import { computed, ref, watch } from 'vue';
 import { api } from '../api';
@@ -41,6 +41,7 @@ const days = computed(() => {
   for (let on = data.value.from; on <= data.value.to; on = addDays(on, 1)) out.push(on);
   return out;
 });
+const dayOptions = computed(() => days.value.map(on => ({ key: on, label: `${formatDot(on)} ${weekdayOf(on)}` })));
 const rows = computed(() => (data.value?.coaches ?? []).map(c => ({ coach: c.coach, slots: c.days.find(d => d.on === day.value)?.slots ?? [] })));
 
 // 点格子处理（任务 30）
@@ -93,12 +94,8 @@ function label(s: AdminPtSlot): string {
 </script>
 
 <template>
-  <div class="days" role="tablist">
-    <button v-for="on in days" :key="on" type="button" role="tab" :aria-selected="on === day" :class="{ on: on === day }" @click="day = on">
-      {{ formatDot(on) }} {{ weekdayOf(on) }}
-    </button>
-  </div>
-  <p v-if="error" class="err" role="alert">{{ error }}<button type="button" class="link" @click="load">重试</button></p>
+  <Tabs class="days" variant="chips" label="日期" :options="dayOptions" :model-value="day" @update:model-value="v => (day = v)" />
+  <p v-if="error" class="err" role="alert">{{ error }}<UiButton variant="link" class="retry" @click="load">重试</UiButton></p>
   <p v-else-if="loading && !data" class="muted">加载中…</p>
   <p v-else-if="data && !rows.length" class="muted">这家店还没有接私教的教练（在「员工」里给员工勾上「是教练」）</p>
   <div v-else-if="data" class="grid" :style="{ gridTemplateColumns: `120px repeat(${data.hours.length}, minmax(64px, 1fr))` }">
@@ -112,10 +109,11 @@ function label(s: AdminPtSlot): string {
         class="cell"
         :class="[s.status, { past: s.past, clickable: clickable(r.coach.id, s) }]"
         :title="label(s)"
+        :aria-label="label(s)"
         :tabindex="clickable(r.coach.id, s) ? 0 : undefined"
         @click="pick(r.coach.id, r.coach.name, s)"
         @keydown.enter="pick(r.coach.id, r.coach.name, s)"
-      >{{ label(s) }}</div>
+      >{{ s.status === 'free' ? '' : label(s) }}</div>
     </template>
   </div>
   <Modal :open="pickOpen" :title="picked ? `${picked.coachName} ${formatDot(picked.on)} ${picked.slot.hour}:00` : ''" :busy="busy" @update:open="v => (pickOpen = v)">
@@ -123,18 +121,18 @@ function label(s: AdminPtSlot): string {
       <div v-if="picked.slot.status === 'free'" class="pick">
         <Field label="备注" hint="线下约的填学员名字，不接课填原因，可以不填" v-slot="f"><input v-model="note" v-bind="f.attrs" maxlength="50" :disabled="busy" /></Field>
         <div class="row">
-          <button type="button" class="btn" :disabled="busy" @click="mark('offline')">标为线下约的</button>
-          <button type="button" class="btn" :disabled="busy" @click="mark('off')">标为不接课</button>
+          <UiButton :disabled="busy" @click="mark('offline')">标为线下约的</UiButton>
+          <UiButton :disabled="busy" @click="mark('off')">标为不接课</UiButton>
         </div>
       </div>
       <div v-else-if="picked.slot.mark" class="pick">
         <p>{{ label(picked.slot) }}</p>
-        <button type="button" class="btn" :disabled="busy" @click="unmark">去掉这个标记</button>
+        <UiButton :disabled="busy" @click="unmark">去掉这个标记</UiButton>
       </div>
       <div v-else-if="picked.slot.booking" class="pick">
         <p>{{ picked.slot.booking.memberName }}{{ picked.slot.booking.status === 'pending' ? '，等教练确认' : '' }}</p>
         <div class="row">
-          <button v-if="picked.slot.booking.status === 'pending'" type="button" class="btn" :disabled="busy" @click="confirm">确认</button>
+          <UiButton v-if="picked.slot.booking.status === 'pending'" :disabled="busy" @click="confirm">确认</UiButton>
           <ConfirmButton label="会员要取消" title="会员要取消这节私教" message="退回 1 节课时，格子空出来。" :action="cancelAction('member')" @done="onCancelled" />
           <ConfirmButton
             :label="picked.slot.booking.status === 'pending' ? '教练拒绝' : '教练取消'"
@@ -152,15 +150,13 @@ function label(s: AdminPtSlot): string {
 </template>
 
 <style scoped>
-.days { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; }
-.days button { padding: 4px 10px; font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); cursor: pointer; }
-.days button.on { font-weight: 700; border-color: var(--ink); }
+.days { margin-bottom: 12px; }
 .grid { display: grid; gap: 2px; overflow-x: auto; font-size: 12px; }
 .head { padding: 4px; color: var(--ink-muted); text-align: center; }
 .coach { display: flex; align-items: center; padding: 4px 8px; font-weight: 600; }
-.cell { padding: 6px 4px; overflow: hidden; text-align: center; white-space: nowrap; text-overflow: ellipsis; border-radius: 6px; }
-.cell.free { background: var(--surface); border: 1px solid var(--line); }
-.cell.member { color: var(--on-brand); background: var(--brand); }
+.cell { min-height: 28px; padding: 6px 4px; overflow: hidden; text-align: center; white-space: nowrap; text-overflow: ellipsis; border-radius: 6px; }
+.cell.free { color: var(--ink-muted); background: var(--surface); border: 1px dashed var(--line); }
+.cell.member { color: var(--on-brand); background: var(--brand); outline: var(--stroke) solid var(--ink); outline-offset: calc(-1 * var(--stroke)); font-weight: 600; }
 .cell.offline { background: var(--accent); }
 .cell.off { color: var(--ink-muted); background: var(--neutral-soft); }
 .cell.past { opacity: 0.45; }
@@ -170,11 +166,9 @@ function label(s: AdminPtSlot): string {
 .pick p { margin: 0; }
 .pick input { font: inherit; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; }
-.btn { height: 32px; padding: 0 12px; font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); cursor: pointer; }
-.btn:disabled { cursor: default; opacity: 0.5; }
 .legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0 0; font-size: 12px; color: var(--ink-muted); }
 .legend .cell { padding: 2px 8px; }
+.retry { margin-left: 8px; }
 .muted { font-size: 13px; color: var(--ink-muted); }
 .err { padding: 9px 12px; font-size: 13px; background: var(--accent-soft); border-radius: var(--radius-sm); }
-.link { margin-left: 8px; padding: 0; font: inherit; color: var(--brand); background: none; border: 0; cursor: pointer; text-decoration: underline; }
 </style>

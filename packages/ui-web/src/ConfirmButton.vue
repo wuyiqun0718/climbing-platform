@@ -8,6 +8,7 @@
 import { ref, useId } from 'vue';
 import Field from './Field.vue';
 import Modal from './Modal.vue';
+import UiButton from './UiButton.vue';
 import { REASON_MAX_LENGTH, errorText, reasonError } from './overlay';
 
 const props = withDefaults(
@@ -80,7 +81,7 @@ async function submit() {
 </script>
 
 <template>
-  <button type="button" class="trigger" :class="[variant, { danger }]" :disabled="disabled" @click="start">{{ label }}</button>
+  <UiButton :variant="variant === 'link' ? 'link' : 'secondary'" :disabled="disabled" @click="start">{{ label }}</UiButton>
   <Modal v-model:open="open" :title="title ?? label" :busy="busy" :close-on-backdrop="false">
     <form :id="formId" class="form" novalidate @submit.prevent="submit">
       <p v-if="message" class="msg">{{ message }}</p>
@@ -100,10 +101,10 @@ async function submit() {
       <p v-if="submitErr" class="err" role="alert">{{ submitErr }}</p>
     </form>
     <template #footer>
-      <button type="button" class="btn" :disabled="busy" @click="open = false">取消</button>
-      <button type="submit" class="btn primary" :class="{ danger }" :form="formId" :disabled="busy">
+      <UiButton :disabled="busy" @click="open = false">取消</UiButton>
+      <UiButton type="submit" variant="primary" :danger="danger" :form="formId" :disabled="busy">
         {{ busy ? '提交中…' : confirmText }}
-      </button>
+      </UiButton>
     </template>
   </Modal>
 </template>
@@ -112,23 +113,4 @@ async function submit() {
 .form { display: grid; gap: 12px; }
 .msg { margin: 0; font-size: 14px; color: var(--ink-muted); }
 .err { margin: 0; padding: 9px 12px; font-size: 13px; background: var(--accent-soft); border-radius: var(--radius-sm); }
-.trigger.button,
-.btn {
-  height: 34px;
-  padding: 0 14px;
-  font: inherit;
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-.trigger.button:hover:not(:disabled),
-.btn:hover:not(:disabled) { border-color: var(--ink); }
-.trigger.link { padding: 0; font: inherit; font-size: 13px; color: var(--ink); text-decoration: underline; background: none; border: 0; cursor: pointer; }
-.trigger:disabled, .btn:disabled { cursor: default; opacity: 0.5; }
-.btn.primary { color: var(--on-brand); background: var(--brand); border-color: var(--brand); }
-.btn.primary.danger { color: var(--surface); background: var(--ink); border-color: var(--ink); }
 </style>

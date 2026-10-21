@@ -2,7 +2,7 @@
 /** 一张卡的流水，从会员详情点卡打开。最新的在上面 */
 import type { CardLedger, CardLedgerRow } from '@climb/api';
 import { LEDGER_REASON_LABELS, ledgerAfterText, ledgerDeltaText } from '@climb/core';
-import { DataTable, Modal, errorText, type Column } from '@climb/ui-web';
+import { DataTable, Modal, errorText, type Column, UiButton } from '@climb/ui-web';
 import { formatDotTime } from '@climb/utils';
 import { computed, ref, watch } from 'vue';
 import { api } from '../api';
@@ -52,7 +52,7 @@ const columns: Column<Row>[] = [
 <template>
   <Modal :open="!!cardId" :title="`${title} · 流水`" width="820px" @close="emit('close')">
     <p v-if="error" class="state error" role="alert">
-      {{ error }}<button type="button" class="retry" @click="load">重试</button>
+      {{ error }}<UiButton size="sm" @click="load">重试</UiButton>
     </p>
     <DataTable v-else :columns="columns" :rows="rows" row-key="id" :loading="loading" empty="这张卡还没有流水" />
   </Modal>
@@ -61,5 +61,4 @@ const columns: Column<Row>[] = [
 <style scoped>
 .state { margin: 0; font-size: 13px; }
 .state.error { display: flex; align-items: center; gap: 12px; padding: 10px 14px; color: var(--ink); background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }
-.retry { padding: 4px 10px; font: inherit; font-weight: 600; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
 </style>

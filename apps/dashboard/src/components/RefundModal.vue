@@ -5,7 +5,7 @@
  */
 import { ApiError, REFUND_METHOD_TEXT, REFUND_STATUS_TEXT, type RefundPreview, type RefundResult } from '@climb/api';
 import { parseYuanInput, refundBasisText } from '@climb/core';
-import { Field, Modal, errorText, reasonError } from '@climb/ui-web';
+import { Field, Modal, errorText, reasonError, UiButton } from '@climb/ui-web';
 import { formatDot, formatYuan } from '@climb/utils';
 import { computed, ref, useId, watch } from 'vue';
 import { api } from '../api';
@@ -111,8 +111,8 @@ async function submit() {
       <p v-if="err" class="err" role="alert">{{ err }}</p>
     </form>
     <template #footer>
-      <button type="button" class="btn" :disabled="busy" @click="close">取消</button>
-      <button type="submit" class="btn primary" :form="formId" :disabled="busy || !preview || !!preview.blockedBy">{{ busy ? '提交中…' : '确认退款' }}</button>
+      <UiButton :disabled="busy" @click="close">取消</UiButton>
+      <UiButton variant="primary" type="submit" :form="formId" :disabled="busy || !preview || !!preview.blockedBy">{{ busy ? '提交中…' : '确认退款' }}</UiButton>
     </template>
   </Modal>
 </template>
@@ -123,19 +123,4 @@ async function submit() {
 .note { margin: 0; font-size: 13px; color: var(--ink-muted); }
 .history { padding-left: 18px; }
 .warn, .err { margin: 0; padding: 9px 12px; font-size: 13px; background: var(--accent-soft); border-radius: var(--radius-sm); }
-.btn {
-  height: 34px;
-  padding: 0 14px;
-  font: inherit;
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-.btn:hover:not(:disabled) { border-color: var(--ink); }
-.btn:disabled { cursor: default; opacity: 0.5; }
-.btn.primary { color: var(--on-brand); background: var(--brand); border-color: var(--brand); }
 </style>

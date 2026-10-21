@@ -4,7 +4,7 @@
  * 迟到算不算缺席、取消退次和候补递补都由接口按 @climb/core 的 classRoster.ts / classes.ts 判断，这里只负责显示和提交。
  */
 import type { ClassRosterView, RosterRow } from '@climb/api';
-import { ConfirmButton, DataTable, Modal, errorText, useToast, type Column } from '@climb/ui-web';
+import { ConfirmButton, DataTable, Modal, errorText, useToast, type Column, UiButton } from '@climb/ui-web';
 import { formatDot, formatDotTime } from '@climb/utils';
 import { computed, ref, watch } from 'vue';
 import { api } from '../api';
@@ -85,8 +85,8 @@ const title = computed(() => (data.value ? `${data.value.session.name} ${formatD
         <template #cell-actions="{ row }">
           <span v-if="data.session.status !== 'cancelled'" class="actions">
             <template v-if="can('class.attend')">
-              <button type="button" class="link" :disabled="busy !== null || row.status === 'attended'" @click="attend(row, true)">签到</button>
-              <button type="button" class="link" :disabled="busy !== null || row.status === 'absent'" @click="attend(row, false)">缺席</button>
+              <UiButton variant="link" :disabled="busy !== null || row.status === 'attended'" @click="attend(row, true)">签到</UiButton>
+              <UiButton variant="link" :disabled="busy !== null || row.status === 'absent'" @click="attend(row, false)">缺席</UiButton>
             </template>
             <ConfirmButton
               v-if="can('class.cancelBooking') && row.status === 'booked'"
@@ -121,7 +121,5 @@ h3 { margin: 16px 0 8px; font-size: 14px; }
 .status { display: grid; white-space: normal; }
 .status small { font-size: 12px; color: var(--ink-muted); }
 .actions { display: inline-flex; gap: 10px; white-space: nowrap; }
-.link { padding: 0; font: inherit; font-size: 13px; color: var(--brand); background: none; border: 0; cursor: pointer; text-decoration: underline; }
-.link:disabled { cursor: default; opacity: 0.4; }
 .err { margin: 0 0 12px; padding: 9px 12px; font-size: 13px; background: var(--accent-soft); border-radius: var(--radius-sm); }
 </style>

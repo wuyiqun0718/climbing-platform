@@ -4,7 +4,7 @@
  * 顺序和校验都在 @climb/core 的 product.ts，这里只负责显示和提交。页面店长以上能进（permissions.ts 的 products），改价看 product.price。
  */
 import { SHOP_SECTION_LABELS, shopSectionOf, type Product, type ShopSection } from '@climb/core';
-import { DataTable, errorText, useToast, type Column } from '@climb/ui-web';
+import { DataTable, errorText, useToast, type Column, UiButton } from '@climb/ui-web';
 import { formatYuan } from '@climb/utils';
 import { computed, onMounted, ref } from 'vue';
 import { api } from '../api';
@@ -85,22 +85,22 @@ async function toggle(p: Product) {
       <h1>卡种与价格</h1>
       <p>改价只影响以后的订单，已经卖出去的订单和卡不变；下架后小程序里看不到，前台也开不了</p>
     </div>
-    <button v-if="canCreate" type="button" class="create" @click="openForm(null)">新建卡种</button>
+    <UiButton variant="primary" v-if="canCreate" @click="openForm(null)">新建卡种</UiButton>
   </header>
   <ProductForm v-model:open="formOpen" :product="editing" :products="products" @saved="onSaved" />
   <p v-if="error" class="state error" role="alert">
-    {{ error }}<button type="button" class="retry" @click="load">重试</button>
+    {{ error }}<UiButton size="sm" @click="load">重试</UiButton>
   </p>
   <p v-else-if="loading && !products.length" class="state">加载中…</p>
   <section v-for="g in groups" :key="g.section" class="panel">
     <h2>{{ SHOP_SECTION_LABELS[g.section] }}</h2>
-    <DataTable :columns="columns" :rows="g.rows" row-key="id" :clickable="canEdit" @row-click="(p: Product) => canEdit && openForm(p)">
+    <DataTable plain :columns="columns" :rows="g.rows" row-key="id" :clickable="canEdit" @row-click="(p: Product) => canEdit && openForm(p)">
       <template #cell-name="{ row }">
         <span :class="{ off: !row.onSale }">{{ row.name }}</span>
       </template>
       <template #cell-onSale="{ row }">
         <span class="status" :class="{ off: !row.onSale }">{{ row.onSale ? '在售' : '已下架' }}</span>
-        <button v-if="canEdit" type="button" class="link" :disabled="toggling !== null" @click.stop="toggle(row)">{{ row.onSale ? '下架' : '上架' }}</button>
+        <UiButton variant="link" v-if="canEdit" :disabled="toggling !== null" @click.stop="toggle(row)">{{ row.onSale ? '下架' : '上架' }}</UiButton>
       </template>
     </DataTable>
   </section>
@@ -110,14 +110,10 @@ async function toggle(p: Product) {
 .page-h { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0 16px; }
 .page-h h1 { margin: 0; font-family: var(--font-display); font-size: 34px; font-weight: 400; }
 .page-h p { margin: 4px 0 16px; font-size: 13px; color: var(--ink-muted); }
-.create { flex: none; padding: 6px 14px; white-space: nowrap; font: inherit; font-weight: 600; color: var(--on-brand); background: var(--brand); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
-.panel { margin-bottom: 20px; }
-.panel h2 { margin: 0 0 8px; font-size: 15px; }
+.panel { min-width: 0; margin-bottom: 20px; padding: 16px 18px; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
+.panel h2 { margin: 0 0 8px; font-family: var(--font-display); font-size: 20px; font-weight: 400; }
 .off { color: var(--ink-muted); }
 .status { margin-right: 10px; font-size: 13px; }
-.link { padding: 0; font: inherit; font-size: 13px; color: var(--brand); background: none; border: 0; cursor: pointer; text-decoration: underline; }
-.link:disabled { cursor: default; opacity: 0.5; }
 .state { margin: 0 0 16px; font-size: 13px; color: var(--ink-muted); }
 .state.error { display: flex; align-items: center; gap: 12px; padding: 10px 14px; color: var(--ink); background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }
-.retry { padding: 2px 10px; font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
 </style>

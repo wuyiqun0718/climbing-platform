@@ -6,7 +6,7 @@
 import type { ShareList, ShareRow } from '@climb/api';
 import { SHARE_KIND_TEXT } from '@climb/api';
 import { SHARE_STATUS_TEXT, type Share } from '@climb/core';
-import { DataTable, errorText, type Column } from '@climb/ui-web';
+import { DataTable, errorText, type Column, UiButton } from '@climb/ui-web';
 import { formatDot } from '@climb/utils';
 import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
@@ -62,7 +62,7 @@ const columns = computed<Column<ShareRow>[]>(() => [
     </label>
   </div>
   <p v-if="error" class="state error" role="alert">
-    {{ error }}<button type="button" class="retry" @click="load">重试</button>
+    {{ error }}<UiButton size="sm" @click="load">重试</UiButton>
   </p>
   <section class="panel">
     <DataTable
@@ -71,6 +71,7 @@ const columns = computed<Column<ShareRow>[]>(() => [
       row-key="id"
       :loading="loading"
       empty="还没有分享"
+      max-height="calc(100vh - 260px)"
       clickable
       @row-click="(r: ShareRow) => router.push({ name: 'member', params: { id: r.fromMemberId } })"
     />
@@ -83,5 +84,4 @@ const columns = computed<Column<ShareRow>[]>(() => [
 .bar select { padding: 5px 8px; font: inherit; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); }
 .state { margin: 0 0 16px; font-size: 13px; color: var(--ink-muted); }
 .state.error { display: flex; align-items: center; gap: 12px; padding: 10px 14px; color: var(--ink); background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }
-.retry { padding: 2px 10px; font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
 </style>

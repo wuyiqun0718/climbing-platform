@@ -5,7 +5,7 @@
  */
 import type { DeskCheckInPreview, DeskCheckInResult } from '@climb/api';
 import { ENTRY_BLOCKED_TEXT, POLICY_STATUS_TEXT, cardText, type Card } from '@climb/core';
-import { Field, Modal, errorText } from '@climb/ui-web';
+import { Field, Modal, errorText, UiButton } from '@climb/ui-web';
 import { toDateKey } from '@climb/utils';
 import { computed, ref, useId, watch } from 'vue';
 import { api } from '../api';
@@ -109,7 +109,7 @@ async function submit() {
       <fieldset class="cards" :disabled="busy">
         <legend>用哪张卡</legend>
         <p v-if="loading && !preview" class="hint">加载中…</p>
-        <p v-else-if="loadErr" class="err" role="alert">{{ loadErr }}<button type="button" class="btn sm" @click="load">重试</button></p>
+        <p v-else-if="loadErr" class="err" role="alert">{{ loadErr }}<UiButton size="sm" @click="load">重试</UiButton></p>
         <p v-else-if="preview && !preview.options.length" class="hint">没有能用的卡。先收款开卡（比如单次票），再来登记。</p>
         <label v-for="o in preview?.options ?? []" :key="o.card.id" class="opt" :class="{ off: !o.usable }">
           <input v-model="cardId" type="radio" name="card" :value="o.card.id" :disabled="!o.usable" />
@@ -121,8 +121,8 @@ async function submit() {
       <p v-if="submitErr" class="err" role="alert">{{ submitErr }}</p>
     </form>
     <template #footer>
-      <button type="button" class="btn" :disabled="busy" @click="close">取消</button>
-      <button type="submit" class="btn primary" :form="formId" :disabled="busy || !usable.length || !cardId">{{ busy ? '提交中…' : '确认入场' }}</button>
+      <UiButton :disabled="busy" @click="close">取消</UiButton>
+      <UiButton variant="primary" type="submit" :form="formId" :disabled="busy || !usable.length || !cardId">{{ busy ? '提交中…' : '确认入场' }}</UiButton>
     </template>
   </Modal>
 </template>
@@ -138,20 +138,4 @@ async function submit() {
 .opt.off { cursor: default; opacity: 0.55; }
 .hint, .note { margin: 0; font-size: 13px; color: var(--ink-muted); }
 .warn, .err { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; padding: 9px 12px; font-size: 13px; background: var(--accent-soft); border-radius: var(--radius-sm); }
-.btn {
-  height: 34px;
-  padding: 0 14px;
-  font: inherit;
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-}
-.btn.sm { height: 28px; padding: 0 10px; font-size: 12.5px; }
-.btn:hover:not(:disabled) { border-color: var(--ink); }
-.btn:disabled { cursor: default; opacity: 0.5; }
-.btn.primary { color: var(--on-brand); background: var(--brand); border-color: var(--brand); }
 </style>

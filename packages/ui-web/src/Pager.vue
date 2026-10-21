@@ -54,13 +54,13 @@ function go(p: number) {
   font: inherit;
   color: var(--ink);
   background: var(--surface);
-  border: 1px solid var(--line);
+  border: var(--stroke) solid var(--ink);
   border-radius: var(--radius-sm);
   cursor: pointer;
 }
 .btn.num { font-family: var(--font-number); font-variant-numeric: tabular-nums; }
-.btn:hover:not(:disabled) { border-color: var(--ink); }
-.btn.on { color: var(--on-brand); background: var(--brand); border-color: var(--brand); font-weight: 700; }
+.btn:hover:not(:disabled):not(.on) { background: var(--neutral-soft); }
+.btn.on { color: var(--on-brand); background: var(--brand); font-weight: 700; }
 .btn:disabled { cursor: default; opacity: 0.45; }
 .btn.on:disabled { opacity: 1; }
 .gap { padding: 0 4px; color: var(--ink-muted); }

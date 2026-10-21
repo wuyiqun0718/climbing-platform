@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { MEMBER_SOURCE_TEXT, type DeskOrderResult, type MemberDetail, type MemberListRow, type PageOf } from '@climb/api';
-import { DataTable, Pager, errorText, useToast, type Column } from '@climb/ui-web';
-import { formatDot } from '@climb/utils';
+import { DataTable, Pager, errorText, useToast, type Column, UiButton } from '@climb/ui-web';
+import { daysBetween, formatDot, toDateKey } from '@climb/utils';
 import { onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { api } from '../api';
@@ -64,6 +64,12 @@ const columns: Column<MemberListRow>[] = [
   { key: 'lastEntryOn', label: '最近入场', format: r => (r.lastEntryOn ? formatDot(r.lastEntryOn) : '—') },
 ];
 
+// 最近入场超过这么多天标灰提示，只是显示，不影响任何规则
+const QUIET_DAYS = 30;
+const today = toDateKey(new Date());
+const quietDays = (r: MemberListRow) => (r.lastEntryOn ? daysBetween(r.lastEntryOn, today) : 0);
+const initial = (name: string) => name.trim().slice(-1) || '?';
+
 // 新建会员；搜的是手机号就预填进去
 const toast = useToast();
 const formOpen = ref(false);
@@ -95,21 +101,22 @@ const emptyText = () => (qFromRoute() ? `没找到「${qFromRoute()}」，换个
     <div class="actions">
       <ExportButton kind="members" :filters="{ q: qFromRoute() }" label="导出会员" />
       <ExportButton kind="cards" :filters="{ q: qFromRoute() }" label="导出卡" />
-      <button v-if="canOrder()" type="button" class="create" @click="orderOpen = true">收款开卡</button>
-      <button v-if="canCreate()" type="button" class="create" @click="formOpen = true">新建会员</button>
+      <UiButton variant="primary" v-if="canOrder()" @click="orderOpen = true">收款开卡</UiButton>
+      <UiButton variant="primary" v-if="canCreate()" @click="formOpen = true">新建会员</UiButton>
     </div>
   </header>
   <DeskOrderModal v-model:open="orderOpen" @created="onOrdered" />
   <MemberForm v-model:open="formOpen" :phone="prefillPhone()" @created="onCreated" @open-existing="openMember" />
   <form class="search" role="search" @submit.prevent="search()">
     <input v-model="input" type="search" placeholder="手机号（后四位也行）或名字" aria-label="搜索会员" maxlength="30" />
-    <button type="submit">搜索</button>
+    <UiButton type="submit">搜索</UiButton>
   </form>
   <p v-if="error" class="state error" role="alert">
-    {{ error }}<button type="button" class="retry" @click="load">重试</button>
+    {{ error }}<UiButton size="sm" @click="load">重试</UiButton>
   </p>
   <section class="panel">
     <DataTable
+      plain
       :columns="columns"
       :rows="data?.items ?? []"
       row-key="id"
@@ -117,7 +124,21 @@ const emptyText = () => (qFromRoute() ? `没找到「${qFromRoute()}」，换个
       :empty="emptyText()"
       clickable
       @row-click="(r: MemberListRow) => openMember(r.id)"
-    />
+    >
+      <template #cell-name="{ row }">
+        <span class="who"><span class="avatar" aria-hidden="true">{{ initial(row.name) }}</span>{{ row.name || '（没填）' }}</span>
+      </template>
+      <template #cell-validCards="{ row }">
+        <span :class="{ muted: !row.validCards }">{{ row.validCards ? `${row.validCards} 张` : '没有' }}</span>
+      </template>
+      <template #cell-lastEntryOn="{ row }">
+        <template v-if="row.lastEntryOn">
+          {{ formatDot(row.lastEntryOn) }}
+          <span v-if="quietDays(row) > QUIET_DAYS" class="chip quiet">{{ quietDays(row) }} 天没来</span>
+        </template>
+        <span v-else class="muted">—</span>
+      </template>
+    </DataTable>
     <Pager
       v-if="data && data.total > 0"
       class="pager"
@@ -133,15 +154,17 @@ const emptyText = () => (qFromRoute() ? `没找到「${qFromRoute()}」，换个
 <style scoped>
 .page-h { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0 16px; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-.create { flex: none; padding: 6px 14px; font: inherit; font-weight: 600; white-space: nowrap; color: var(--on-brand); background: var(--brand); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
 .page-h h1 { margin: 0; font-family: var(--font-display); font-size: 34px; font-weight: 400; }
 .page-h p { margin: 4px 0 16px; font-size: 13px; color: var(--ink-muted); }
 .search { display: flex; gap: 8px; max-width: 420px; margin-bottom: 16px; }
 .search input { flex: 1; min-width: 0; padding: 6px 10px; font: inherit; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); }
-.search button { padding: 6px 14px; font: inherit; font-weight: 600; color: var(--on-brand); background: var(--brand); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
 .state { margin: 0 0 16px; font-size: 13px; color: var(--ink-muted); }
 .state.error { display: flex; align-items: center; gap: 12px; padding: 10px 14px; color: var(--ink); background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }
-.retry { padding: 4px 10px; font: inherit; font-weight: 600; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
 .panel { min-width: 0; padding: 16px 18px; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
 .pager { margin-top: 12px; }
+.who { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; }
+.avatar { display: grid; flex: none; width: 30px; height: 30px; place-items: center; font-size: 13px; font-weight: 700; background: var(--brand-soft); border-radius: 50%; }
+.muted { color: var(--ink-muted); }
+.chip { display: inline-block; margin-left: 6px; padding: 1px 8px; font-size: 12px; font-weight: 600; border-radius: 999px; }
+.chip.quiet { color: var(--ink-muted); background: var(--neutral-soft); }
 </style>
