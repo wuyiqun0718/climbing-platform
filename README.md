@@ -56,7 +56,7 @@ pnpm build:gym benchmark  # 给一个岩馆打包小程序和后台
 1. `gyms/<岩馆>/gym.json` 放打包时要用的信息：名称、小程序 AppID、标志文件名。
 2. `gyms/<岩馆>/src/index.ts` 用 `defineGym()` 补上主题、营业时间、业务规则和功能开关。
 3. 两个 app 的 `vite.config.ts` 把 `@gym` 指向 `gyms/$GYM/src/index.ts`，代码里 `import gym from '@gym'` 就是当前岩馆的配置，别的岩馆不会被打进包里。
-4. 打包前 `prepare-gym` 脚本会生成小程序的 `src/manifest.json`（名称、AppID），并把 `gyms/<岩馆>/assets` 复制到两个端的静态目录。这些生成的文件不提交。
+4. 打包前 `prepare-gym` 脚本会生成小程序的 `src/manifest.json`（名称、AppID）、`src/pages.json`（由 `pages.base.json` 生成，里面 `"$brand"` 这类值换成主题颜色）和 `src/styles/theme.css`（主题 CSS 变量，挂在 `page` 上），并把 `gyms/<岩馆>/assets` 复制到两个端的静态目录。这些生成的文件不提交；小程序加页面改 `apps/miniapp/pages.base.json`。
 
 ## 新增一个岩馆
 

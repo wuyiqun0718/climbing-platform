@@ -23,9 +23,13 @@ onLaunch(() => {
 </script>
 
 <style>
-body,
+/* 主题变量由 scripts/prepare-gym.mjs 按岩馆生成，挂在 page 上，页面和组件直接用 var(--brand) 等 */
+@import './styles/theme.css';
+
 page {
-  background: #f3f4ee;
+  min-height: 100%;
+  background: var(--page);
+  color: var(--ink);
   font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 </style>

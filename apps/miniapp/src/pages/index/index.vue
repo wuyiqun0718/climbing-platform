@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { entryOptions, type Card, type EntryOption } from '@climb/core';
-import { toCssVarString } from '@climb/theme';
 // 小程序组件要按 .vue 路径引入，uni-app 才会生成 usingComponents
 import MemberCard from '@climb/ui-mp/MemberCard.vue';
 import { addDays, daysBetween, formatDot, toDateKey } from '@climb/utils';
@@ -18,7 +17,6 @@ const cards: Card[] = [
 
 // 入场规则来自 @climb/core，和后台、后端用的是同一份
 const options = entryOptions(cards, { today, rules: gym.rules, hasCheckedIn: () => false });
-const vars = toCssVarString(gym.theme);
 const logo = `/static/gym/${gym.logo}`;
 
 function cardView(o: EntryOption) {
@@ -32,14 +30,14 @@ function cardView(o: EntryOption) {
   return { kind: '老带新', tone: 'neutral' as const, value: o.usable ? '可用' : '等待', unit: '', meta: `${formatDot(c.expiresOn)} 前有效` };
 }
 
+// 导航栏颜色在 pages.json 里（按主题生成），这里只设标题
 onLoad(() => {
   uni.setNavigationBarTitle({ title: gym.shortName });
-  uni.setNavigationBarColor({ frontColor: gym.theme.onBrand === '#ffffff' ? '#ffffff' : '#000000', backgroundColor: gym.theme.brand });
 });
 </script>
 
 <template>
-  <view class="page" :style="vars">
+  <view class="page">
     <view class="hero">
       <image class="logo" :src="logo" mode="aspectFill" />
       <view class="hero-text">
@@ -62,7 +60,7 @@ onLoad(() => {
 </template>
 
 <style scoped>
-.page { min-height: 100vh; padding-bottom: 32px; background: var(--page); color: var(--ink); }
+.page { padding-bottom: 32px; }
 .hero { display: flex; align-items: center; padding: 16px; background: var(--brand); border-bottom: var(--stroke) solid var(--ink); }
 .logo { flex: none; width: 56px; height: 56px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }
 .hero-text { display: flex; flex-direction: column; margin-left: 12px; }

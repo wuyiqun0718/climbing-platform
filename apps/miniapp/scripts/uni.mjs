@@ -11,7 +11,7 @@ if (!['dev', 'build'].includes(mode) || !platform) {
   process.exit(1);
 }
 
-const gym = prepareMiniapp();
+const gym = await prepareMiniapp();
 const APP = fileURLToPath(new URL('..', import.meta.url));
 const outDir = path.join(APP, 'dist', mode, gym.id, platform);
 console.log(`▸ ${gym.name}：${mode} ${platform} → ${path.relative(APP, outDir)}`);

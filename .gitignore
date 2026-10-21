@@ -8,5 +8,7 @@ coverage/
 
 # 按岩馆生成的文件（由 prepare-gym 脚本写入，不提交）
 apps/miniapp/src/manifest.json
+apps/miniapp/src/pages.json
+apps/miniapp/src/styles/theme.css
 apps/miniapp/src/static/gym/
 apps/dashboard/public/gym/
