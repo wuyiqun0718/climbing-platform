@@ -1,9 +1,12 @@
 import { ApiError } from '@climb/api';
-import { api } from '../api';
+import { api, auth } from '../api';
 import { createMemberStore, type Me } from './member';
 
 /** 当前会员；401（没登录、或者还没验证手机号）当成没登录 */
 async function fetchMe(): Promise<Me | null> {
+  // 等启动时的登录结束，否则先拉会拿到「没登录」
+  await auth.whenReady();
+  if (!auth.loggedIn()) return null;
   try {
     return await api.me.get();
   } catch (e) {

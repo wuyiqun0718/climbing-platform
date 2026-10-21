@@ -1,7 +1,7 @@
 import type { RequestAdapter } from '@climb/api';
 import type { GymRules } from '@climb/core';
 import { toDateKey, type DateKey } from '@climb/utils';
-import { loadCurrentMember, loadDb, MOCK_MEMBERS, saveCurrentMember, saveDb, seedDb, type MockDb, type MockStorage } from './db';
+import { loadCurrentWx, loadDb, saveCurrentWx, saveDb, seedDb, type MockDb, type MockStorage } from './db';
 import { createRoutes } from './routes';
 import { createMockAdapter, type MockIdentity } from './router';
 
@@ -19,9 +19,17 @@ export interface MockOptions {
 export interface Mock {
   adapter: RequestAdapter;
   db: MockDb;
-  /** 当前以哪位示例会员的身份调接口 */
-  currentMember(): string;
+  /**
+   * 当前用的是哪个微信（openid）。小程序里 `uni.login` 的 code 在 mock 下就是它，
+   * 登录时 `POST /auth/wx-login` 拿它换 token。
+   */
+  currentWx(): string;
+  /** 当前微信绑着的会员；新微信还没验证手机号时为 null */
+  currentMember(): string | null;
+  /** 换成某位示例会员的微信 */
   switchMember(memberId: string): void;
+  /** 换成一个没登录过的新微信，用来走「验证手机号」和认领老卡 */
+  switchToNewWx(): void;
   /** 数据回到示例数据（不改当前身份） */
   reset(): void;
 }
@@ -34,7 +42,11 @@ export function createMock(opts: MockOptions): Mock {
   const today = opts.today ?? (() => toDateKey(new Date()));
   const { storage } = opts;
   const db = opts.db ?? (storage ? loadDb(storage, today()) : seedDb(today()));
-  let current: string = storage ? loadCurrentMember(storage, db) : MOCK_MEMBERS.ajie;
+  let current: string = storage ? loadCurrentWx(storage) : 'wx-ajie';
+  const setCurrent = (openid: string) => {
+    current = openid;
+    if (storage) saveCurrentWx(storage, openid);
+  };
 
   const resolveToken = (token: string): MockIdentity => {
     if (token.startsWith('mock-wx:')) return { memberId: null, openid: token.slice(8) || null };
@@ -53,11 +65,15 @@ export function createMock(opts: MockOptions): Mock {
   return {
     adapter,
     db,
-    currentMember: () => current,
+    currentWx: () => current,
+    currentMember: () => db.members.find(m => m.openid === current)?.id ?? null,
     switchMember(memberId) {
-      if (!db.members.some(m => m.id === memberId && m.openid)) throw new Error(`mock 里没有登录过的会员 ${memberId}`);
-      current = memberId;
-      if (storage) saveCurrentMember(storage, memberId);
+      const openid = db.members.find(m => m.id === memberId)?.openid;
+      if (!openid) throw new Error(`mock 里没有登录过的会员 ${memberId}`);
+      setCurrent(openid);
+    },
+    switchToNewWx() {
+      setCurrent(`wx-new-${Date.now().toString(36)}`);
     },
     reset() {
       // 路由里拿的是同一个 db 对象，所以原地替换内容

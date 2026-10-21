@@ -86,7 +86,7 @@ describe('mock 数据持久化、切换身份、重置', () => {
   };
   const open = (storage: MockStorage) => {
     const mock = createMock({ rules: defaultRules, today: () => TODAY, storage });
-    const api = createApi({ baseURL: '', gymId: 'benchmark', adapter: mock.adapter, getToken: () => mockToken(mock.currentMember()) });
+    const api = createApi({ baseURL: '', gymId: 'benchmark', adapter: mock.adapter, getToken: () => mockToken(mock.currentMember() ?? '') });
     return { mock, api };
   };
 
@@ -136,10 +136,17 @@ describe('mock 数据持久化、切换身份、重置', () => {
     expect((await again.api.me.cards()).find(c => c.id === 'card-ajie-c10')).toMatchObject({ remaining: 6 });
   });
 
+  it('换成新微信：没有绑定的会员，微信登录拿到的是临时 token', async () => {
+    const { mock, api } = open(memoryStorage());
+    mock.switchToNewWx();
+    expect(mock.currentMember()).toBeNull();
+    expect(await api.auth.wxLogin({ code: mock.currentWx() })).toMatchObject({ phoneBound: false });
+  });
+
   it('存着的数据版本不对或身份无效时用默认值', () => {
     const storage = memoryStorage();
     storage.set('mock:db', { version: 0, db: { members: [] } });
-    storage.set('mock:member', 'm-nobody');
+    storage.set('mock:wx', 42);
     const { mock } = open(storage);
     expect(mock.db).toEqual(seedDb(TODAY));
     expect(mock.currentMember()).toBe(MOCK_MEMBERS.ajie);

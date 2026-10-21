@@ -9,7 +9,7 @@ const TODAY = '2026-10-21';
 /** 跟 src/stores/index.ts 一样接 mock，身份跟着 mock.currentMember() 走 */
 function setup() {
   const mock = createMock({ rules: defaultRules, today: () => TODAY });
-  const api = createApi({ baseURL: '', gymId: 'benchmark', adapter: mock.adapter, getToken: () => mockToken(mock.currentMember()) });
+  const api = createApi({ baseURL: '', gymId: 'benchmark', adapter: mock.adapter, getToken: () => mockToken(mock.currentMember() ?? '') });
   const fetchMe = vi.fn((): Promise<Me | null> => api.me.get());
   const fetchCards = vi.fn(() => api.me.cards());
   const store = createMemberStore({ fetchMe, fetchCards });

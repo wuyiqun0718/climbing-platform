@@ -91,7 +91,7 @@ export interface MockStorage {
 }
 
 const DB_KEY = 'mock:db';
-const MEMBER_KEY = 'mock:member';
+const WX_KEY = 'mock:wx';
 /** 示例数据的结构改了就加 1，存着的旧数据会被丢掉、重新生成 */
 const DB_VERSION = 2;
 
@@ -108,12 +108,12 @@ export function saveDb(storage: MockStorage, db: MockDb) {
   storage.set(DB_KEY, { version: DB_VERSION, db: JSON.parse(JSON.stringify(db)) });
 }
 
-/** 开发时当前用哪位示例会员的身份，默认阿杰 */
-export function loadCurrentMember(storage: MockStorage, db: MockDb): string {
-  const id = storage.get(MEMBER_KEY);
-  return typeof id === 'string' && db.members.some(m => m.id === id && m.openid) ? id : MOCK_MEMBERS.ajie;
+/** 开发时当前用哪个微信（openid），默认阿杰的 */
+export function loadCurrentWx(storage: MockStorage): string {
+  const openid = storage.get(WX_KEY);
+  return typeof openid === 'string' && openid ? openid : 'wx-ajie';
 }
 
-export function saveCurrentMember(storage: MockStorage, memberId: string) {
-  storage.set(MEMBER_KEY, memberId);
+export function saveCurrentWx(storage: MockStorage, openid: string) {
+  storage.set(WX_KEY, openid);
 }

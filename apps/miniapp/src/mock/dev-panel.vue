@@ -3,11 +3,12 @@
 // 只在走 mock 时显示；真后端下 mock 为 null，这个组件什么都不渲染。
 import type { Card, Share } from '@climb/core';
 import { computed, ref } from 'vue';
-import { api, mock, run } from '../api';
+import { api, auth, mock, run } from '../api';
 import { member } from '../stores';
 
 const open = ref(false);
 const cards = computed(() => member.state.cards);
+/** 当前微信绑着的会员；新微信还没验证手机号时为空 */
 const current = ref(mock?.currentMember() ?? '');
 
 /** 只列登录过小程序的；青橙导入还没绑微信的老会员要走登录认领 */
@@ -55,12 +56,24 @@ function toggle() {
   if (open.value) refresh();
 }
 
+/** 换了微信：重新登录、重新拉会员，再重开页面（要登录的页面会跳去登录页） */
+async function relogin() {
+  current.value = mock?.currentMember() ?? '';
+  await auth.relaunch();
+  member.reset().catch(() => {});
+  reloadPage();
+}
+
 function switchTo(id: string) {
   if (!mock || id === current.value) return;
   mock.switchMember(id);
-  current.value = id;
-  member.reset().catch(() => {});
-  reloadPage();
+  relogin();
+}
+
+/** 没登录过的新微信：去卡包会跳登录页，输入老周的手机号 13800000003 能认领老卡 */
+function newWx() {
+  mock?.switchToNewWx();
+  relogin();
 }
 
 function reset() {
@@ -70,8 +83,8 @@ function reset() {
     success: r => {
       if (!r.confirm || !mock) return;
       mock.reset();
-      member.reset().catch(() => {});
-      reloadPage();
+      // 重置后新微信绑的会员没了，重新登录一次
+      relogin();
     },
   });
 }
@@ -89,6 +102,7 @@ const claim = (s: Share) => act(() => api.shares.claim(s.id), '领到了');
       <text class="label">当前身份</text>
       <view class="row">
         <text v-for="m in members" :key="m.id" class="chip" :class="{ on: m.id === current }" @click="switchTo(m.id)">{{ m.name }}</text>
+        <text class="chip" :class="{ on: !current }" @click="newWx">新微信</text>
       </view>
 
       <text class="label">卡包</text>
@@ -112,7 +126,7 @@ const claim = (s: Share) => act(() => api.shares.claim(s.id), '领到了');
         <text class="chip" @click="reset">重置数据</text>
       </view>
     </view>
-    <text class="fab" @click="toggle">{{ open ? '收起' : nameOf(current) }}</text>
+    <text class="fab" @click="toggle">{{ open ? '收起' : current ? nameOf(current) : '没登录' }}</text>
   </view>
 </template>
 

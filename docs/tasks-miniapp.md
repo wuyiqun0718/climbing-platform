@@ -27,7 +27,7 @@
 | # | 任务 | 依赖 | 涉及文件 | 完成标准 |
 |---|---|---|---|---|
 | 6 ✅ | 契约 + mock：`POST /auth/wx-login`、`POST /auth/phone`、`GET /me` | 1 | `packages/api/src/index.ts`、`src/mock/routes/auth.ts` | mock 里手机号对上「青橙导入」的老会员时，老卡出现在卡包；有单测 |
-| 7 | 登录流程：启动时 `uni.login` 换 token；第一次要手机号快速验证（`button open-type="getPhoneNumber"`），H5 下用输入框代替 | 3, 5, 6 | `src/App.vue`、`src/pages/login/*`、`src/lib/auth.ts` | 未登录访问需要登录的页面会先去登录，登录完回到原页面 |
+| 7 ✅ | 登录流程：启动时 `uni.login` 换 token；第一次要手机号快速验证（`button open-type="getPhoneNumber"`），H5 下用输入框代替 | 3, 5, 6 | `src/App.vue`、`src/pages/login/*`、`src/lib/auth.ts` | 未登录访问需要登录的页面会先去登录，登录完回到原页面 |
 | 8 | 隐私协议：首次登录前展示隐私说明并同意（小程序隐私保护指引） | 7 | `src/pages/login/*`、`src/manifest`（`__usePrivacyCheck__`） | 不同意不能登录；同意后不再弹 |
 
 ## C. 首页、卡包
