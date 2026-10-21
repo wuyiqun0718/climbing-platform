@@ -74,11 +74,14 @@ export interface ClassBooking {
   closedAt?: string;
 }
 
-/** 卡次数的一次变化：调用方据此写卡、记流水（ledgerEntry，ref 为 class_booking） */
+/**
+ * 课包次数的一次变化：调用方据此写卡、记流水（ledgerEntry）。团课和私教共用：
+ * 团课的 reason 是 class_*、ref 为 class_booking；私教（pt.ts）的是 pt_*、ref 为 pt_booking
+ */
 export interface CardChange {
   card: LessonCard;
   delta: number;
-  reason: Extract<LedgerReason, 'class_book' | 'class_cancel' | 'class_void'>;
+  reason: Extract<LedgerReason, 'class_book' | 'class_cancel' | 'class_void' | 'pt_book' | 'pt_cancel' | 'pt_void'>;
   bookingId: string;
 }
 

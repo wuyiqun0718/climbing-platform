@@ -18,3 +18,4 @@ export * from './checkInDone';
 export * from './insuranceHistory';
 export * from './shareToken';
 export * from './classes';
+export * from './pt';

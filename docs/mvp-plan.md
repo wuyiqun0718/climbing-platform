@@ -115,8 +115,8 @@ card_ledger (id, gym_id, card_id,
              remaining_after, expires_on_after,
              reason,                                             -- purchase | check_in | check_in_void | share_out | share_return
                                                                  -- | claim | adjust | refund | import | freeze | unfreeze
-                                                                 -- | class_book | class_cancel | class_void
-             ref_type, ref_id,                                   -- 关联的入场记录、订单、分享、团课预约
+                                                                 -- | class_book | class_cancel | class_void | pt_book | pt_cancel | pt_void
+             ref_type, ref_id,                                   -- 关联的入场记录、订单、分享、团课预约、私教预约
              operator_type, operator_id,                         -- member | staff | system
              note, created_at)
 

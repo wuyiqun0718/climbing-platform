@@ -25,5 +25,6 @@ export default defineGym({
     // 没写的用 @climb/core 的 defaultFreezeRules（每年次数、天数上下限是占位，等馆方定）
     freezeRules: { memberSelfService: true, perMonth: 1 },
     // 团课规则（取消截止、候补、迟到）没写，用 @climb/core 的 defaultClassRules，全是占位，等馆方定
+    // 私教规则（每小时一格的时段、取消截止、要不要教练确认）没写，用 defaultPtRules，全是占位，等馆方定
   },
 });

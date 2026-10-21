@@ -40,6 +40,15 @@ const RULE_MESSAGES: Record<RuleErrorCode, string> = {
   'class-waitlist-full': '这节课约满了，候补也排满了',
   'class-cancel-too-late': '离开课太近了，不能自己取消，找前台帮你处理',
   'booking-not-active': '这个预约已经取消或者上过课了',
+  'pt-outside-hours': '这个时间不排私教',
+  'pt-slot-past': '这个时段已经过了',
+  'pt-slot-taken': '这个时段已经被约了，换一个',
+  'pt-coach-off': '教练这个时段不接课',
+  'pt-member-busy': '你这个时段已经约了别的私教',
+  'pt-no-card': '没有能用的私教课包，先买一个',
+  'pt-started': '这节课已经开始了',
+  'pt-cancel-too-late': '离上课太近了，不能自己取消，找前台帮你处理',
+  'pt-booking-not-pending': '这个预约已经处理过了，刷新看看',
 };
 
 /** 接口层的错误（后端约定的 code，mock 里也一样） */

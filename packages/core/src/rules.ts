@@ -40,7 +40,16 @@ export type RuleErrorCode =
   | 'class-full'
   | 'class-waitlist-full'
   | 'class-cancel-too-late'
-  | 'booking-not-active';
+  | 'booking-not-active'
+  | 'pt-outside-hours'
+  | 'pt-slot-past'
+  | 'pt-slot-taken'
+  | 'pt-coach-off'
+  | 'pt-member-busy'
+  | 'pt-no-card'
+  | 'pt-started'
+  | 'pt-cancel-too-late'
+  | 'pt-booking-not-pending';
 
 export class RuleError extends Error {
   constructor(public code: RuleErrorCode, message: string) {

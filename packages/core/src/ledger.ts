@@ -17,6 +17,9 @@ export const LEDGER_REASON_LABELS: Record<LedgerReason, string> = {
   class_book: '约团课',
   class_cancel: '取消约课，退回',
   class_void: '团课取消，退回',
+  pt_book: '约私教',
+  pt_cancel: '取消私教，退回',
+  pt_void: '教练取消，退回',
 };
 
 /** 卡现在还剩几次：次卡、课时看 remaining，体验券没用过算 1 次，期限卡没有次数 */
