@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaultRules } from './gym';
-import { cardFromProduct, closeIfExpired, createOrder, payOrder, snapshotOf } from './orders';
+import { assertPayable, cardFromProduct, closeIfExpired, createOrder, isPayable, payOrder, snapshotOf } from './orders';
 import type { Product } from './types';
 
 const now = new Date('2026-10-21T10:00:00.000Z');
@@ -41,6 +41,19 @@ describe('订单', () => {
     const pay = { at: '2026-10-21T10:20:00.000Z', transactionId: 'wx-1', amountCents: 89900 };
     expect(() => payOrder({ ...order(), status: 'closed' }, pay)).toThrow(expect.objectContaining({ code: 'order-closed' }));
     expect(() => payOrder(order(), { ...pay, amountCents: 1 })).toThrow(expect.objectContaining({ code: 'order-amount-mismatch' }));
+  });
+
+  it('只有待支付、没超时的订单能接着付', () => {
+    const before = new Date('2026-10-21T10:14:59.000Z');
+    const after = new Date('2026-10-21T10:15:00.000Z');
+    expect(isPayable(order(), before)).toBe(true);
+    expect(assertPayable(order(), before).status).toBe('pending');
+    expect(isPayable(order(), after)).toBe(false);
+    expect(() => assertPayable(order(), after)).toThrow(expect.objectContaining({ code: 'order-closed' }));
+    const paid = { ...order(), status: 'paid' as const };
+    expect(isPayable(paid, before)).toBe(false);
+    expect(() => assertPayable(paid, before)).toThrow(expect.objectContaining({ code: 'order-not-pending' }));
+    expect(() => assertPayable({ ...order(), status: 'refunded' }, before)).toThrow(expect.objectContaining({ code: 'order-not-pending' }));
   });
 });
 

@@ -5,7 +5,7 @@ import { closeIfExpired, type Order } from '@climb/core';
 export type PromptResult = 'ok' | 'cancel';
 
 export interface PayDeps {
-  orders: Pick<Api['orders'], 'create' | 'get'>;
+  orders: Pick<Api['orders'], 'create' | 'get' | 'pay'>;
   /** 小程序里是 `uni.requestPayment`；mock 下弹一个「模拟支付」确认 */
   requestPayment(payment: WxPayParams, order: Order): Promise<PromptResult>;
   now?: () => Date;
@@ -59,6 +59,11 @@ export function createPay(deps: PayDeps) {
     /** 下单（或沿用 prev），返回订单和支付参数；页面要先存下来，取消后再点支付时传回 prev */
     async order(productId: string, prev: CreateOrderResult | null): Promise<CreateOrderResult> {
       return reusable(prev, productId) ? prev : deps.orders.create({ productId });
+    },
+
+    /** 订单记录里接着付之前没付的订单：重新拿支付参数，再交给 pay */
+    resume(orderId: string): Promise<CreateOrderResult> {
+      return deps.orders.pay(orderId);
     },
 
     /** 拉起支付并等结果 */

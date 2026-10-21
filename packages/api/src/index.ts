@@ -79,6 +79,8 @@ export function createApi(opts: ClientOptions) {
       create: (body: { productId: string }) => http<CreateOrderResult>('POST', '/orders', body),
       /** 支付完以后查结果；还是待支付时后端会去微信查一次单补上回调 */
       get: (id: string) => http<Order>('GET', `/orders/${encodeURIComponent(id)}`),
+      /** 接着付之前没付的订单（订单记录里的「去付款」）：重新拿支付参数，后端用同一个 out_trade_no 再调一次微信下单 */
+      pay: (id: string) => http<CreateOrderResult>('POST', `/orders/${encodeURIComponent(id)}/pay`),
     },
     checkIns: {
       /** 扫前台码入场：qrToken 是前台二维码里的内容 */

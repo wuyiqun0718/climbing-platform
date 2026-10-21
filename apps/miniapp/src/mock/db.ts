@@ -1,4 +1,4 @@
-import { ledgerEntry, type Card, type CheckIn, type LedgerEntry, type Order, type Product, type Share } from '@climb/core';
+import { ledgerEntry, snapshotOf, type Card, type CheckIn, type LedgerEntry, type Order, type Product, type Share } from '@climb/core';
 import { addDays, type DateKey } from '@climb/utils';
 
 export interface MockMember {
@@ -57,7 +57,7 @@ export function seedDb(today: DateKey): MockDb {
   const at = (on: DateKey) => `${on}T03:00:00.000Z`;
   const ledger: LedgerEntry[] = [
     ledgerEntry({ id: 'led-seed-1', card: year, delta: 0, reason: 'purchase', on: year.startsOn, at: at(year.startsOn) }),
-    ledgerEntry({ id: 'led-seed-2', card: { ...c10, remaining: 10 }, delta: 10, reason: 'purchase', on: addDays(today, -62), at: at(addDays(today, -62)) }),
+    ledgerEntry({ id: 'led-seed-2', card: { ...c10, remaining: 10 }, delta: 10, reason: 'purchase', on: addDays(today, -62), at: at(addDays(today, -62)), ref: { type: 'order', id: 'order-seed-3' } }),
     ...checkIns.map((ci, i) => ledgerEntry({
       id: `led-seed-${i + 3}`, card: { ...c10, remaining: 9 - i }, delta: -1, reason: 'check_in', on: ci.on, at: at(ci.on), ref: { type: 'check_in', id: ci.id },
     })),
@@ -66,6 +66,34 @@ export function seedDb(today: DateKey): MockDb {
   const p = (id: string, category: Product['category'], name: string, yuan: number, extra: Partial<Product> = {}): Product => ({
     id, category, name, priceCents: yuan * 100, perks: [], onSale: true, ...extra,
   });
+  const products = [
+    p('month', 'period', '月卡', 599, { days: 30, perks: ['不限次入场', '每次入场含当日保险'] }),
+    p('quarter', 'period', '季卡', 1599, { days: 90, perks: ['不限次入场', '每次入场含当日保险'] }),
+    p('year', 'period', '年卡', 4999, { days: 365, perks: ['不限次入场', '每次入场含当日保险', '送 2 节私教体验'] }),
+    p('c10', 'count', '10 次卡', 899, { quantity: 10, validMonths: 6, perks: ['三店通用', '可以分给朋友', '每次入场含当日保险'] }),
+    p('c20', 'count', '20 次卡', 1599, { quantity: 20, validMonths: 12, perks: ['三店通用', '可以分给朋友', '每次入场含当日保险'] }),
+    p('single', 'count', '单次票', 108, { quantity: 1, perks: ['当天有效', '含租鞋', '含当日保险'] }),
+    p('pt-trial', 'pt', '私教体验课', 299, { quantity: 1, validMonths: 3 }),
+    p('pt5', 'pt', '私教 5 节', 1980, { quantity: 5, validMonths: 6 }),
+    p('pt10', 'pt', '私教 10 节', 3680, { quantity: 10, validMonths: 12 }),
+    p('class1', 'class', '团课单节', 128, { quantity: 1, validMonths: 1 }),
+    p('class10', 'class', '团课 10 次', 1080, { quantity: 10, validMonths: 6 }),
+    p('class20', 'class', '团课 20 次', 1980, { quantity: 20, validMonths: 12 }),
+  ];
+  // 阿杰的订单：年卡在滨港店前台刷卡买的，10 次卡在小程序买的，还有一单私教体验课退了
+  const order = (id: string, productId: string, on: DateKey, extra: Partial<Order>): Order => {
+    const product = snapshotOf(products.find(x => x.id === productId)!);
+    const createdAt = at(on);
+    return {
+      id, memberId: MOCK_MEMBERS.ajie, product, amountCents: product.priceCents, channel: 'wechat', status: 'paid',
+      createdAt, expiresAt: new Date(Date.parse(createdAt) + 15 * 60_000).toISOString(), paidAt: createdAt, ...extra,
+    };
+  };
+  const orders: Order[] = [
+    order('order-seed-1', 'year', year.startsOn, { channel: 'desk_pos', storeId: 'binggang', cardId: year.id }),
+    order('order-seed-2', 'pt-trial', addDays(today, -80), { status: 'refunded', wxTransactionId: 'mock-wx-order-seed-2' }),
+    order('order-seed-3', 'c10', addDays(today, -62), { wxTransactionId: 'mock-wx-order-seed-3', cardId: c10.id }),
+  ];
   return {
     members: [
       { id: MOCK_MEMBERS.ajie, name: '阿杰', phone: '13800000001', openid: 'wx-ajie', source: 'walkin' },
@@ -77,25 +105,12 @@ export function seedDb(today: DateKey): MockDb {
       { id: 'huiju', name: '汇聚店' },
       { id: 'huanqiugang', name: '环球港店' },
     ],
-    products: [
-      p('month', 'period', '月卡', 599, { days: 30, perks: ['不限次入场', '每次入场含当日保险'] }),
-      p('quarter', 'period', '季卡', 1599, { days: 90, perks: ['不限次入场', '每次入场含当日保险'] }),
-      p('year', 'period', '年卡', 4999, { days: 365, perks: ['不限次入场', '每次入场含当日保险', '送 2 节私教体验'] }),
-      p('c10', 'count', '10 次卡', 899, { quantity: 10, validMonths: 6, perks: ['三店通用', '可以分给朋友', '每次入场含当日保险'] }),
-      p('c20', 'count', '20 次卡', 1599, { quantity: 20, validMonths: 12, perks: ['三店通用', '可以分给朋友', '每次入场含当日保险'] }),
-      p('single', 'count', '单次票', 108, { quantity: 1, perks: ['当天有效', '含租鞋', '含当日保险'] }),
-      p('pt-trial', 'pt', '私教体验课', 299, { quantity: 1, validMonths: 3 }),
-      p('pt5', 'pt', '私教 5 节', 1980, { quantity: 5, validMonths: 6 }),
-      p('pt10', 'pt', '私教 10 节', 3680, { quantity: 10, validMonths: 12 }),
-      p('class1', 'class', '团课单节', 128, { quantity: 1, validMonths: 1 }),
-      p('class10', 'class', '团课 10 次', 1080, { quantity: 10, validMonths: 6 }),
-      p('class20', 'class', '团课 20 次', 1980, { quantity: 20, validMonths: 12 }),
-    ],
+    products,
     cards: [year, c10, c20],
     shares: [],
     checkIns,
     ledger,
-    orders: [],
+    orders,
     seq: 0,
   };
 }
@@ -109,7 +124,7 @@ export interface MockStorage {
 const DB_KEY = 'mock:db';
 const WX_KEY = 'mock:wx';
 /** 示例数据的结构改了就加 1，存着的旧数据会被丢掉、重新生成 */
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 /** 读存着的数据；没有或者版本不对就用示例数据重新生成 */
 export function loadDb(storage: MockStorage, today: DateKey): MockDb {

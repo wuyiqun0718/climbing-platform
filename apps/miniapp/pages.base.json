@@ -39,6 +39,12 @@
       }
     },
     {
+      "path": "pages/me/orders",
+      "style": {
+        "navigationBarTitleText": "订单记录"
+      }
+    },
+    {
       "path": "pages/login/index",
       "style": {
         "navigationBarTitleText": "登录"

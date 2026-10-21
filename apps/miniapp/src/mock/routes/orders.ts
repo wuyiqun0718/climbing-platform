@@ -1,11 +1,11 @@
 import type { CreateOrderResult } from '@climb/api';
-import { cardFromProduct, closeIfExpired, createOrder, payOrder, remainingOf, type Card, type GymRules, type LedgerEntry, type Order } from '@climb/core';
+import { assertPayable, cardFromProduct, closeIfExpired, createOrder, payOrder, remainingOf, type Card, type GymRules, type LedgerEntry, type Order } from '@climb/core';
 import type { DateKey } from '@climb/utils';
 import type { MockDb } from '../db';
 import { MockHttpError, type MockContext, type MockRoutes } from '../router';
 
 /**
- * 下单和支付：`POST /orders`、`GET /orders/:id`、`GET /me/orders`，加上微信调后端的 `POST /pay/wechat/notify`。
+ * 下单和支付：`POST /orders`、`GET /orders/:id`、`POST /orders/:id/pay`、`GET /me/orders`，加上微信调后端的 `POST /pay/wechat/notify`。
  *
  * mock 里没有微信支付：下单返回假的支付参数；「付款」就是调一次 notify（开发面板、测试用 `mock.simulatePayment`）。
  * notify 的 body 是验签解密之后的结果 `{ outTradeNo, transactionId, amountCents }`，outTradeNo 就是订单 id。
@@ -32,6 +32,10 @@ export function createOrderRoutes(
     return closed === order ? order : replaceOrder(closed);
   };
 
+  const paymentOf = (order: Order) => ({
+    timeStamp: String(Math.floor(helpers.now().getTime() / 1000)), nonceStr: order.id, package: `prepay_id=mock-${order.id}`, signType: 'RSA' as const, paySign: 'mock',
+  });
+
   const myOrder = (memberId: string, id: string) => {
     const order = db.orders.find(o => o.id === id && o.memberId === memberId);
     if (!order) throw new MockHttpError(404, 'order-not-found', '没找到这个订单');
@@ -46,11 +50,15 @@ export function createOrderRoutes(
       if (!product) throw new MockHttpError(404, 'product-not-found', '没找到这个商品');
       const order = createOrder({ id: helpers.nextId('order'), product, memberId: me, channel: 'wechat', now: helpers.now(), rules: helpers.rules });
       db.orders.push(order);
-      const payment = { timeStamp: String(Math.floor(helpers.now().getTime() / 1000)), nonceStr: order.id, package: `prepay_id=mock-${order.id}`, signType: 'RSA' as const, paySign: 'mock' };
-      return { order, payment };
+      return { order, payment: paymentOf(order) };
     },
 
     'GET /orders/:id': ctx => myOrder(helpers.requireMember(ctx), ctx.params.id),
+
+    'POST /orders/:id/pay': (ctx): CreateOrderResult => {
+      const order = assertPayable(myOrder(helpers.requireMember(ctx), ctx.params.id), helpers.now());
+      return { order, payment: paymentOf(order) };
+    },
 
     'GET /me/orders': ctx => {
       const me = helpers.requireMember(ctx);

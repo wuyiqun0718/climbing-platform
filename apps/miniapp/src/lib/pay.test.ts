@@ -42,6 +42,14 @@ describe('下单和支付', () => {
     expect((await pay.order('c10', first)).order.id).toBe(first.order.id);
   });
 
+  it('订单记录里接着付：同一个订单付完发卡', async () => {
+    const { api, pay } = setup();
+    const { order } = await api.orders.create({ productId: 'c10' });
+    const outcome = await pay.pay(await pay.resume(order.id));
+    expect(outcome).toMatchObject({ status: 'paid', order: { id: order.id } });
+    expect(await api.me.cards()).toEqual([expect.objectContaining({ id: outcome.order.cardId })]);
+  });
+
   it('换了商品或者上一个订单超时了，重新下单', async () => {
     const { pay, wait } = setup({ prompt: 'cancel' });
     const first = await pay.order('c10', null);

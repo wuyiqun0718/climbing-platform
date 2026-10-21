@@ -75,6 +75,17 @@ export function closeIfExpired(order: Order, now: Date): Order {
   return order.status === 'pending' && now.getTime() >= Date.parse(order.expiresAt) ? { ...order, status: 'closed' } : order;
 }
 
+/** 待支付、还没过付款时限的订单可以接着付（订单记录里的「去付款」） */
+export const isPayable = (order: Order, now: Date) => closeIfExpired(order, now).status === 'pending';
+
+/** 接着付之前没付的订单前检查；返回关单后的最新状态 */
+export function assertPayable(order: Order, now: Date): Order {
+  const current = closeIfExpired(order, now);
+  if (current.status === 'closed') throw new RuleError('order-closed', '订单已经关闭了');
+  if (current.status !== 'pending') throw new RuleError('order-not-pending', '这个订单已经付过了');
+  return current;
+}
+
 /**
  * 收到并验证过的支付结果（微信回调或查单）。回调会重复到达：只有待支付的订单变成已支付，
  * 这时 issue 为 true，调用方发卡；已经付过的原样返回、issue 为 false，保证只发一次。

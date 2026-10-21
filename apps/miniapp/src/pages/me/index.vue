@@ -9,11 +9,13 @@ useRequireLogin(() => member.ensureLoaded().catch(() => {}));
 
 <template>
   <view class="page">
-    <text class="placeholder">我的还在做</text>
+    <navigator class="entry" url="/pages/me/orders">订单记录</navigator>
+    <text class="placeholder">其他入口还在做</text>
   </view>
 </template>
 
 <style scoped>
 .page { padding: 16px; }
+.entry { margin-bottom: 12px; padding: 14px 16px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); background: var(--surface); font-size: 15px; font-weight: 600; }
 .placeholder { font-size: 14px; color: var(--ink-muted); }
 </style>

@@ -65,6 +65,30 @@ describe('mock 订单', () => {
     expect(await codeOf(ajie.orders.get(a.id))).toEqual({ status: 404, code: 'order-not-found' });
   });
 
+  it('示例数据里阿杰有前台和小程序的订单，含一单退款', async () => {
+    const { ajie } = setup();
+    expect((await ajie.me.orders()).map(o => [o.product.id, o.channel, o.status])).toEqual([
+      ['c10', 'wechat', 'paid'],
+      ['pt-trial', 'wechat', 'refunded'],
+      ['year', 'desk_pos', 'paid'],
+    ]);
+  });
+
+  it('待支付的订单可以接着付；付过的、超时的、别人的不行', async () => {
+    const { mock, ajie, xiaolu, wait } = setup();
+    const { order } = await xiaolu.orders.create({ productId: 'c10' });
+    const again = await xiaolu.orders.pay(order.id);
+    expect(again.order).toMatchObject({ id: order.id, status: 'pending' });
+    expect(again.payment.package).toBe(`prepay_id=mock-${order.id}`);
+    expect(await codeOf(ajie.orders.pay(order.id))).toEqual({ status: 404, code: 'order-not-found' });
+    await mock.simulatePayment(order.id);
+    expect(await codeOf(xiaolu.orders.pay(order.id))).toEqual({ status: 409, code: 'order-not-pending' });
+
+    const late = (await xiaolu.orders.create({ productId: 'single' })).order;
+    wait(15);
+    expect(await codeOf(xiaolu.orders.pay(late.id))).toEqual({ status: 409, code: 'order-closed' });
+  });
+
   it('要登录；没有的商品、下架的商品不能下单', async () => {
     const { mock, guest, xiaolu } = setup();
     expect(await codeOf(guest.orders.create({ productId: 'c10' }))).toEqual({ status: 401, code: 'unauthorized' });

@@ -15,6 +15,7 @@ const RULE_MESSAGES: Record<RuleErrorCode, string> = {
   'no-period-card': '有期限卡才能发老带新邀请',
   'product-off-sale': '这个已经不卖了，换一个看看',
   'order-closed': '订单超时关闭了，重新下一单吧',
+  'order-not-pending': '这个订单已经付过了，刷新看看',
   'order-amount-mismatch': '支付金额不对，找前台帮你处理',
 };
 

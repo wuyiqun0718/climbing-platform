@@ -15,6 +15,7 @@ export type RuleErrorCode =
   | 'no-period-card'
   | 'product-off-sale'
   | 'order-closed'
+  | 'order-not-pending'
   | 'order-amount-mismatch';
 
 export class RuleError extends Error {
