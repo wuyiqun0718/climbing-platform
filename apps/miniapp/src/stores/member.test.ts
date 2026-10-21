@@ -111,7 +111,7 @@ describe('会员 store', () => {
     const store = createMemberStore({ fetchMe, fetchCards: async () => [] });
     const first = store.load();
     await store.reset();
-    slow.resolve({ id: 'a', name: '阿杰', phone: '13800000001', waiverSigned: true });
+    slow.resolve({ id: 'a', name: '阿杰', phone: '13800000001', waiverSigned: true, coach: null });
     await first;
     expect(store.state.me?.name).toBe('小鹿');
     expect(store.state.loading).toBe(false);

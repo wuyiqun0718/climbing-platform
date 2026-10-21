@@ -33,7 +33,7 @@ describe('mock 登录', () => {
   it('绑过手机号的微信直接登录，/me 返回会员信息', async () => {
     const { api, login } = setup();
     expect(await login('wx-ajie')).toMatchObject({ phoneBound: true });
-    expect(await api.me.get()).toEqual({ id: MOCK_MEMBERS.ajie, name: '阿杰', phone: '13800000001', waiverSigned: true });
+    expect(await api.me.get()).toEqual({ id: MOCK_MEMBERS.ajie, name: '阿杰', phone: '13800000001', waiverSigned: true, coach: null });
   });
 
   it('没登录访问 /me 是 401', async () => {
@@ -66,7 +66,7 @@ describe('mock 登录', () => {
     const r = await bindPhone('13900001234');
     expect(r).toMatchObject({ legacyBound: false, me: { name: '岩友1234', phone: '13900001234' } });
     expect(await api.me.cards()).toEqual([]);
-    expect(db.members).toHaveLength(4);
+    expect(db.members).toHaveLength(5);
   });
 
   it('手机号已经绑了别的微信、格式不对、没微信登录、重复绑定都被拒', async () => {

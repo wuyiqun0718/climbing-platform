@@ -87,6 +87,12 @@
       }
     },
     {
+      "path": "pages/coach/schedule",
+      "style": {
+        "navigationBarTitleText": "我的排班"
+      }
+    },
+    {
       "path": "pages/login/index",
       "style": {
         "navigationBarTitleText": "登录"

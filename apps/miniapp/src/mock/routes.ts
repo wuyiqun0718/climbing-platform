@@ -6,6 +6,7 @@ import { createAuthRoutes } from './routes/auth';
 import { createCardRoutes, settleFrozenCards } from './routes/cards';
 import { createCheckInRoutes } from './routes/checkins';
 import { createClassRoutes } from './routes/classes';
+import { createCoachRoutes } from './routes/coach';
 import { createInsuranceRoutes } from './routes/insurance';
 import { createOrderRoutes } from './routes/orders';
 import { createPtRoutes } from './routes/pt';
@@ -54,6 +55,7 @@ export function createRoutes(db: MockDb, env: { rules: GymRules; today: () => Da
     ...createShareRoutes(db, { ...env, nextId, requireMember, myCard, replaceCard, record }),
     ...createClassRoutes(db, { ...env, nextId, requireMember, replaceCard, record }),
     ...createPtRoutes(db, { ...env, nextId, requireMember, replaceCard, record }),
+    ...createCoachRoutes(db, { ...env, nextId, requireMember, replaceCard, record }),
 
     'GET /products': () => db.products.filter(p => p.onSale),
     'GET /stores': () => db.stores,

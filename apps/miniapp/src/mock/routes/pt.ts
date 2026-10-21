@@ -25,7 +25,7 @@ export function createPtRoutes(
 ): MockRoutes {
   const rules = () => h.rules.ptRules;
   const coachOf = (id: string) => {
-    const c = db.coaches.find(x => x.id === id);
+    const c = db.coaches.find(x => x.id === id && x.active);
     if (!c) throw new MockHttpError(404, 'coach-not-found', '没找到这位教练');
     return c;
   };
@@ -52,7 +52,7 @@ export function createPtRoutes(
   };
 
   return {
-    'GET /coaches': (ctx): Coach[] => db.coaches.filter(c => !ctx.query.store || c.storeIds.includes(ctx.query.store)).map(coachView),
+    'GET /coaches': (ctx): Coach[] => db.coaches.filter(c => c.active && (!ctx.query.store || c.storeIds.includes(ctx.query.store))).map(coachView),
 
     'GET /coaches/:id/slots': (ctx): CoachSlots => {
       const coach = coachOf(ctx.params.id);

@@ -125,16 +125,17 @@ describe('取消私教', () => {
     expect(ptCancelBlockedBy({ booking, now: new Date(`${on}T12:00:00`), rules: { ...rules, cancelBeforeMinutes: 60 } })).toBeNull();
   });
 
-  it('教练取消、拒绝等确认的：不看截止时间，退课时（pt_void），写原因；取消过的不能再取消', () => {
+  it('教练取消、拒绝等确认的：必须写原因，不看截止时间，退课时（pt_void）；取消过的不能再取消', () => {
     const { booking, changes } = booked();
     const late = new Date(`${on}T13:00:00`);
     const res = coachCancelPtBooking({ booking, cards: [changes[0].card], now: late, reason: '教练生病' });
     expect(res.booking).toMatchObject({ status: 'voided', closeReason: '教练生病' });
     expect(res.changes).toEqual([{ card: pack(), delta: 1, reason: 'pt_void', bookingId: 'b1' }]);
-    expect(code(() => coachCancelPtBooking({ booking: res.booking, cards: [], now: late }))).toBe('booking-not-active');
+    expect(code(() => coachCancelPtBooking({ booking: res.booking, cards: [], now: late, reason: 'x' }))).toBe('booking-not-active');
     expect(code(() => cancelPtBooking({ booking: res.booking, cards: [], now, rules, by: 'member' }))).toBe('booking-not-active');
     const pending = book({ r: { ...rules, needCoachConfirm: true } });
-    expect(coachCancelPtBooking({ booking: pending.booking, cards: [pending.changes[0].card], now }).changes[0].reason).toBe('pt_void');
+    expect(coachCancelPtBooking({ booking: pending.booking, cards: [pending.changes[0].card], now, reason: '这周出差' }).changes[0].reason).toBe('pt_void');
+    expect(code(() => coachCancelPtBooking({ booking, cards: [], now, reason: '  ' }))).toBe('pt-reason-required');
   });
 });
 

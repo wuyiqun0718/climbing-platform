@@ -3,6 +3,7 @@ import { currentWaiver, hasSignedWaiver } from '@climb/core';
 import type { DateKey } from '@climb/utils';
 import { mockToken, mockWxToken, type MockDb, type MockMember } from '../db';
 import { MockHttpError, type MockContext, type MockRoutes } from '../router';
+import { coachOfMember } from './coach';
 
 const PHONE = /^1\d{10}$/;
 
@@ -23,6 +24,7 @@ export function createAuthRoutes(
     name: m.name,
     phone: m.phone,
     waiverSigned: hasSignedWaiver(db.waivers, m.id, currentWaiver(db.waiverVersions, helpers.today())),
+    coach: coachOfMember(db, m.id),
   });
 
   return {

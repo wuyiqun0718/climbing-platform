@@ -33,6 +33,10 @@ export interface MockCoach {
   bio: string;
   /** 在哪几家店接私教；教练列表按门店筛 */
   storeIds: string[];
+  /** 员工账号的手机号；会员在小程序验证的手机号跟它一样，就是这位教练本人，能进「我的排班」 */
+  phone: string;
+  /** 停用的员工不能再用教练端，也不出现在教练列表 */
+  active: boolean;
 }
 
 /** 私教预约：后端 pt_bookings 表里多存一个幂等键 */
@@ -75,7 +79,7 @@ export interface MockDb {
   seq: number;
 }
 
-export const MOCK_MEMBERS = { ajie: 'm-ajie', xiaolu: 'm-xiaolu', laozhou: 'm-laozhou' } as const;
+export const MOCK_MEMBERS = { ajie: 'm-ajie', xiaolu: 'm-xiaolu', laozhou: 'm-laozhou', max: 'm-max' } as const;
 
 /** 从青橙导入、还没用过小程序的老会员老周的手机号；H5 登录时输入它就能认领老卡 */
 export const MOCK_LEGACY_PHONE = '13800000003';
@@ -170,6 +174,8 @@ export function seedDb(today: DateKey): MockDb {
       { id: MOCK_MEMBERS.ajie, name: '阿杰', phone: '13800000001', openid: 'wx-ajie', source: 'walkin' },
       { id: MOCK_MEMBERS.xiaolu, name: '小鹿', phone: '13800000002', openid: 'wx-xiaolu', source: 'walkin' },
       { id: MOCK_MEMBERS.laozhou, name: '老周', phone: MOCK_LEGACY_PHONE, openid: null, source: 'legacy_import', legacyId: 'qc-10086' },
+      // 教练 Max 也用小程序：手机号跟员工账号一样，登录后多一个「我的排班」
+      { id: MOCK_MEMBERS.max, name: 'Max 教练', phone: MOCK_COACH_PHONE, openid: 'wx-max', source: 'walkin' },
     ],
     stores: [
       { id: 'binggang', name: '滨港店' },
@@ -187,7 +193,8 @@ export function seedDb(today: DateKey): MockDb {
     waivers: [{ id: 'waiver-sign-seed-1', memberId: MOCK_MEMBERS.ajie, waiverVersionId: MOCK_WAIVER.id, signedAt: at(addDays(today, -62)) }],
     ledger,
     orders,
-    coaches: MOCK_COACHES,
+    // 复制一份：测试里会改（停用教练），不能改到共用的示例数据
+    coaches: MOCK_COACHES.map(c => ({ ...c, tags: [...c.tags], storeIds: [...c.storeIds] })),
     classTypes,
     classSessions,
     classBookings: [],
@@ -197,10 +204,13 @@ export function seedDb(today: DateKey): MockDb {
   };
 }
 
+/** 教练 Max 的员工手机号 */
+export const MOCK_COACH_PHONE = '13900000001';
+
 export const MOCK_COACHES: MockCoach[] = [
-  { id: 'coach-max', name: 'Max', tags: ['抱石', '力量训练'], bio: '前省队抱石选手，课上会拍视频逐帧拆动作。', storeIds: ['binggang', 'huiju'] },
-  { id: 'coach-kiki', name: 'Kiki', tags: ['零基础', '柔韧'], bio: '第一次摸岩点也不用紧张，从站姿开始教。', storeIds: ['huanqiugang', 'huiju'] },
-  { id: 'coach-may', name: 'May', tags: ['先锋攀登', '保护技术'], bio: '持证先锋保护教练，想从抱石转先锋从她这里开始。', storeIds: ['binggang'] },
+  { id: 'coach-max', name: 'Max', tags: ['抱石', '力量训练'], bio: '前省队抱石选手，课上会拍视频逐帧拆动作。', storeIds: ['binggang', 'huiju'], phone: MOCK_COACH_PHONE, active: true },
+  { id: 'coach-kiki', name: 'Kiki', tags: ['零基础', '柔韧'], bio: '第一次摸岩点也不用紧张，从站姿开始教。', storeIds: ['huanqiugang', 'huiju'], phone: '13900000002', active: true },
+  { id: 'coach-may', name: 'May', tags: ['先锋攀登', '保护技术'], bio: '持证先锋保护教练，想从抱石转先锋从她这里开始。', storeIds: ['binggang'], phone: '13900000003', active: true },
 ];
 
 /** 私教示例：明天 Max 15 点线下约了学员、19 点有事不接课，May 后天上午不接课 */
@@ -259,7 +269,7 @@ export interface MockStorage {
 const DB_KEY = 'mock:db';
 const WX_KEY = 'mock:wx';
 /** 示例数据的结构改了就加 1，存着的旧数据会被丢掉、重新生成 */
-const DB_VERSION = 10;
+const DB_VERSION = 11;
 
 /** 读存着的数据；没有或者版本不对就用示例数据重新生成 */
 export function loadDb(storage: MockStorage, today: DateKey): MockDb {

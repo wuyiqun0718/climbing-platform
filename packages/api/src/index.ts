@@ -1,4 +1,4 @@
-import type { Card, CheckIn, ClassBooking, ClassBookingStatus, ClassSession, PtBooking, PtBookingStatus, EntryCard, EntryOption, InsurancePolicy, LedgerEntry, Order, Product, ReferralRecordState, ReferralStatus, ReferralWait, RuleErrorCode, Share, ShareDisplayStatus, WaiverHistory, WaiverSignature, WaiverVersion } from '@climb/core';
+import type { Card, CheckIn, ClassBooking, ClassBookingStatus, ClassSession, PtBooking, PtBookingStatus, PtSlot, PtSlotMark, EntryCard, EntryOption, InsurancePolicy, LedgerEntry, Order, Product, ReferralRecordState, ReferralStatus, ReferralWait, RuleErrorCode, Share, ShareDisplayStatus, WaiverHistory, WaiverSignature, WaiverVersion } from '@climb/core';
 import { createHttp, type ClientOptions } from './client';
 
 export * from './client';
@@ -10,6 +10,11 @@ export interface Me {
   phone: string;
   /** 当前版本的风险告知书签过没有 */
   waiverSigned: boolean;
+  /**
+   * 这个人也是本馆在用的教练（员工账号的手机号跟会员验证过的手机号一样）：小程序里多出「我的排班」，能调 `/coach/*`。
+   * 不是为 null
+   */
+  coach: { id: string; name: string } | null;
 }
 
 /** `GET /me/cards/:id/ledger` 的一条：流水加上会员看得懂的上下文 */
@@ -241,6 +246,23 @@ export interface MyPtBooking extends PtBooking {
 }
 
 /**
+ * 教练端「我的排班」的一格：@climb/core 的 PtSlot（free / member / offline / off，跟后台时间轴一样），
+ * 会员约的带上会员名字和预约状态（等确认还是约上了），自己标的带上标记内容。
+ */
+export interface CoachSlotView extends PtSlot {
+  booking: { id: string; memberName: string; status: Extract<PtBookingStatus, 'pending' | 'booked' | 'attended' | 'absent'>; storeName: string } | null;
+  mark: Pick<PtSlotMark, 'id' | 'kind' | 'note'> | null;
+}
+
+/** `GET /coach/schedule`：教练自己 from 起 days 天的格子；needConfirm 是 ptRules.needCoachConfirm，pendingCount 是等我确认的预约数 */
+export interface CoachSchedule {
+  coach: { id: string; name: string };
+  needConfirm: boolean;
+  pendingCount: number;
+  days: { on: string; slots: CoachSlotView[] }[];
+}
+
+/**
  * 接口定义（后端还没开始写，路径是约定稿）。
  * 新增接口时在这里加方法，两个端都能直接用上。
  */
@@ -347,6 +369,24 @@ export function createApi(opts: ClientOptions) {
       cancel: (bookingId: string) => http<MyPtBooking>('POST', `/pt-bookings/${encodeURIComponent(bookingId)}/cancel`),
       /** 我的私教预约：还没上的在前（近的在前），上过的、取消的在后 */
       mine: () => http<MyPtBooking[]>('GET', '/me/pt-bookings'),
+    },
+    /**
+     * 教练端（小程序里的「我的排班」）。只有 Me.coach 不为 null 的人能调，别人返回 403 not-coach；
+     * 教练只能看、改自己的格子和自己的预约，别的教练的返回 404。
+     */
+    coach: {
+      schedule: (q: { from?: string; days?: number } = {}) => {
+        const qs = Object.entries(q).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&');
+        return http<CoachSchedule>('GET', `/coach/schedule${qs ? `?${qs}` : ''}`);
+      },
+      /** 占一格：线下约的学员或有事不接课（@climb/core markPtSlot）。会员约了的格子返回 409 pt-slot-taken；占了以后会员那边马上约不了 */
+      mark: (body: { on: string; hour: number; kind: PtSlotMark['kind']; note?: string }) => http<PtSlotMark>('POST', '/coach/slots', body),
+      /** 取消自己占的格子，格子空出来会员能约 */
+      unmark: (markId: string) => http<null>('DELETE', `/coach/slots/${encodeURIComponent(markId)}`),
+      /** 确认会员的预约（ptRules.needCoachConfirm 开着时，@climb/core confirmPtBooking） */
+      confirm: (bookingId: string) => http<CoachSlotView['booking']>('POST', `/coach/pt-bookings/${encodeURIComponent(bookingId)}/confirm`),
+      /** 取消或拒绝会员的预约：必须写原因（会员看得到），退课时记 pt_void（@climb/core coachCancelPtBooking） */
+      cancel: (bookingId: string, body: { reason: string }) => http<null>('POST', `/coach/pt-bookings/${encodeURIComponent(bookingId)}/cancel`, body),
     },
     shares: {
       /**

@@ -49,7 +49,8 @@ export type RuleErrorCode =
   | 'pt-no-card'
   | 'pt-started'
   | 'pt-cancel-too-late'
-  | 'pt-booking-not-pending';
+  | 'pt-booking-not-pending'
+  | 'pt-reason-required';
 
 export class RuleError extends Error {
   constructor(public code: RuleErrorCode, message: string) {

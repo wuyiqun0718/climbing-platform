@@ -49,6 +49,7 @@ const RULE_MESSAGES: Record<RuleErrorCode, string> = {
   'pt-started': '这节课已经开始了',
   'pt-cancel-too-late': '离上课太近了，不能自己取消，找前台帮你处理',
   'pt-booking-not-pending': '这个预约已经处理过了，刷新看看',
+  'pt-reason-required': '取消会员的预约要写原因，会员那边能看到',
 };
 
 /** 接口层的错误（后端约定的 code，mock 里也一样） */
@@ -70,6 +71,8 @@ const API_MESSAGES: Record<string, string> = {
   'booking-not-found': '没找到这个预约',
   'coach-not-found': '没找到这位教练',
   'coach-not-at-store': '这位教练不在这家店上私教，换一家店看看',
+  'not-coach': '这一页只有教练能看',
+  'mark-not-found': '没找到这个占用，可能已经取消了',
 };
 
 const MESSAGES: Record<string, string> = { ...API_MESSAGES, ...RULE_MESSAGES };

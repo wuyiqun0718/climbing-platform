@@ -133,6 +133,7 @@ const TEXT: Partial<Record<RuleErrorCode, string>> = {
   'pt-started': '这节课已经开始了',
   'pt-cancel-too-late': '离上课太近了，不能自己取消，找前台帮你处理',
   'pt-booking-not-pending': '这个预约不是等确认的状态',
+  'pt-reason-required': '取消会员的预约要写原因，会员那边能看到',
   'booking-not-active': '这个预约已经取消或者上过课了',
 };
 const fail = (code: RuleErrorCode): never => { throw new RuleError(code, TEXT[code]!); };
@@ -206,10 +207,12 @@ export function cancelPtBooking(a: { booking: PtBooking; cards: Card[]; now: Dat
   return { booking: { ...a.booking, status: 'cancelled', closedAt: a.now.toISOString() }, changes: refund(a.booking, a.cards, 'pt_cancel') };
 }
 
-/** 教练取消或拒绝（等确认的也走这里）：不看截止时间，退课时（pt_void），格子空出来 */
-export function coachCancelPtBooking(a: { booking: PtBooking; cards: Card[]; now: Date; reason?: string }): { booking: PtBooking; changes: CardChange[] } {
+/** 教练取消或拒绝（等确认的也走这里）：必须写原因（会员那边会看到），不看截止时间，退课时（pt_void），格子空出来 */
+export function coachCancelPtBooking(a: { booking: PtBooking; cards: Card[]; now: Date; reason: string }): { booking: PtBooking; changes: CardChange[] } {
   if (!isPtBookingActive(a.booking)) fail('booking-not-active');
-  const booking: PtBooking = { ...a.booking, status: 'voided', closedAt: a.now.toISOString(), ...(a.reason ? { closeReason: a.reason } : {}) };
+  const reason = (a.reason ?? '').trim();
+  if (!reason) fail('pt-reason-required');
+  const booking: PtBooking = { ...a.booking, status: 'voided', closedAt: a.now.toISOString(), closeReason: reason };
   return { booking, changes: refund(a.booking, a.cards, 'pt_void') };
 }
 
