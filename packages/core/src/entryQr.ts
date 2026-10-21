@@ -35,3 +35,54 @@ export function useEntryQr(qr: EntryQr, memberId: string, now: Date): EntryQr {
   checkEntryQr(qr, now);
   return { ...qr, usedAt: now.toISOString(), usedBy: memberId };
 }
+
+/**
+ * 码里写的内容（前台平板生成、小程序解析，两边按同一个格式）。两种码都是 `s=<门店>&t=<token>`：
+ * - 小程序码：整串放进 scene（微信限制最多 32 个字符），页面是签到页；
+ * - 普通链接二维码：`<岩馆的入场链接>?s=<门店>&t=<token>`，微信后台配置这个前缀跳转到签到页。
+ * 门店 id 和 token 只用字母、数字、`-`、`_`，不用转义。
+ */
+export interface EntryQrPayload {
+  storeId: string;
+  token: string;
+}
+
+/** 小程序码 scene 的长度上限（微信限制） */
+export const ENTRY_QR_SCENE_MAX = 32;
+
+const SAFE = /^[A-Za-z0-9_-]+$/;
+
+export function entryQrParams(p: EntryQrPayload): string {
+  if (!SAFE.test(p.storeId) || !SAFE.test(p.token)) throw new Error('门店 id 和 token 只能用字母、数字、-、_');
+  return `s=${p.storeId}&t=${p.token}`;
+}
+
+/** 小程序码的 scene；太长会被微信拒，提前报错 */
+export function entryQrScene(p: EntryQrPayload): string {
+  const scene = entryQrParams(p);
+  if (scene.length > ENTRY_QR_SCENE_MAX) throw new Error(`scene 超过 ${ENTRY_QR_SCENE_MAX} 个字符：${scene}`);
+  return scene;
+}
+
+/** 普通链接二维码的内容；linkBase 是岩馆配置里的入场链接（GymConfig.entryQrLink） */
+export function entryQrLink(linkBase: string, p: EntryQrPayload): string {
+  return `${linkBase}?${entryQrParams(p)}`;
+}
+
+/** 解析 `s=...&t=...`（顺序不限，多余的参数忽略）；不是这个格式返回 null */
+export function parseEntryQrParams(params: string): EntryQrPayload | null {
+  const map: Record<string, string> = {};
+  for (const pair of params.split('&')) {
+    const i = pair.indexOf('=');
+    if (i > 0) map[pair.slice(0, i)] = pair.slice(i + 1);
+  }
+  const { s, t } = map;
+  return s && t && SAFE.test(s) && SAFE.test(t) ? { storeId: s, token: t } : null;
+}
+
+/** 解析普通链接二维码：前缀要正好是本馆的入场链接，否则返回 null（别的馆、别的网址） */
+export function parseEntryQrLink(linkBase: string, url: string): EntryQrPayload | null {
+  const prefix = `${linkBase}?`;
+  if (!url.startsWith(prefix)) return null;
+  return parseEntryQrParams(url.slice(prefix.length).split('#')[0]);
+}

@@ -65,7 +65,7 @@ export interface Store {
   name: string;
 }
 
-/** 前台平板入场码里的内容：门店和一次性 token（怎么从扫码结果里解析出来见任务 18） */
+/** 前台平板入场码里的内容：门店和一次性 token（码的格式见 @climb/core entryQr.ts，小程序里的解析见 apps/miniapp/src/pages/checkin/scan.ts） */
 export interface EntryQrBody {
   storeId: string;
   qrToken: string;

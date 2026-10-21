@@ -6,6 +6,7 @@ import gym from '@gym';
 import { computed, ref } from 'vue';
 import { goLogin } from '../../lib/use-login';
 import DevPanel from '../../mock/dev-panel.vue';
+import { startScan } from '../checkin/start-scan';
 import { member } from '../../stores';
 
 // 跨天后回到首页要按新的一天算
@@ -62,7 +63,6 @@ const firstTime = computed(() => member.state.cards.length === 0);
 
 // 下面这些页面还没做，做好后把对应的 case 换成跳转
 const SOON: Record<string, string> = {
-  scan: '扫码入场（任务 18）',
   classes: '团课（任务 30）',
   pt: '私教（任务 33）',
   events: '活动（任务 36）',
@@ -78,7 +78,7 @@ function open(key: string) {
 
 function scan() {
   if (!me.value) return goLogin().catch(e => console.warn('跳转登录页失败', e));
-  open('scan');
+  startScan();
 }
 
 onLoad(() => uni.setNavigationBarTitle({ title: gym.shortName }));
