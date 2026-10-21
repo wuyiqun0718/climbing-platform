@@ -1,0 +1,119 @@
+<script setup lang="ts">
+import type { CheckInResult, ReferralWaitInfo } from '@climb/api';
+import { checkInDoneView } from '@climb/core';
+import { onLoad, onShow } from '@dcloudio/uni-app';
+import { computed, ref } from 'vue';
+import { api, run } from '../../api';
+import { errorMessage } from '../../lib/errors';
+import { requireLogin } from '../../lib/use-login';
+import { startScan } from './start-scan';
+
+// 入场成功页：签到页入场后 redirectTo 过来（?id=入场记录），刷新页面也能按 id 再拉一次。
+// 老带新的领取人被拦下、选了「等等再扫」时进 ?wait=1：等邀请人入场。
+// 邀请人入场后的提醒是订阅消息（任务 40）；现在回到这页或点「刷新」就重新查一次。
+// 文案和扣次、保单的说法按 @climb/core 的 checkInDoneView / referralWait，这里只显示。
+const DONE_PAGE = 'pages/checkin/done';
+
+const status = ref<'loading' | 'bad' | 'done' | 'wait'>('loading');
+const message = ref('');
+const result = ref<CheckInResult | null>(null);
+const wait = ref<ReferralWaitInfo | null>(null);
+
+const view = computed(() => {
+  const r = result.value;
+  return r && checkInDoneView({ reentry: r.reentry, deducted: r.deducted, cardKind: r.cardKind, policyStatus: r.policy.status });
+});
+
+onLoad(async q => {
+  const query = (q ?? {}) as Record<string, string | undefined>;
+  if (!(await requireLogin({ route: DONE_PAGE, query }))) return;
+  if (query.id) {
+    try {
+      result.value = await run(() => api.checkIns.get(query.id!), { silent: true, loading: '加载中' });
+      status.value = 'done';
+    } catch (e) {
+      status.value = 'bad';
+      message.value = errorMessage(e);
+    }
+  } else if (query.wait) {
+    status.value = 'wait';
+    await loadWait();
+  } else {
+    status.value = 'bad';
+    message.value = '没找到这次入场记录';
+  }
+});
+
+// 从后台回来（比如看到订阅消息点进来）时再查一次邀请人到了没有
+onShow(() => { if (status.value === 'wait') loadWait(); });
+
+async function loadWait() {
+  try {
+    wait.value = await run(() => api.checkIns.referralWait(), { silent: true });
+  } catch (e) {
+    uni.showToast({ title: errorMessage(e), icon: 'none' });
+  }
+}
+
+const rescan = () => startScan('redirectTo');
+const goHome = () => uni.switchTab({ url: '/pages/index/index' });
+</script>
+
+<template>
+  <view class="page">
+    <view v-if="status === 'bad'" class="panel">
+      <text class="h">{{ message }}</text>
+      <button class="btn primary" @tap="goHome">回首页</button>
+    </view>
+
+    <template v-else-if="status === 'done' && result && view">
+      <view class="panel hero">
+        <text class="h">{{ view.title }}</text>
+        <text class="p">{{ result.storeName }} · {{ result.on }}</text>
+      </view>
+      <view class="panel">
+        <view class="row"><text class="k">门店</text><text class="v">{{ result.storeName }}</text></view>
+        <view class="row"><text class="k">用的卡</text><text class="v">{{ result.cardName }}</text></view>
+        <view class="row"><text class="k">扣次</text><text class="v">{{ view.deductText }}</text></view>
+        <view class="row"><text class="k">当日保险</text><text class="tag">{{ view.policyText }}</text></view>
+      </view>
+      <text class="fine">{{ view.policyNote }}</text>
+      <button class="btn primary block" @tap="goHome">好的</button>
+    </template>
+
+    <template v-else-if="status === 'wait'">
+      <view v-if="!wait" class="panel">
+        <text class="h">不用等了</text>
+        <text class="p">今天已经入过场，或者体验券已经用掉、过期了。</text>
+        <button class="btn primary" @tap="goHome">回首页</button>
+      </view>
+      <view v-else-if="wait.inviterCheckedIn" class="panel hero">
+        <text class="h">{{ wait.inviterName }} 到了</text>
+        <text class="p">再扫一次前台平板上的码，就能用{{ wait.cardName }}进。</text>
+        <button class="btn primary" @tap="rescan">扫码入场</button>
+      </view>
+      <view v-else class="panel">
+        <text class="h">等邀请人入场</text>
+        <text class="p">{{ wait.cardName }}要在 {{ wait.inviterName }} 到馆的当天用。TA 入场后会提醒你，再扫一次码就能进。</text>
+        <button class="btn primary" @tap="loadWait">刷新看看</button>
+        <button class="btn" @tap="goHome">回首页</button>
+      </view>
+    </template>
+  </view>
+</template>
+
+<style scoped>
+.page { padding: 16px 16px 40px; }
+.panel { display: flex; flex-direction: column; margin-bottom: 10px; padding: 16px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); background: var(--surface); }
+.hero { background: var(--brand); }
+.h { display: block; font-family: var(--font-display); font-size: 24px; }
+.p { display: block; margin-top: 6px; font-size: 14px; color: var(--ink-muted); }
+.row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; }
+.k { font-size: 14px; color: var(--ink-muted); }
+.v { font-size: 15px; font-weight: 600; }
+.tag { padding: 2px 8px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; }
+.fine { display: block; margin-bottom: 16px; font-size: 12px; line-height: 1.6; color: var(--ink-muted); }
+.btn { margin: 14px 0 0; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font-size: 15px; font-weight: 600; }
+.btn.block { width: 100%; }
+.btn.primary { background: var(--brand); }
+</style>

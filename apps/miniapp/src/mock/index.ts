@@ -1,7 +1,7 @@
-import type { EntryQrBody, RequestAdapter } from '@climb/api';
+import type { ApiRequest, CheckInPreview, CheckInResult, EntryQrBody, RequestAdapter } from '@climb/api';
 import type { GymRules, WaiverVersion } from '@climb/core';
 import { toDateKey, type DateKey } from '@climb/utils';
-import { loadCurrentWx, loadDb, saveCurrentWx, saveDb, seedDb, type MockDb, type MockStorage } from './db';
+import { loadCurrentWx, loadDb, mockToken, saveCurrentWx, saveDb, seedDb, type MockDb, type MockStorage } from './db';
 import { createRoutes } from './routes';
 import { issueEntryQr } from './routes/checkins';
 import { createMockAdapter, type MockIdentity } from './router';
@@ -40,6 +40,11 @@ export interface Mock {
   simulatePayment(orderId: string): Promise<void>;
   /** 前台平板在某家店显示一个新的入场码（后端的 `GET /desk/qr`）；H5 的「模拟扫码」和测试用 */
   issueEntryQr(storeId: string): EntryQrBody;
+  /**
+   * 让另一位会员在某家店扫码入场（没签当前告知书就先签，用第一张能用的卡）；没有能用的卡抛错。
+   * 开发面板用它模拟「邀请人入场」，老带新的领取人那边刷新后就能用体验券。
+   */
+  checkInAs(memberId: string, storeId: string): Promise<CheckInResult>;
   /** 后台上了一版新的告知书，今天生效（条款在旧版后面加一条），所有人入场前要重签；测试和开发面板用 */
   publishWaiver(): WaiverVersion;
   /** 数据回到示例数据（不改当前身份） */
@@ -103,6 +108,19 @@ export function createMock(opts: MockOptions): Mock {
       const qr = issueEntryQr(db, storeId, now());
       if (storage) saveDb(storage, db);
       return qr;
+    },
+    async checkInAs(memberId, storeId) {
+      const call = async <T>(method: ApiRequest['method'], url: string, body: unknown): Promise<T> => {
+        const res = await adapter({ method, url, headers: { Authorization: `Bearer ${mockToken(memberId)}` }, body });
+        if (res.status !== 200) throw new Error((res.data as { message?: string }).message ?? `模拟入场失败：${JSON.stringify(res.data)}`);
+        return res.data as T;
+      };
+      const qr = issueEntryQr(db, storeId, now());
+      const preview = await call<CheckInPreview>('POST', '/check-ins/preview', qr);
+      const card = preview.options.find(o => o.usable)?.card;
+      if (!card) throw new Error('这位会员没有能用来入场的卡');
+      if (preview.waiver) await call('POST', '/waivers', { waiverVersionId: preview.waiver.id });
+      return call<CheckInResult>('POST', '/check-ins', { ...qr, cardId: card.id, idempotencyKey: `dev-${++db.seq}` });
     },
     publishWaiver() {
       const n = db.waiverVersions.length + 1;

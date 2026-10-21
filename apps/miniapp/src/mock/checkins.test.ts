@@ -140,4 +140,27 @@ describe('mock 扫码入场', () => {
     await ajie.waivers.sign({ waiverVersionId: v2.id });
     expect(await ajie.checkIns.create({ ...qr, cardId: YEAR, idempotencyKey: 'k1' })).toMatchObject({ storeId: 'binggang' });
   });
+
+  it('入场成功页：按 id 拉回入场记录，带卡名；同日再次入场标 reentry、不扣次；别人的记录拉不到', async () => {
+    const { mock, ajie, xiaolu } = setup();
+    const first = await ajie.checkIns.create({ ...mock.issueEntryQr('binggang'), cardId: C10, idempotencyKey: 'k1' });
+    expect(await ajie.checkIns.get(first.id)).toEqual(first);
+    expect(first).toMatchObject({ cardName: expect.any(String), cardKind: 'count', deducted: 1, reentry: false });
+    const again = await ajie.checkIns.create({ ...mock.issueEntryQr('huiju'), cardId: C10, idempotencyKey: 'k2' });
+    expect(again).toMatchObject({ deducted: 0, reentry: true, policy: { id: first.policy.id } });
+    expect(await codeOf(xiaolu.checkIns.get(first.id))).toBe('check-in-not-found');
+  });
+
+  it('等邀请人入场：邀请人没入场时在等，邀请人入场后可以用，用完不再等', async () => {
+    const { mock, ajie, xiaolu } = setup();
+    expect(await xiaolu.checkIns.referralWait()).toBeNull();
+    await xiaolu.waivers.sign({ waiverVersionId: MOCK_WAIVER.id });
+    const { card } = await xiaolu.shares.claim((await ajie.shares.createReferral()).id);
+    expect(await xiaolu.checkIns.referralWait()).toMatchObject({ cardId: card.id, inviterId: MOCK_MEMBERS.ajie, inviterName: '阿杰', inviterCheckedIn: false });
+
+    await mock.checkInAs(MOCK_MEMBERS.ajie, 'binggang');
+    expect(await xiaolu.checkIns.referralWait()).toMatchObject({ cardId: card.id, inviterCheckedIn: true });
+    await xiaolu.checkIns.create({ ...mock.issueEntryQr('binggang'), cardId: card.id, idempotencyKey: 'k1' });
+    expect(await xiaolu.checkIns.referralWait()).toBeNull();
+  });
 });

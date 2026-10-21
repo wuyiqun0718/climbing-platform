@@ -1,7 +1,7 @@
-import type { CheckInPreview, CheckInResult, EntryQrBody } from '@climb/api';
+import type { CheckInPreview, CheckInResult, EntryQrBody, ReferralWaitInfo } from '@climb/api';
 import {
-  checkEntryQr, checkInPlan, checkInWith, currentWaiver, entryLedgerDelta, hasSignedWaiver, insuranceForEntry, newEntryQr, newPolicy, useEntryQr,
-  type Card, type CheckInArgs, type EntryContext, type GymRules, type LedgerEntry,
+  checkEntryQr, checkInPlan, checkInWith, referralWait, currentWaiver, entryLedgerDelta, hasSignedWaiver, insuranceForEntry, newEntryQr, newPolicy, useEntryQr,
+  type Card, type CheckInArgs, type EntryCard, type EntryContext, type GymRules, type LedgerEntry,
 } from '@climb/core';
 import type { DateKey } from '@climb/utils';
 import type { MockCheckIn, MockDb } from '../db';
@@ -63,10 +63,27 @@ export function createCheckInRoutes(
 
   const resultOf = (ci: MockCheckIn): CheckInResult => {
     const { idempotencyKey: _key, policyId, ...checkIn } = ci;
-    return { ...checkIn, storeName: storeOf(ci.storeId).name, policy: db.policies.find(p => p.id === policyId)! };
+    // 入场用的一定是入场卡（checkInWith 只接受这几种）
+    const card = db.cards.find(c => c.id === ci.cardId) as EntryCard;
+    return { ...checkIn, storeName: storeOf(ci.storeId).name, cardName: card.name, cardKind: card.kind, policy: db.policies.find(p => p.id === policyId)! };
   };
 
   return {
+    // 放在 /check-ins/:id 前面，免得 referral-wait 被当成 id
+    'GET /check-ins/referral-wait': (ctx): ReferralWaitInfo | null => {
+      const me = h.requireMember(ctx);
+      // 门店只影响「同日再次入场算不算跨店」，卡三店通用，随便给一家
+      const wait = referralWait(planArgs(me, db.stores[0].id));
+      return wait && { ...wait, inviterName: db.members.find(m => m.id === wait.inviterId)?.name ?? '邀请人' };
+    },
+
+    'GET /check-ins/:id': (ctx): CheckInResult => {
+      const me = h.requireMember(ctx);
+      const ci = db.checkIns.find(c => c.id === ctx.params.id && c.memberId === me);
+      if (!ci) throw new MockHttpError(404, 'check-in-not-found', '没找到这次入场记录');
+      return resultOf(ci);
+    },
+
     'POST /check-ins/preview': (ctx): CheckInPreview => {
       const me = h.requireMember(ctx);
       const qr = validQr(ctx.body as EntryQrBody);

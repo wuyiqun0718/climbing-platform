@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ApiError, type CheckInResult, type CreateOrderResult, type EntryQrBody } from '@climb/api';
-import { entryBlockedText, entrySheet, pickEntryCard, POLICY_STATUS_TEXT, type EntryOption, type EntrySheet, type WaiverVersion } from '@climb/core';
+import { ApiError, type CreateOrderResult, type EntryQrBody } from '@climb/api';
+import { entryBlockedText, entrySheet, pickEntryCard, type EntryOption, type EntrySheet, type WaiverVersion } from '@climb/core';
 import { formatDot, formatYuan } from '@climb/utils';
 import { onLoad } from '@dcloudio/uni-app';
 import gym from '@gym';
@@ -16,8 +16,9 @@ import WaiverAgree from './waiver.vue';
 // 签到页：微信扫前台的码直接打开，或者小程序里扫码后跳过来。
 // 解析码、确认登录、预览（验码，不作废）→ 选卡（没卡就买单次票）→ 确认入场。
 // 选哪张、能不能用、保险怎么标都按 @climb/core 的 entrySheet，这里只显示。
-// 没签当前版本的风险告知书时预览会带上它：勾选同意后先签（POST /waivers），再付款或入场。成功页在任务 22。
-const status = ref<'loading' | 'bad' | 'ready' | 'done'>('loading');
+// 没签当前版本的风险告知书时预览会带上它：勾选同意后先签（POST /waivers），再付款或入场。
+// 入场后换成成功页（done?id=）；体验券等邀请人时可以去 done?wait=1 等着。
+const status = ref<'loading' | 'bad' | 'ready'>('loading');
 const message = ref('');
 const qr = ref<EntryQrBody | null>(null);
 const storeName = ref('');
@@ -28,7 +29,6 @@ const submitting = ref(false);
 /** 要签的告知书；签过为 null */
 const waiver = ref<WaiverVersion | null>(null);
 const agreed = ref(false);
-const result = ref<{ checkIn: CheckInResult; cardName: string } | null>(null);
 /** 进页面时生成一次，重试、连点都带同一个，后端只入场一次 */
 const idempotencyKey = `ci-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 /** 买单次票时取消没付的订单，再点接着付 */
@@ -89,8 +89,7 @@ const modal = (title: string, content: string) => uni.showModal({ title, content
 async function enter(cardId: string, cardName: string, bought: boolean) {
   try {
     const checkIn = await run(() => api.checkIns.create({ ...qr.value!, cardId, idempotencyKey }), { loading: '入场中', silent: true });
-    result.value = { checkIn, cardName };
-    status.value = 'done';
+    uni.redirectTo({ url: `/pages/checkin/done?id=${encodeURIComponent(checkIn.id)}` });
   } catch (e) {
     const code = errorCode(e);
     if (code === 'waiver-required') {
@@ -159,7 +158,7 @@ async function submit() {
   }
 }
 
-const goHome = () => uni.switchTab({ url: '/pages/index/index' });
+const waitInviter = () => uni.redirectTo({ url: '/pages/checkin/done?wait=1' });
 const goShop = () => uni.navigateTo({ url: '/pages/shop/index' });
 </script>
 
@@ -206,17 +205,8 @@ const goShop = () => uni.navigateTo({ url: '/pages/shop/index' });
       </template>
 
       <button class="btn primary block" :disabled="!canSubmit || submitting" @tap="submit">{{ confirmText }}</button>
-      <button v-if="sheet.mustBuy && sheet.waitingInviter" class="btn block" @tap="goHome">我等等再扫</button>
+      <button v-if="sheet.mustBuy && sheet.waitingInviter" class="btn block" @tap="waitInviter">我等等再扫</button>
     </template>
-
-    <!-- 入场结果先在这里简单显示，成功页在任务 22 -->
-    <view v-else-if="status === 'done' && result" class="panel">
-      <text class="h">{{ result.checkIn.reentry ? '今天已入场，不再扣次' : '入场成功' }}</text>
-      <text class="p">{{ result.checkIn.storeName }} · {{ result.cardName }}</text>
-      <text class="p">{{ result.checkIn.deducted ? `扣了 ${result.checkIn.deducted} 次` : '没扣次' }}</text>
-      <text class="p">当日保险：{{ POLICY_STATUS_TEXT[result.checkIn.policy.status] }}</text>
-      <button class="btn primary" @tap="goHome">好的</button>
-    </view>
   </view>
 </template>
 

@@ -51,6 +51,12 @@
       }
     },
     {
+      "path": "pages/checkin/done",
+      "style": {
+        "navigationBarTitleText": "入场"
+      }
+    },
+    {
       "path": "pages/login/index",
       "style": {
         "navigationBarTitleText": "登录"

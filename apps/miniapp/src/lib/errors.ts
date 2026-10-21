@@ -35,6 +35,7 @@ const API_MESSAGES: Record<string, string> = {
   unauthorized: '登录过期了，重新登录一下',
   'not-found': '没找到，可能已经被删掉了',
   'card-not-found': '没找到这张卡',
+  'check-in-not-found': '没找到这次入场记录',
   'card-not-shareable': '只有自己买的次卡可以分给朋友',
   'invalid-qr': '这个码不是本馆的入场码',
   'share-not-found': '这个分享不存在',

@@ -17,6 +17,11 @@ const nameOf = (id: string) => members.value.find(m => m.id === id)?.name ?? id;
 /** 别人发的、还没领的分享；接口里没有「列出分享」，开发面板直接看 mock 的数据 */
 const claimable = ref<Share[]>([]);
 const countCard = computed(() => cards.value.find(c => c.kind === 'count' && c.remaining > 0));
+/** 当前会员手上还没用的体验券的邀请人；模拟 TA 入场，领取人那边刷新后就能用 */
+const inviter = computed(() => {
+  const v = cards.value.find(c => c.kind === 'referral' && !c.usedOn);
+  return v?.kind === 'referral' ? v.fromMemberId : null;
+});
 
 function cardText(c: Card) {
   if (c.kind === 'period') return `${c.name}，${c.expiresOn} 到期`;
@@ -102,6 +107,16 @@ function newWaiver() {
 const giveOne = () => countCard.value && act(() => api.shares.createCount({ cardId: countCard.value!.id, quantity: 1 }), '送出 1 次');
 const invite = () => act(() => api.shares.createReferral(), '发了一张老带新邀请');
 const claim = (s: Share) => act(() => api.shares.claim(s.id), '领到了');
+
+async function inviterCheckIn() {
+  if (!mock || !inviter.value) return;
+  try {
+    await mock.checkInAs(inviter.value, mock.db.stores[0].id);
+    uni.showToast({ title: `${nameOf(inviter.value)} 入场了`, icon: 'none' });
+  } catch (e) {
+    uni.showToast({ title: (e as Error).message, icon: 'none' });
+  }
+}
 </script>
 
 <template>
@@ -131,6 +146,11 @@ const claim = (s: Share) => act(() => api.shares.claim(s.id), '领到了');
         <text class="chip" @click="claim(s)">领取</text>
       </view>
       <text v-if="!claimable.length" class="line muted">没有</text>
+
+      <template v-if="inviter">
+        <text class="label">老带新</text>
+        <view class="row"><text class="chip" @click="inviterCheckIn">让 {{ nameOf(inviter) }} 入场</text></view>
+      </template>
 
       <view class="row foot">
         <text class="chip" @click="newWaiver">告知书出新版</text>

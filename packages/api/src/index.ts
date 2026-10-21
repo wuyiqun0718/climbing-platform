@@ -1,4 +1,4 @@
-import type { Card, CheckIn, EntryOption, InsurancePolicy, LedgerEntry, Order, Product, RuleErrorCode, Share, WaiverSignature, WaiverVersion } from '@climb/core';
+import type { Card, CheckIn, EntryCard, EntryOption, InsurancePolicy, LedgerEntry, Order, Product, ReferralWait, RuleErrorCode, Share, WaiverSignature, WaiverVersion } from '@climb/core';
 import { createHttp, type ClientOptions } from './client';
 
 export * from './client';
@@ -83,11 +83,18 @@ export interface CheckInPreview {
   waiver: WaiverVersion | null;
 }
 
-/** `POST /check-ins` 的返回：入场记录，加上门店名、是不是再次入场、当天的保单（新投的或复用的） */
+/** `POST /check-ins`、`GET /check-ins/:id` 的返回：入场记录，加上门店名、卡名、是不是再次入场、当天的保单（新投的或复用的） */
 export interface CheckInResult extends CheckIn {
   storeName: string;
+  cardName: string;
+  cardKind: EntryCard['kind'];
   reentry: boolean;
   policy: InsurancePolicy;
+}
+
+/** `GET /check-ins/referral-wait`：老带新领取人在等邀请人入场（@climb/core referralWait），加上邀请人的名字；不用等为 null */
+export interface ReferralWaitInfo extends ReferralWait {
+  inviterName: string;
 }
 
 /**
@@ -140,6 +147,10 @@ export function createApi(opts: ClientOptions) {
        * idempotencyKey 由页面在进签到页时生成一次，网络重试、连点都带同一个，后端只入场一次、返回同一条记录。
        */
       create: (body: EntryQrBody & { cardId: string; idempotencyKey: string }) => http<CheckInResult>('POST', '/check-ins', body),
+      /** 自己的一条入场记录，入场成功页用（刷新页面也能再拉到） */
+      get: (id: string) => http<CheckInResult>('GET', `/check-ins/${encodeURIComponent(id)}`),
+      /** 老带新领取人：是不是在等邀请人入场、邀请人到了没有。邀请人入场后的提醒走订阅消息（任务 40），这里给页面刷新用 */
+      referralWait: () => http<ReferralWaitInfo | null>('GET', '/check-ins/referral-wait'),
     },
     shares: {
       createCount: (body: { cardId: string; quantity: number }) => http<Share>('POST', '/shares/count', body),
