@@ -35,7 +35,13 @@ export interface DashboardSummary {
   todayEntries: number;
   /** 上周同一天、截至同一时刻的入场人次 */
   lastWeekSameTimeEntries: number;
+  /** 今日约课人次（团课 + 私教） */
   todayBookings: number;
+  /**
+   * 有效会员：手上有至少一张能用的卡（没过期、没用完、没冻结作废退款）的人。
+   * 按门店看时算「归属这家店」的会员（等馆方：按办卡门店还是最近入场门店，先按办卡门店），
+   * 一人只归一家店，所以全部门店 = 各店相加。
+   */
   activeMembers: number;
 }
 

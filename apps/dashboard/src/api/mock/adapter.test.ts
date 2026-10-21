@@ -41,6 +41,8 @@ describe('后台 mock', () => {
     const each = await Promise.all(stores.map(s => api.dashboard({ store: s.id })));
     expect(all.todayEntries).toBe(each.reduce((n, d) => n + d.todayEntries, 0));
     expect(all.monthRevenueCents).toBe(each.reduce((n, d) => n + d.monthRevenueCents, 0));
+    expect(all.activeMembers).toBe(each.reduce((n, d) => n + d.activeMembers, 0));
+    expect(new Set(each.map(d => d.todayEntries)).size).toBe(each.length);
     expect(each[0]).toMatchObject({ storeId: 'bingang', today: '2026-10-21' });
   });
 

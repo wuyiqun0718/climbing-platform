@@ -66,7 +66,7 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
         todayEntries: sum('todayEntries'),
         lastWeekSameTimeEntries: sum('lastWeekSameTimeEntries'),
         todayBookings: sum('todayBookings'),
-        activeMembers: db.activeMembers,
+        activeMembers: sum('activeMembers'),
       };
       return ok(res);
     },
