@@ -103,7 +103,7 @@ async function tap(s: CoachSlotView) {
       <view class="head">
         <text class="h">{{ data.coach.name }} 的排班</text>
         <text v-if="data.needConfirm && data.pendingCount" class="fine">有 {{ data.pendingCount }} 节等你确认</text>
-        <text class="fine">点空闲的格子占上（线下约的、有事），会员那边马上约不了。</text>
+        <text class="fine">点空闲的时段占上（线下约的、有事），会员那边马上约不了。</text>
       </view>
       <view class="days">
         <view v-for="d in days" :key="d" class="day" :class="{ on: d === day }" @tap="day = d">
@@ -130,6 +130,7 @@ async function tap(s: CoachSlotView) {
 .dl { font-size: 11px; }
 .dn { font-family: var(--font-number); font-size: 16px; font-weight: 700; }
 .row { display: flex; align-items: center; gap: 12px; margin-top: 6px; padding: 10px 12px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); background: var(--surface); font-size: 14px; }
+.row.free { border-style: dashed; }
 .row.member { background: var(--brand-soft); }
 .row.offline { background: var(--accent-soft); }
 .row.off { background: var(--neutral); }

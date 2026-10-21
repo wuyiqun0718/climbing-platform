@@ -16,8 +16,9 @@ import { currentStoreName, ensureStores, storePick } from '../../stores/store-pi
 
 // 跨天后回到首页要按新的一天算
 const today = ref(toDateKey(new Date()));
-// 每个岩馆都有 logo；mark 不一定有
-const mark = `/static/gym/${gym.logo}`;
+// 线稿水印；没有 mark.png 的岩馆加载失败时退回 logo
+const mark = ref('/static/gym/mark.png');
+const markFallback = () => { mark.value = `/static/gym/${gym.logo}`; };
 const scanIcon = iconStyle('scan');
 
 const me = computed(() => member.state.me);
@@ -126,7 +127,7 @@ onShow(() => {
 <template>
   <view class="page">
     <view class="hero">
-      <image class="hero-mark" :src="mark" mode="widthFix" />
+      <image class="hero-mark" :src="mark" mode="widthFix" @error="markFallback" />
       <text class="hello">{{ hello }}</text>
       <text class="hello-sub">{{ sub }}</text>
       <!-- 今天已经入过场也能再扫，扣不扣次由确认页说明 -->
@@ -183,14 +184,16 @@ onShow(() => {
         <text class="link" @tap="open('classes')">课表</text>
       </view>
       <view v-if="todayClasses && !todayClasses.length" class="panel placeholder"><text>今天这家店没有还没开始的团课了，看看明天的。</text></view>
-      <view v-for="c in todayClasses ?? []" :key="c.id" class="panel class-row" @tap="open('classes')">
-        <text class="class-time">{{ c.startTime }}</text>
-        <view class="class-main">
-          <text class="class-name">{{ c.name }}</text>
-          <text class="class-meta">{{ c.status === 'cancelled' ? `取消了：${c.cancelReason ?? ''}` : `${c.coachName ?? ''} 已约 ${c.booked}/${c.capacity}` }}</text>
+      <scroll-view v-if="todayClasses?.length" class="class-scroll" scroll-x>
+        <view class="class-track">
+          <view v-for="c in todayClasses" :key="c.id" class="class-card" @tap="open('classes')">
+            <text class="class-time">{{ c.startTime }}</text>
+            <text class="class-name">{{ c.name }}</text>
+            <text class="class-meta">{{ c.status === 'cancelled' ? `取消了：${c.cancelReason ?? ''}` : [c.storeName, c.coachName].filter(Boolean).join(' · ') }}</text>
+            <text class="class-tag">{{ c.myBooking ? (c.myBooking.status === 'waitlisted' ? `候补第 ${c.myBooking.position} 位` : '已预约') : c.left > 0 ? `剩 ${c.left} 位` : '约满' }}</text>
+          </view>
         </view>
-        <text class="class-tag">{{ c.myBooking ? (c.myBooking.status === 'waitlisted' ? `候补第 ${c.myBooking.position} 位` : '已预约') : c.left > 0 ? `剩 ${c.left} 位` : '约满' }}</text>
-      </view>
+      </scroll-view>
     </template>
 
     <!-- 活动报名还没开放，先放空状态 -->
@@ -208,13 +211,13 @@ onShow(() => {
 
 <style scoped>
 .sec-sub { margin-left: 6px; font-size: 12px; font-family: inherit; color: var(--ink-muted); }
-.class-row { display: flex; align-items: center; gap: 12px; }
-.class-row + .class-row { margin-top: 8px; }
-.class-time { font-family: var(--font-number); font-size: 18px; font-weight: 700; }
-.class-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-.class-name { font-size: 15px; font-weight: 600; }
-.class-meta { font-size: 12px; color: var(--ink-muted); }
-.class-tag { font-size: 12px; font-weight: 600; }
+.class-scroll { width: 100%; white-space: nowrap; }
+.class-track { display: flex; gap: 10px; padding: 0 16px 4px; }
+.class-card { flex: 0 0 200px; box-sizing: border-box; display: flex; flex-direction: column; padding: 12px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); background: var(--surface); white-space: normal; }
+.class-time { font-family: var(--font-number); font-size: 18px; font-weight: 800; }
+.class-name { margin-top: 2px; font-size: 15px; font-weight: 600; }
+.class-meta { margin-top: 2px; font-size: 12px; color: var(--ink-muted); }
+.class-tag { margin-top: 8px; font-size: 12px; font-weight: 600; }
 .page { padding-bottom: 32px; }
 
 .hero { position: relative; display: flex; flex-direction: column; padding: 10px 16px 22px; background: var(--brand); border-bottom: var(--stroke) solid var(--ink); overflow: hidden; }

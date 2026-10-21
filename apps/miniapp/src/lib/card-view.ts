@@ -13,6 +13,8 @@ export interface CardView {
   meta: string;
   tone: CardTone;
   acts: CardAction[];
+  /** 进度条：剩余天数 / 总天数，或剩余次数 / 总次数；体验券没有 */
+  progress?: number;
 }
 
 /** 把一张卡翻成 MemberCard 要的文字和按钮；剩多少由 cardBalance 算。卡包列表和卡详情共用 */
@@ -20,6 +22,7 @@ export function cardView(card: Card, today: DateKey, done: boolean): CardView {
   const b = cardBalance(card, today);
   const until = `${formatDot(card.expiresOn)} 前有效`;
   const acts: CardAction[] = [];
+  const ratio = (left: number, total: number) => (total > 0 ? left / total : 0);
   if (card.kind === 'period' && b.type === 'days' && b.frozenUntil) {
     return {
       kind: '期限卡 · 冻结中',
@@ -29,6 +32,7 @@ export function cardView(card: Card, today: DateKey, done: boolean): CardView {
       meta: `冻结到 ${formatDot(b.frozenUntil)}，解冻后到期日顺延`,
       tone: 'neutral',
       acts,
+      progress: ratio(b.left, b.total),
     };
   }
   if (card.kind === 'period' && b.type === 'days') {
@@ -42,6 +46,7 @@ export function cardView(card: Card, today: DateKey, done: boolean): CardView {
       meta: `${formatDot(card.startsOn)} – ${formatDot(card.expiresOn)}`,
       tone: 'brand',
       acts,
+      progress: done ? 0 : ratio(b.left, b.total),
     };
   }
   if (b.type === 'voucher') {
@@ -62,5 +67,6 @@ export function cardView(card: Card, today: DateKey, done: boolean): CardView {
     meta: until,
     tone: lesson ? 'surface' : 'accent',
     acts,
+    progress: ratio(b.left, b.total),
   };
 }

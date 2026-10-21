@@ -6,6 +6,8 @@ import Button from '@climb/ui-mp/Button.vue';
 import { onLoad } from '@dcloudio/uni-app';
 import { computed, ref } from 'vue';
 import { api, pay, run } from '../../api';
+import AskSheet from '../../components/AskSheet.vue';
+import { ask } from '../../lib/ask';
 import { REFUND_NOTE } from '../../config/checkout';
 import { errorMessage } from '../../lib/errors';
 import { useRequireLogin } from '../../lib/use-login';
@@ -55,7 +57,7 @@ const view = computed(() => product.value && {
   price: formatYuan(product.value.priceCents),
 });
 
-const modal = (title: string, content: string) => uni.showModal({ title, content, showCancel: false, confirmText: '知道了' });
+const modal = (title: string, content: string) => ask({ title, content, showCancel: false, confirmText: '知道了' });
 
 async function submit() {
   const p = product.value;
@@ -112,6 +114,7 @@ async function submit() {
       </view>
     </template>
     <view v-else-if="loaded" class="empty">这个已经不卖了，回去换一个看看</view>
+    <AskSheet />
   </view>
 </template>
 

@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { shareBlockedBy, type Share } from '@climb/core';
 import Button from '@climb/ui-mp/Button.vue';
+import Empty from '@climb/ui-mp/Empty.vue';
 import MemberCard from '@climb/ui-mp/MemberCard.vue';
 import { formatDot, toDateKey } from '@climb/utils';
 import { onLoad, onShareAppMessage } from '@dcloudio/uni-app';
 import { computed, ref } from 'vue';
 import { api, run } from '../../api';
+import AskSheet from '../../components/AskSheet.vue';
+import { ask } from '../../lib/ask';
 import { cardView } from '../../lib/card-view';
 import { codeMessage } from '../../lib/errors';
 import { useRequireLogin } from '../../lib/use-login';
@@ -36,9 +39,7 @@ const step = (d: number) => { qty.value = Math.min(remaining.value, Math.max(1, 
 /** 生成好的分享；生成时次数已经从卡里扣掉 */
 const share = ref<Share | null>(null);
 
-const confirm = (title: string, content: string) => new Promise<boolean>(resolve => {
-  uni.showModal({ title, content, success: r => resolve(r.confirm), fail: () => resolve(false) });
-});
+const confirm = (title: string, content: string) => ask({ title, content });
 
 async function create() {
   const c = card.value;
@@ -63,9 +64,9 @@ const copyPath = () => share.value && uni.setClipboardData({ data: claimPath(sha
 
 <template>
   <view class="page">
-    <view v-if="member.state.loaded && !card" class="empty">没有能送给朋友的次卡</view>
+    <Empty v-if="member.state.loaded && !card" title="没有能送给朋友的次卡" />
     <template v-else-if="view && card">
-      <MemberCard :kind="view.kind" :name="view.name" :value="view.value" :unit="view.unit" :meta="view.meta" :tone="view.tone" />
+      <MemberCard :kind="view.kind" :name="view.name" :value="view.value" :unit="view.unit" :meta="view.meta" :tone="view.tone" :progress="view.progress" />
 
       <view v-if="share" class="box">
         <text class="h">分享已生成</text>
@@ -74,7 +75,10 @@ const copyPath = () => share.value && uni.setClipboardData({ data: claimPath(sha
         <Button variant="dark" block open-type="share">发给微信好友</Button>
         <!-- #endif -->
         <!-- #ifndef MP-WEIXIN -->
-        <text class="fine">{{ message?.title }} · {{ claimPath(share.token) }}</text>
+        <view>
+          <text class="share-title">{{ message?.title }}</text>
+          <text class="share-path">{{ claimPath(share.token) }}</text>
+        </view>
         <Button variant="dark" block @click="copyPath">复制领取路径</Button>
         <!-- #endif -->
       </view>
@@ -92,6 +96,7 @@ const copyPath = () => share.value && uni.setClipboardData({ data: claimPath(sha
         <Button variant="dark" block @click="create">生成分享</Button>
       </view>
     </template>
+    <AskSheet />
   </view>
 </template>
 
@@ -100,11 +105,12 @@ const copyPath = () => share.value && uni.setClipboardData({ data: claimPath(sha
 .box { margin-top: 16px; padding: 14px 12px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); background: var(--surface); display: flex; flex-direction: column; gap: 10px; }
 .h { font-family: var(--font-display); font-size: 20px; }
 .p { font-size: 14px; line-height: 1.6; }
-.fine { font-size: 12px; line-height: 1.6; color: var(--ink-muted); word-break: break-all; }
+.fine { font-size: 12px; line-height: 1.6; color: var(--ink-muted); }
+.share-title { display: block; font-size: 14px; color: var(--ink); }
+.share-path { display: block; margin-top: 8px; font-size: 12px; line-height: 1.5; color: var(--ink-muted); overflow-wrap: anywhere; }
 .center { text-align: center; }
 .stepper { display: flex; align-items: center; justify-content: center; gap: 24px; }
 .sbtn { margin: 0; width: 44px; height: 44px; line-height: 40px; padding: 0; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font-size: 22px; }
 .num { font-family: var(--font-number); font-size: 40px; font-weight: 700; }
 .unit { font-size: 14px; margin-left: 2px; }
-.empty { padding: 80px 0; text-align: center; color: var(--ink-muted); }
 </style>

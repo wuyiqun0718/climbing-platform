@@ -4,9 +4,12 @@ import { isCardValid, type Card, type LessonCard, type RuleErrorCode } from '@cl
 import gym from '@gym';
 import { addDays, formatMonthDay, toDateKey, weekdayOf } from '@climb/utils';
 import Button from '@climb/ui-mp/Button.vue';
+import Empty from '@climb/ui-mp/Empty.vue';
 import { onLoad, onShow } from '@dcloudio/uni-app';
 import { computed, ref } from 'vue';
 import { api, auth, run } from '../../api';
+import AskSheet from '../../components/AskSheet.vue';
+import { ask } from '../../lib/ask';
 import { codeMessage } from '../../lib/errors';
 import { requireLogin } from '../../lib/use-login';
 import { member } from '../../stores';
@@ -77,9 +80,7 @@ function action(s: ClassSessionView): { label: string; kind: 'book' | 'buy' | 'c
   return { label: s.left > 0 ? '预约' : '排候补', kind: 'book', tone: 'dark' };
 }
 
-const confirm = (title: string, content: string, confirmText = '确定') => new Promise<boolean>(resolve => {
-  uni.showModal({ title, content, confirmText, success: r => resolve(r.confirm), fail: () => resolve(false) });
-});
+const confirm = (title: string, content: string, confirmText = '确定') => ask({ title, content, confirmText });
 
 /** 正在提交的课；提交中不能再点（防连点） */
 const busy = ref('');
@@ -124,7 +125,7 @@ async function cancel(bookingId: string, blockedBy: RuleErrorCode | null, name: 
   if (busy.value) return;
   if (blockedBy) {
     // 过了截止时间：codeMessage 里会说找前台
-    uni.showModal({ title: '不能自己取消', content: codeMessage(blockedBy), showCancel: false });
+    ask({ title: '不能自己取消', content: codeMessage(blockedBy), showCancel: false });
     return;
   }
   busy.value = bookingId;
@@ -185,25 +186,36 @@ const history = computed(() => mine.value.filter(b => b.status !== 'booked' && b
         <text class="fine">{{ cancelHint }}</text>
       </view>
 
-      <view v-if="loaded && !sessions.length" class="empty">这天没有团课，换一天看看。</view>
-      <view v-for="s in sessions" :key="s.id" class="row" :class="{ off: s.status === 'cancelled' }">
-        <view class="time">
-          <text class="t1">{{ s.startTime }}</text>
-          <text class="t2">{{ endTime(s) }}</text>
-        </view>
-        <view class="main">
+      <Empty v-if="loaded && !sessions.length" title="这天没有团课" text="换一天看看。" />
+      <template v-for="s in sessions" :key="s.id">
+        <!-- 取消的课：第一行时间和状态，原因单独一行，窄屏折行时不和状态挤在一起 -->
+        <view v-if="s.status === 'cancelled'" class="row off cancelled">
+          <view class="c-top">
+            <text class="t1">{{ s.startTime }}<text class="t2"> – {{ endTime(s) }}</text></text>
+            <Button :variant="action(s).tone" mini disabled>{{ action(s).label }}</Button>
+          </view>
           <text class="name">{{ s.name }}</text>
           <text class="meta">{{ s.coachName ? `${s.coachName}，` : '' }}{{ s.storeName }}</text>
-          <text v-if="s.status === 'cancelled'" class="meta warn">这节取消了：{{ s.cancelReason || '馆里临时调整' }}</text>
-          <text v-else class="meta">已约 {{ s.booked }}/{{ s.capacity }}{{ s.waitlisted ? `，候补 ${s.waitlisted} 人` : '' }}</text>
+          <text class="reason">这节取消了：{{ s.cancelReason || '馆里临时调整' }}</text>
         </view>
-        <Button :variant="action(s).tone" mini :disabled="action(s).kind === 'none' || busy === s.id" @tap="tap(s)">{{ action(s).label }}</Button>
-      </view>
+        <view v-else class="row">
+          <view class="time">
+            <text class="t1">{{ s.startTime }}</text>
+            <text class="t2">{{ endTime(s) }}</text>
+          </view>
+          <view class="main">
+            <text class="name">{{ s.name }}</text>
+            <text class="meta">{{ s.coachName ? `${s.coachName}，` : '' }}{{ s.storeName }}</text>
+            <text class="meta">已约 {{ s.booked }}/{{ s.capacity }}{{ s.waitlisted ? `，候补 ${s.waitlisted} 人` : '' }}</text>
+          </view>
+          <Button :variant="action(s).tone" mini :disabled="action(s).kind === 'none' || busy === s.id" @tap="tap(s)">{{ action(s).label }}</Button>
+        </view>
+      </template>
     </template>
 
     <template v-else>
-      <view v-if="!member.state.me" class="empty">登录后看你的预约</view>
-      <view v-else-if="!mine.length" class="empty">还没有预约，去课表里约一节吧。</view>
+      <Empty v-if="!member.state.me" title="登录后看你的预约" />
+      <Empty v-else-if="!mine.length" title="还没有预约" text="去课表里约一节吧。" />
       <view v-for="b in [...active, ...history]" :key="b.id" class="row" :class="{ off: !active.includes(b) }">
         <view class="time">
           <text class="t1">{{ formatMonthDay(b.session.on) }}</text>
@@ -222,6 +234,7 @@ const history = computed(() => mine.value.filter(b => b.status !== 'booked' && b
         >{{ b.status === 'waitlisted' ? '不排了' : '取消' }}</Button>
       </view>
     </template>
+    <AskSheet />
   </view>
 </template>
 
@@ -250,5 +263,7 @@ const history = computed(() => mine.value.filter(b => b.status !== 'booked' && b
 .name { font-size: 15px; font-weight: 600; }
 .meta { font-size: 12px; color: var(--ink-muted); }
 .warn { color: var(--ink); }
-.empty { padding: 60px 0; text-align: center; color: var(--ink-muted); }
+.row.cancelled { flex-direction: column; align-items: stretch; gap: 2px; }
+.c-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
+.reason { font-size: 12px; line-height: 1.5; color: var(--ink-muted); }
 </style>

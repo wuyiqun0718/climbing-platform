@@ -2,6 +2,7 @@
 import type { CheckInResult, ReferralWaitInfo } from '@climb/api';
 import { checkInDoneView } from '@climb/core';
 import Button from '@climb/ui-mp/Button.vue';
+import { formatDot } from '@climb/utils';
 import { onLoad, onShow } from '@dcloudio/uni-app';
 import { computed, ref } from 'vue';
 import { api, run } from '../../api';
@@ -61,16 +62,18 @@ const goHome = () => uni.switchTab({ url: '/pages/index/index' });
 </script>
 
 <template>
-  <view class="page">
+  <view class="page" :class="{ ok: status === 'done' && result && view }">
     <view v-if="status === 'bad'" class="panel">
       <text class="h">{{ message }}</text>
       <view class="act"><Button variant="primary" block @tap="goHome">回首页</Button></view>
     </view>
 
     <template v-else-if="status === 'done' && result && view">
-      <view class="panel hero">
+      <view class="done-hero">
         <text class="h">{{ view.title }}</text>
-        <text class="p">{{ result.storeName }} · {{ result.on }}</text>
+        <!-- 入场结果只有日期，没有几点几分 -->
+        <text class="when">{{ formatDot(result.on) }}</text>
+        <text class="p">{{ result.storeName }}</text>
       </view>
       <view class="panel">
         <view class="row"><text class="k">门店</text><text class="v">{{ result.storeName }}</text></view>
@@ -79,7 +82,7 @@ const goHome = () => uni.switchTab({ url: '/pages/index/index' });
         <view class="row"><text class="k">当日保险</text><text class="tag">{{ view.policyText }}</text></view>
       </view>
       <text class="fine">{{ view.policyNote }}</text>
-      <Button variant="primary" block @tap="goHome">好的</Button>
+      <Button variant="dark" block @tap="goHome">完成</Button>
     </template>
 
     <template v-else-if="status === 'wait'">
@@ -107,6 +110,13 @@ const goHome = () => uni.switchTab({ url: '/pages/index/index' });
 .page { padding: 16px 16px 40px; }
 .panel { display: flex; flex-direction: column; margin-bottom: 10px; padding: 16px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); background: var(--surface); }
 .hero { background: var(--brand); }
+/* 成功态整屏品牌色；等邀请人的几种还是白底面板 */
+.page.ok { min-height: 100vh; box-sizing: border-box; padding: 32px 16px 40px; background: var(--brand); }
+.done-hero { margin-bottom: 20px; }
+.done-hero .h { font-size: 32px; color: var(--on-brand); }
+.when { display: block; margin-top: 10px; font-family: var(--font-number); font-size: 40px; font-weight: 800; line-height: 1.1; color: var(--on-brand); }
+.done-hero .p { color: var(--on-brand); opacity: 0.75; }
+.page.ok .fine { color: var(--on-brand); opacity: 0.75; }
 .h { display: block; font-family: var(--font-display); font-size: 24px; }
 .p { display: block; margin-top: 6px; font-size: 14px; color: var(--ink-muted); }
 /* 品牌底上的说明用正文色压淡，白底面板上的 .p 不变 */

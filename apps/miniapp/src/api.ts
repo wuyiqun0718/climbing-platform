@@ -3,6 +3,7 @@ import type { Order } from '@climb/core';
 import { formatYuan } from '@climb/utils';
 import gym from '@gym';
 import { PRIVACY } from './config/privacy';
+import { ask } from './lib/ask';
 import { createAuth, type Session } from './lib/auth';
 import { createPay, isPayCancel, type PromptResult } from './lib/pay';
 import { createPrivacy } from './lib/privacy';
@@ -89,21 +90,19 @@ function wxPayment(payment: WxPayParams): Promise<PromptResult> {
   });
 }
 
-/** mock 下没有微信支付：弹个确认框，点「确认支付」就模拟一次支付回调 */
-function mockPayment(_payment: WxPayParams, order: Order): Promise<PromptResult> {
-  return new Promise((resolve, reject) => {
-    uni.showModal({
-      title: '模拟支付',
-      content: `${order.product.name} ${formatYuan(order.amountCents)}\n开发环境，不会真的扣款`,
-      confirmText: '确认支付',
-      cancelText: '不付了',
-      success: r => {
-        if (!r.confirm) return resolve('cancel');
-        mock!.simulatePayment(order.id).then(() => resolve('ok'), reject);
-      },
-      fail: reject,
-    });
+/** mock 下没有微信支付：底部弹个确认框（页面里要放 AskSheet），点「确认支付」就模拟一次支付回调 */
+async function mockPayment(_payment: WxPayParams, order: Order): Promise<PromptResult> {
+  const ok = await ask({
+    title: order.product.name,
+    amount: formatYuan(order.amountCents),
+    content: '模拟支付：开发环境，不会真的扣款',
+    confirmText: '确认支付',
+    cancelText: '不付了',
+    bottom: true,
   });
+  if (!ok) return 'cancel';
+  await mock!.simulatePayment(order.id);
+  return 'ok';
 }
 
 /** 下单和支付，见 src/lib/pay.ts */

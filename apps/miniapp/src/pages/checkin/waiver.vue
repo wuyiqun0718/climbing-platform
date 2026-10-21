@@ -25,7 +25,7 @@ const expanded = ref(false);
 <style scoped>
 .waiver { margin-bottom: 10px; padding: 14px 16px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); background: var(--surface); }
 .agree { display: flex; align-items: center; gap: 10px; }
-.box { display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); background: var(--surface); font-size: 12px; font-weight: 700; }
+.box { display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: var(--stroke) solid var(--ink); border-radius: 4px; background: var(--surface); color: var(--ink); font-size: 12px; font-weight: 700; }
 .box.on { background: var(--brand); }
 .t { font-size: 14px; font-weight: 600; }
 .toggle { display: block; margin-top: 8px; font-size: 12px; color: var(--ink-muted); text-decoration: underline; }

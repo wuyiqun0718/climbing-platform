@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { ClimbCalendar } from '@climb/api';
 import { daysOfMonth, shiftMonth, type MonthKey } from '@climb/core';
-import { fromDateKey, monthOf, toDateKey, WEEKDAYS } from '@climb/utils';
+import Empty from '@climb/ui-mp/Empty.vue';
+import { fromDateKey, monthOf, toDateKey } from '@climb/utils';
 import { computed, ref } from 'vue';
 import { api, run } from '../../api';
 import { useRequireLogin } from '../../lib/use-login';
@@ -33,10 +34,12 @@ const go = (n: number) => {
 
 const today = toDateKey(new Date());
 const byDay = computed(() => new Map((data.value?.month === month.value ? data.value.days : []).map(d => [d.on, d])));
+/** 周一开头，和「我的」里的预览一致 */
+const WEEK_HEAD = ['一', '二', '三', '四', '五', '六', '日'];
 /** 日历格子：前面按 1 号是星期几补空 */
 const cells = computed(() => {
   const days = daysOfMonth(month.value);
-  const lead = fromDateKey(days[0]).getDay();
+  const lead = (fromDateKey(days[0]).getDay() + 6) % 7;
   return [...Array<null>(lead).fill(null), ...days];
 });
 const title = computed(() => `${Number(month.value.slice(0, 4))} 年 ${Number(month.value.slice(5))} 月`);
@@ -53,7 +56,7 @@ const climbed = computed(() => [...byDay.value.values()]);
     <text class="sum">这个月来了 {{ climbed.length }} 天</text>
 
     <view class="grid">
-      <text v-for="w in WEEKDAYS" :key="w" class="wd">{{ w.slice(1) }}</text>
+      <text v-for="w in WEEK_HEAD" :key="w" class="wd">{{ w }}</text>
       <view v-for="(d, i) in cells" :key="i" class="cell" :class="{ on: d && byDay.has(d), today: d === today }">
         <template v-if="d">
           <text class="dn">{{ Number(d.slice(8)) }}</text>
@@ -66,7 +69,7 @@ const climbed = computed(() => [...byDay.value.values()]);
       <text class="date">{{ Number(d.on.slice(5, 7)) }}月{{ Number(d.on.slice(8)) }}日</text>
       <text class="stores">{{ d.stores.map(s => s.name).join('、') }}</text>
     </view>
-    <text v-if="data && !climbed.length" class="empty">这个月还没来过</text>
+    <Empty v-if="data && !climbed.length" title="这个月还没来过" />
   </view>
 </template>
 
@@ -87,5 +90,4 @@ const climbed = computed(() => [...byDay.value.values()]);
 .row { display: flex; justify-content: space-between; margin-top: 8px; padding: 10px 12px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); background: var(--surface); font-size: 14px; }
 .date { font-family: var(--font-number); font-weight: 600; }
 .stores { color: var(--ink-muted); }
-.empty { display: block; padding: 40px 0; text-align: center; color: var(--ink-muted); }
 </style>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { MyInsurance } from '@climb/api';
 import { POLICY_STATUS_TEXT, policyCheckInText, waiverStatusText } from '@climb/core';
+import Empty from '@climb/ui-mp/Empty.vue';
 import { formatDot, formatMonthDay, toDateKey } from '@climb/utils';
 import { computed, ref } from 'vue';
 import { api, run } from '../../api';
@@ -49,8 +50,8 @@ const waiver = computed(() => {
       <text class="label">风险告知书</text>
       <view class="panel">
         <view class="row"><text class="k">现在这一版</text><text class="v">{{ waiver.status }}</text></view>
-        <view v-for="s in waiver.signed" :key="s.id" class="row">
-          <text class="k">{{ s.text }}{{ s.current ? '' : '（旧版）' }}</text><text class="v">{{ s.at }} 签</text>
+        <view v-for="s in waiver.signed" :key="s.id" class="row top">
+          <text class="k top-k">{{ s.text }}{{ s.current ? '' : '（旧版）' }}</text><text class="top-at">{{ s.at }} 签</text>
         </view>
         <template v-if="waiver.current">
           <text class="toggle" @tap="expanded = !expanded">{{ expanded ? '收起' : '告知书内容' }}</text>
@@ -70,7 +71,7 @@ const waiver = computed(() => {
         <text class="k">{{ e.text }}</text><text class="k">{{ e.how }}</text>
       </view>
     </view>
-    <view v-if="loaded && !policies.length" class="empty">还没有保单，扫码入场后这里会有记录</view>
+    <Empty v-if="loaded && !policies.length" title="还没有保单" text="扫码入场后这里会有记录" />
   </view>
 </template>
 
@@ -82,11 +83,14 @@ const waiver = computed(() => {
 .name { font-size: 16px; font-weight: 600; }
 .k { font-size: 13px; color: var(--ink-muted); }
 .v { font-size: 14px; font-weight: 600; }
+/* 告知书标题可能很长：日期固定在右上角 */
+.row.top { align-items: flex-start; gap: 8px; }
+.top-k { flex: 1; min-width: 0; }
+.top-at { flex: none; font-size: 12px; color: var(--ink-muted); }
 .tag { padding: 2px 8px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; }
 .tag.off { color: var(--ink-muted); }
 .toggle { font-size: 12px; color: var(--ink-muted); text-decoration: underline; }
 .points { display: flex; flex-direction: column; gap: 6px; }
 .point { font-size: 13px; line-height: 1.6; }
 .fine { display: block; margin-bottom: 10px; font-size: 12px; line-height: 1.6; color: var(--ink-muted); }
-.empty { padding: 40px 0; text-align: center; color: var(--ink-muted); }
 </style>

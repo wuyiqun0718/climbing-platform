@@ -53,7 +53,7 @@
     {
       "path": "pages/checkin/confirm",
       "style": {
-        "navigationBarTitleText": "扫码入场"
+        "navigationBarTitleText": "确认入场"
       }
     },
     {
@@ -116,9 +116,9 @@
     "backgroundColor": "$surface",
     "borderStyle": "$ink",
     "list": [
-      { "pagePath": "pages/index/index", "text": "首页" },
-      { "pagePath": "pages/cards/index", "text": "卡包" },
-      { "pagePath": "pages/me/index", "text": "我的" }
+      { "pagePath": "pages/index/index", "text": "首页", "iconPath": "static/gym/tab-home.png", "selectedIconPath": "static/gym/tab-home-on.png" },
+      { "pagePath": "pages/cards/index", "text": "卡包", "iconPath": "static/gym/tab-cards.png", "selectedIconPath": "static/gym/tab-cards-on.png" },
+      { "pagePath": "pages/me/index", "text": "我的", "iconPath": "static/gym/tab-me.png", "selectedIconPath": "static/gym/tab-me-on.png" }
     ]
   }
 }

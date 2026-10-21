@@ -7,6 +7,8 @@ import { formatDot, formatMonthDay, toDateKey } from '@climb/utils';
 import { onLoad } from '@dcloudio/uni-app';
 import { computed, ref } from 'vue';
 import { api, run } from '../../api';
+import AskSheet from '../../components/AskSheet.vue';
+import { ask } from '../../lib/ask';
 import { cardView } from '../../lib/card-view';
 import { codeMessage } from '../../lib/errors';
 import { useRequireLogin } from '../../lib/use-login';
@@ -62,9 +64,7 @@ async function loadFreeze() {
   dayIndex.value = Math.max(0, dayOptions.value.indexOf(Math.min(7, freeze.value?.maxDays ?? 7)));
 }
 
-const confirm = (title: string, content: string) => new Promise<boolean>(resolve => {
-  uni.showModal({ title, content, success: r => resolve(r.confirm), fail: () => resolve(false) });
-});
+const confirm = (title: string, content: string) => ask({ title, content });
 
 async function doFreeze() {
   const days = pickedDays.value;
@@ -108,7 +108,7 @@ const rows = computed(() => ledger.value.map(l => ({
   <view class="page">
     <view v-if="member.state.loaded && !card" class="empty">没找到这张卡</view>
     <template v-else-if="view">
-      <MemberCard :kind="view.kind" :name="view.name" :value="view.value" :unit="view.unit" :meta="view.meta" :tone="view.tone" />
+      <MemberCard :kind="view.kind" :name="view.name" :value="view.value" :unit="view.unit" :meta="view.meta" :tone="view.tone" :progress="view.progress" />
 
       <view v-if="card?.kind === 'period' && card.status === 'frozen'" class="freeze">
         <text class="freeze-t">冻结到 {{ formatDot(card.frozenUntil!) }}（含），到那天以后自动解冻</text>
@@ -136,6 +136,7 @@ const rows = computed(() => ledger.value.map(l => ({
       </view>
       <text class="fine">同一天多次进出只扣 1 次。送给朋友的次数会从这张卡里扣除，朋友领取后可以在有效期内使用。</text>
     </template>
+    <AskSheet />
   </view>
 </template>
 

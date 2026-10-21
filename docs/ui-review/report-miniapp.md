@@ -137,6 +137,7 @@
 - 问题：`loadPreview` 里 `uni.setNavigationBarTitle({ title: preview.store.name })`，模板里又有 `<text class="h">{{ storeName }}</text>`。导航和页面大标题都是「滨港店」。
 - 文件：`apps/miniapp/src/pages/checkin/confirm.vue` 约第 63 行和第 174 行。
 - 改法：导航标题固定「确认入场」。页面 `.h` 留店名，下面的说明（「今天已经入过场了，这次不扣次」这类）保持原样。没法入场时导航也用「确认入场」，页面标题仍是「没法入场」。
+- **已修**：after 图：`after/checkin-confirm-ajie.png`。导航标题在 `pages.base.json` 里改成「确认入场」，不再按店名改。
 
 ### M2. 入场成功页是白底上的一条绿
 
@@ -145,6 +146,7 @@
 - 问题：成功态是页面灰底上的一块绿条加白卡片，下面大片空白。原型是整屏 `--brand`、大时间、白明细卡、黑底「完成」按钮。再次入场的说明句子很长，但还在 16px 边距内，没有溢出。
 - 文件：`apps/miniapp/src/pages/checkin/done.vue` 成功分支（`status === 'done'` 那段模板和 `.page` / `.hero` / `.btn.primary`）。
 - 改法：只改成功态。`.page` 在成功时 `background: var(--brand); min-height: 100vh; padding: 32px 16px 40px`。标题 `.h` 继续 `var(--font-display)`，字号 32px，`color: var(--on-brand)`。时间用入场结果里已有的时刻，`var(--font-number)`、40px、字重 800。明细保持现在的四行（门店、用的卡、扣次、当日保险），白底 `var(--surface)`、描边、`radius-md`。按钮用 H4 的 `Button variant="dark" block`，文案改成「完成」，点击仍是 `goHome`。「投保中」pill 留在白卡片里。副文案按 H3 用 `--on-brand`。等待邀请人的那几个分支保持白底面板，不要整屏刷绿。
+- **已修**：after 图：`after/checkin-done-ajie.png`、`after/checkin-done-reentry.png`。入场结果（`CheckInResult`）里没有几点几分，只有日期，大字显示的是入场日期 `2026.10.22`；要显示时刻得接口加字段，这次没动。
 
 ### M3. 领取页是一张白盒子
 
@@ -159,6 +161,7 @@
   - 右下角水印 `/static/gym/mark.png`，`opacity: 0.15`，`pointer-events: none`。这个路径 `share-link.ts` 已经在用。
   - 主按钮固定在页面底部：`position: fixed; left: 16px; right: 16px; bottom: 24px`，用 `Button variant="primary" block`。已登录文案「领取到我的卡包」，未登录仍是「登录后领取」。页面 `padding-bottom: 96px`，避免按钮盖住说明。
   - 自己的链接、已领、被挡住、打不开，继续用白盒子，但打不开时盒子不要只贴在顶上：垂直方向用现在的 padding 即可，按钮保持全宽。状态 chip 继续 `var(--brand-soft)`。
+- **已修**：after 图：`after/claim-count-pending.png`、`after/claim-referral-pending.png`（这次是朋友小鹿打开的视角）、`after/claim-count-own.png`、`after/claim-bad.png`。打不开的白盒子往下挪了一点（`margin-top: 48px`）。
 
 ### M4. 老带新是说明盒子，没卡时没有去办卡
 
@@ -167,6 +170,7 @@
 - 问题：整页是白盒子。名额数字「1/1」本身对齐没问题。小鹿没有期限卡时只有灰字「有期限卡才能发老带新邀请」，原型底部有「去办期限卡」。
 - 文件：`apps/miniapp/src/pages/share/referral.vue`。`status.blockedBy === 'no-period-card'` 时文案来自 `codeMessage`（`apps/miniapp/src/lib/errors.ts`）。
 - 改法：顶部一块和首页老带新横条一样的板：背景 `var(--accent)`，描边，`border-radius: var(--radius-lg)`，`box-shadow: 0 4px 0 var(--ink)`。说明文字放在这块里。名额数字保持 `var(--font-number)`。`blockedBy === 'no-period-card'` 时，在灰字下面加 `Button variant="primary" block`，文案「去办期限卡」，`uni.navigateTo({ url: '/pages/shop/index?seg=period' })`。其他 `blockedBy`（例如额度用完）不要加这个按钮。步骤如果要补，用三行编号即可，不要新写规则。
+- **已修**：after 图：`after/referral-ajie.png`、`after/referral-sent.png`、`after/referral-xiaolu-blocked.png`（「去办期限卡」进购卡页期限卡分组）。没补步骤。
 
 ### M5. 会员卡没有进度和水印
 
@@ -175,6 +179,7 @@
 - 问题：卡的底色、描边、大数字是对的。缺原型上的进度条和右下角线稿水印。期限卡也没有「本月还能带朋友」这一行；这行数据老带新页已经有（`api.me.referrals()` 的 `left`），卡面上可以带一句，没有数据就不要编。
 - 文件：`packages/ui-mp/src/MemberCard.vue`，比例在 `apps/miniapp/src/lib/card-view.ts` 算好再传入。
 - 改法：`MemberCard` 增加可选 `progress?: number`（0 到 1）。组件里在 meta 下方画一条高 6px 的轨道：`background: var(--ink); opacity` 用一条独立的 inner bar，轨道本身 `background: rgba(0,0,0,.12)` 会写死颜色，改成轨道 `background: var(--ink); opacity: 0.15` 包一层，填充层 `background: var(--ink); width: progress%`，`border-radius: 99px`。不要在组件里算天数。`card-view.ts` 用卡上已有的 `startsOn` / `expiresOn` 或剩余次数 / 总次数算出比例传进去。水印：卡内 `position: absolute; right: 8px; bottom: 8px; width: 72px; opacity: 0.15`，`src="/static/gym/mark.png"`。`.mcard` 加 `position: relative; overflow: hidden`。操作按钮保持现在的文字按钮，390 下三枚已经排得下（`before/cards-ajie-bottom.png`）。
+- **已修**：after 图：`after/cards-ajie.png`、`after/cards-ajie-bottom.png`、`after/card-detail-year.png`、`after/card-detail-count.png`。进度用 `cardBalance` 的剩余 / 总数，体验券不画。期限卡下加了「本月还能带 N 位朋友免费来爬」，数据来自 `api.me.referrals()`，拿不到或没期限卡就不显示。按钮包在一层 `position: relative` 里，盖在水印上面。
 
 ### M6. 攀爬日历从周日开头
 
@@ -183,6 +188,7 @@
 - 问题：`cells` 用 `fromDateKey(days[0]).getDay()` 补空，表头是 `WEEKDAYS`（`packages/utils/src/date.ts` 从「周日」开始），页面 `.wd` 用 `w.slice(1)`，所以表头是日一二三四五六。2026-10-01 是周四，会错一格。
 - 文件：`apps/miniapp/src/pages/me/calendar.vue` 的 `cells` 和表头。H7 的预览用同一套。
 - 改法：只改这个页面，不要改 `WEEKDAYS`。表头写成 `['一','二','三','四','五','六','日']`。`lead = (fromDateKey(days[0]).getDay() + 6) % 7`。有入场的格子继续用现在的品牌底。空月份「这个月还没来过」改成 M7 的空状态，不要只留一行灰字。
+- **已修**：after 图：`after/calendar-ajie.png`、`after/calendar-ajie-prev.png`、`after/calendar-xiaolu-empty.png`。表头一到日，10 月 1 日落在周四。
 
 ### M7. 空状态长短不一
 
@@ -191,6 +197,7 @@
 - 问题：卡包空状态是标题 + 说明 + 按钮，居中。订单、团课、保险、日历、不能分享的次卡只有一行 `var(--ink-muted)`。
 - 文件：新建 `packages/ui-mp/src/Empty.vue`。替换上述页面里单独的一行灰字。卡包现有 `.empty` 也换成它。
 - 改法：props `title`、`text`、默认 slot 放按钮。容器 `padding: 48px 24px; text-align: center`。标题 `font-family: var(--font-display); font-size: 22px`。说明 `margin-top: 8px; font-size: 13px; line-height: 1.5; color: var(--ink-muted)`。文案沿用各页现在的句子，不要改成营销句。卡包空状态的「去购卡」仍走原来的 `open('shop')`。
+- **已修**：after 图：`after/cards-xiaolu-empty.png`、`after/orders-xiaolu-empty.png`、`after/classes-empty-day.png`、`after/classes-mine-empty.png`、`after/share-count-empty.png`、`after/insurance-xiaolu-empty.png`、`after/calendar-xiaolu-empty.png`。原来一句话的拆成标题 + 说明（如「这天没有团课」/「换一天看看。」），字没改。
 
 ### M8. 确认弹窗的按钮是系统蓝
 
@@ -203,6 +210,7 @@
   - `pages/classes/index.vue` 预约确认和不能取消的提示
   - `pages/share/count.vue`、`pages/share/referral.vue` 生成前的确认
 - 改法：`Sheet` 用 `v-model` 或 `open` + `confirm` / `cancel` 事件。遮罩 `position: fixed; inset: 0; background: rgba(0,0,0,.45)`。卡片 `background: var(--surface)`，描边，`border-radius: var(--radius-md)`，padding `20px 16px`。按钮用 H4 的 Button：取消 `ghost`，确认 `dark`。支付这一处用贴底：`left: 0; right: 0; bottom: 0; border-radius: var(--radius-lg) var(--radius-lg) 0 0`，金额 `var(--font-number)` 28px。文案保持现在 modal 里的 title 和 content。不要改 uni 的全局 modal CSS。
+- **已修**：after 图：`after/checkout-pay-modal.png`（贴底）、`after/checkout-pay-cancelled.png`、`after/card-freeze-confirm.png`、`after/classes-book-modal.png`、`after/share-count-confirm.png`、`after/referral-confirm.png`。`Sheet.vue` 是纯展示组件；`apps/miniapp/src/lib/ask.ts` 提供 `ask()` 返回 Promise，页面里放一个 `components/AskSheet.vue` 显示（小程序 App.vue 没有模板，只能每页放）。结算和订单页「知道了」的提示也换了。签到页、教练排班、开发面板的 modal 不在清单里，没动。
 
 ### M9. 首页今日团课是单店竖列表
 
@@ -211,6 +219,7 @@
 - 问题：现在是 `.panel.class-row` 竖排，一家店、一行时间加课名。原型是横向小卡，能露出下一张。课的数据里没有难度标签，不要编「V0」这类字。
 - 文件：`apps/miniapp/src/pages/index/index.vue` 的团课 `v-for` 和 `.class-row`。
 - 改法：外包一层横向滚动：`display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px`（小程序用 `scroll-view` `scroll-x`）。每张卡 `flex: 0 0 200px`，白底，描边，`border-radius: var(--radius-md)`，padding `12px`。时间 `var(--font-number)` 18px / 800。店名和教练放 12px `var(--ink-muted)`。剩余名额保持现在的文案。点击仍 `open('classes')`。「课表」链接留在标题右侧。
+- **已修**：after 图：`after/home-ajie.png`。mock 今天滨港店只剩一节，所以截图里只有一张卡。
 
 ### M10. 告知书勾选框看起来像单选
 
@@ -219,6 +228,7 @@
 - 问题：`.box` 是 18×18，`border-radius: var(--radius-sm)`。`--radius-sm` 是 10px，18px 的盒子会画成圆，和上面选卡的圆形 radio 分不清。
 - 文件：`apps/miniapp/src/pages/checkin/waiver.vue` 的 `.box`。
 - 改法：`.box { border-radius: 4px; }`。选中打勾颜色 `var(--ink)`。不要改 `--radius-sm` 本身，按钮圆角还要用它。展开后的条款能滚到底（`before/checkin-waiver-expanded-bottom.png`），padding 够用。
+- **已修**：after 图：`after/checkin-waiver-expanded.png`、`after/checkin-confirm-xiaolu.png`。
 
 ### M11. 分享路径和标题挤在一行，token 从中间断开
 
@@ -227,6 +237,7 @@
 - 问题：`.fine` 是 `{{ title }} · {{ claimPath }}`，再加 `word-break: break-all`。390 宽下 token 断成 `…L_C` / `VOEGxuE7tfA` 这样两行，标题和 `/pages/share/claim?t=` 混在一段 12px 灰字里。
 - 文件：`apps/miniapp/src/pages/share/count.vue`、`apps/miniapp/src/pages/share/referral.vue` 的 `.fine`。
 - 改法：标题单独一行，`font-size: 14px; color: var(--ink)`。路径单独一行：`display: block; margin-top: 8px; font-size: 12px; line-height: 1.5; color: var(--ink-muted); overflow-wrap: anywhere`。去掉 `word-break: break-all` 和中间的 ` · `。复制按钮文案保持「复制领取路径」，复制的内容仍是完整 path。
+- **已修**：after 图：`after/share-count-created.png`、`after/referral-sent.png`。
 
 ### M12. 教练排班的提示和格子对不上
 
@@ -235,6 +246,7 @@
 - 问题：提示写「点空闲的格子占上」，列表是 10:00–22:00 的通栏行，不是格子。空闲、线下约、不排课靠底色能分开（白 / `--accent` / `--neutral`），但空闲行和已占用行都是实线框。原型的空闲是虚线。底部语音输入不要做。
 - 文件：`apps/miniapp/src/pages/coach/schedule.vue` 的提示文案和 `.row`。
 - 改法：提示改成「点空闲的时段占上（线下约的、有事），会员那边马上约不了。」空闲行 `border-style: dashed`。已约或线下约保持实线，底色继续 `var(--accent)`。不排课底色 `var(--neutral)`。不要加底部输入条。
+- **已修**：after 图：`after/coach-today.png`、`after/coach-tomorrow.png`。
 
 ## 低
 
@@ -245,6 +257,7 @@
 - 问题：`const mark = \`/static/gym/${gym.logo}\``，`gym.logo` 是 `logo.jpg`。半透明照片压在问候语后面。`gyms/benchmark/assets/mark.png` 会进 `/static/gym/mark.png`。
 - 文件：`apps/miniapp/src/pages/index/index.vue` 约第 17–18 行和 `.hero-mark`。
 - 改法：src 改成 `/static/gym/mark.png`。`.hero-mark` 的 `right: -36px; top: -18px; width: 210px; opacity: 0.17` 可以留。图片加载失败时再退回 `gym.logo`。
+- **已修**：after 图：`after/home-ajie.png`。`mark.png` 加载失败时 `@error` 退回 logo。
 
 ### L2. 底部 tab 没有图标
 
@@ -252,6 +265,7 @@
 - 截图：`before/home-ajie.png`、`before/cards-ajie.png`、`before/me-ajie.png` 底部。原型 tab 在 `prototype/home-ajie.png`，选中项是品牌绿圆底图标。
 - 问题：`apps/miniapp/pages.base.json` 的 `tabBar.list` 只有 `text`，没有 `iconPath` / `selectedIconPath`。选中只靠字色，三个字在 390 宽下间距很大，选中态弱。
 - 改法：给首页、卡包、我的各做一对 48×48 的 png（未选中描边黑，选中落在 `--brand` 圆底上），填进 `iconPath` 和 `selectedIconPath`。`selectedColor` 已经是品牌绿，保持。不要加第四个 tab。
+- **已修**：after 图：`after/home-ajie.png`、`after/cards-ajie.png`、`after/me-ajie.png`。图标不是手画的固定 png：`apps/miniapp/scripts/tab-icons.mjs` 在 prepare-gym 时按岩馆主题色（`ink` / `brand` / `onBrand`）生成 48×48 png 到 `src/static/gym/`，换岩馆颜色跟着变。
 
 ### L3. 保险列表的标题和签署日期挤在一行
 
@@ -260,6 +274,7 @@
 - 问题：告知书标题和签署日期在同一个 flex 行。标题一长，日期掉到标题右侧的中间，不是稳定的右上角。展开后最后一张卡能滚出来，底部 padding 够。
 - 文件：`apps/miniapp/src/pages/me/insurance.vue` 的 `.top`。
 - 改法：`.top { display: flex; align-items: flex-start; gap: 8px; }`。标题 `flex: 1; min-width: 0`。日期 `flex: none; font-size: 12px; color: var(--ink-muted)`。
+- **已修**：after 图：`after/insurance-ajie.png`、`after/insurance-ajie-expanded.png`。页面里没有 `.top`，改的是告知书签署那几行（标题 + 签署日期）。
 
 ### L4. 领取说明里岩馆名和后文粘在一起
 
@@ -267,6 +282,7 @@
 - 截图：`before/claim-count-pending.png` 的「2027.02.17 前在BENCHMARK任意一家店」
 - 问题：`claim.vue` 的 hint 是 `` `前在${gym.shortName}任意一家店` ``，`shortName` 是 `BENCHMARK`，中间没有空格。
 - 改法：改成 `` `前在 ${gym.shortName} 任意一家店扫码入场。` ``。只加空格，不要改句子意思。
+- **已修**：after 图：`after/claim-count-pending.png`。
 
 ### L5. 已取消的课，原因和状态并排
 
@@ -275,6 +291,7 @@
 - 问题：原因「这节取消了：教练临时有事，这节停一次」和 pill 在同一行，窄屏下原因折成两行，pill 垂直居中悬在文字旁边。七天的日期条在 390 下是齐的，不用改。
 - 文件：`apps/miniapp/src/pages/classes/index.vue` 课卡片的右侧结构。
 - 改法：第一行左边时间、右边 pill。原因单独一行放在课名下面，`font-size: 12px; line-height: 1.5; color: var(--ink-muted)`。pill 保持描边和现在的文案。
+- **已修**：after 图：`after/classes-cancelled.png`。
 
 ### L6. 登录框的占位符是开发说明
 
@@ -283,6 +300,7 @@
 - 问题：布局、logo、协议勾选、错误 toast「手机号是 11 位数字」都清楚。输入框 placeholder 是「手机号（开发用，代替微信验证）」，会员 H5 上也能看到。
 - 文件：`apps/miniapp/src/pages/login/index.vue` 的 input placeholder。
 - 改法：placeholder 改成「手机号」。校验和 toast 不用动。
+- **已修**：after 图：`after/login-phone.png`。
 
 ## 建议的修改顺序
 

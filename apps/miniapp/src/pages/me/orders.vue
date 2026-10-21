@@ -2,9 +2,12 @@
 import { ApiError } from '@climb/api';
 import { isPayable, ORDER_CHANNEL_LABELS, ORDER_STATUS_LABELS, type Order } from '@climb/core';
 import Button from '@climb/ui-mp/Button.vue';
+import Empty from '@climb/ui-mp/Empty.vue';
 import { formatMonthDay, formatYuan, toDateKey } from '@climb/utils';
 import { computed, ref } from 'vue';
 import { api, pay, run } from '../../api';
+import AskSheet from '../../components/AskSheet.vue';
+import { ask } from '../../lib/ask';
 import { errorMessage } from '../../lib/errors';
 import { useRequireLogin } from '../../lib/use-login';
 import { member } from '../../stores';
@@ -59,7 +62,7 @@ function openCard(cardId?: string) {
   if (cardId) uni.navigateTo({ url: `/pages/cards/detail?id=${encodeURIComponent(cardId)}` });
 }
 
-const modal = (title: string, content: string) => uni.showModal({ title, content, showCancel: false, confirmText: '知道了' });
+const modal = (title: string, content: string) => ask({ title, content, showCancel: false, confirmText: '知道了' });
 
 async function resume(orderId: string) {
   if (paying.value) return;
@@ -97,8 +100,9 @@ async function resume(orderId: string) {
       <text v-if="r.hint" class="meta">{{ r.hint }}</text>
       <view v-if="r.payable" class="pay"><Button variant="primary" mini :disabled="paying" @tap.stop="resume(r.id)">去付款</Button></view>
     </view>
-    <view v-if="loaded && !rows.length" class="empty">还没有订单</view>
+    <Empty v-if="loaded && !rows.length" title="还没有订单" />
     <text v-if="rows.length" class="fine">退款请找前台办理。前台买的卡也会记在这里。</text>
+    <AskSheet />
   </view>
 </template>
 
@@ -115,5 +119,4 @@ async function resume(orderId: string) {
 .status.off { color: var(--ink-muted); }
 .pay { display: flex; justify-content: flex-end; margin-top: 4px; }
 .fine { display: block; margin-top: 4px; font-size: 12px; line-height: 1.6; color: var(--ink-muted); }
-.empty { padding: 80px 0; text-align: center; color: var(--ink-muted); }
 </style>

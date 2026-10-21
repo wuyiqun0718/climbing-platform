@@ -107,7 +107,7 @@ function onH5Submit() {
       <!-- #endif -->
 
       <!-- #ifdef H5 -->
-      <input v-model="phone" class="input" type="number" maxlength="11" placeholder="手机号（开发用，代替微信验证）" />
+      <input v-model="phone" class="input" type="number" maxlength="11" placeholder="手机号" />
       <Button variant="primary" block :disabled="busy" @click="onH5Submit">验证并登录</Button>
       <!-- #endif -->
     </template>

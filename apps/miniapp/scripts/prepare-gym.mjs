@@ -2,11 +2,13 @@
 // - src/manifest.json：小程序名称、AppID
 // - src/pages.json：由 pages.base.json 生成，导航栏和 tabBar 的颜色取自岩馆主题
 // - src/styles/theme.css：主题 CSS 变量，挂在 page 上，所有页面都能用
+// - src/static/gym/tab-*.png：底部 tab 图标，按主题色画
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createServer } from 'vite';
 import { copyGymAssets, readGym, ROOT } from '../../../scripts/gym.mjs';
+import { writeTabIcons } from './tab-icons.mjs';
 
 const APP = fileURLToPath(new URL('..', import.meta.url));
 
@@ -66,6 +68,7 @@ export async function prepareMiniapp() {
   writeFileSync(path.join(APP, 'src/styles/theme.css'), `/* 由 scripts/prepare-gym.mjs 按岩馆「${meta.id}」生成，不要手改 */\npage {\n${vars}\n}\n`);
 
   copyGymAssets(meta.id, path.join(APP, 'src/static/gym'));
+  writeTabIcons(gym.theme, path.join(APP, 'src/static/gym'));
   return meta;
 }
 

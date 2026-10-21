@@ -61,7 +61,6 @@ async function loadPreview() {
     if (preview.waiver?.id !== waiver.value?.id) agreed.value = false;
     waiver.value = preview.waiver;
     status.value = 'ready';
-    uni.setNavigationBarTitle({ title: preview.store.name });
   } catch (e) {
     // 码过期、用过、不是本馆的：后端的原因翻成中文，让会员重新扫
     bad(errorMessage(e));

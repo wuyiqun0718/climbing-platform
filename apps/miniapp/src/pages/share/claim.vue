@@ -38,10 +38,17 @@ const title = computed(() => {
 const hint = computed(() => {
   const s = share.value;
   if (!s) return '';
-  if (s.kind === 'count') return `领到后是一张「好友送的次卡」，${formatDot(s.expiresOn)} 前在${gym.shortName}任意一家店扫码入场。`;
+  if (s.kind === 'count') return `领到后是一张「好友送的次卡」，${formatDot(s.expiresOn)} 前在 ${gym.shortName} 任意一家店扫码入场。`;
   const sameDay = gym.rules.referralRequiresInviterSameDay ? `要跟 ${s.fromName} 同一天来，TA 先扫码入场，你再扫码。` : '';
   return `领到后是一张「老带新体验券」，${formatDot(s.expiresOn)} 前能免费入场一次。${sameDay}`;
 });
+
+/** 朋友打开、还能领的那一态，用大卡显示 */
+const claimable = computed(() => {
+  const s = share.value;
+  return !!s && !s.mine && !s.blockedBy && !s.claimedByMe;
+});
+const avatar = computed(() => share.value?.fromName.slice(0, 1) ?? '');
 
 const justClaimed = ref(false);
 async function claim() {
@@ -63,10 +70,29 @@ const goHome = () => uni.switchTab({ url: '/pages/index/index' });
 
 <template>
   <view class="page">
-    <view v-if="failed" class="box">
+    <view v-if="failed" class="box bad">
       <text class="p">这个分享打不开，可能链接不完整，让朋友重新发一次。</text>
       <Button block @click="goHome">去首页</Button>
     </view>
+
+    <template v-else-if="share && claimable">
+      <view class="gift">
+        <view class="from">
+          <text class="avatar">{{ avatar }}</text>
+          <text class="from-name">{{ share.kind === 'count' ? `${share.fromName} 送你` : `${share.fromName} 邀请你` }}</text>
+        </view>
+        <view v-if="share.kind === 'count'" class="big">
+          <text class="num">{{ share.quantity }}</text><text class="unit">次攀岩</text>
+        </view>
+        <text v-else class="big-h">免费来爬一次</text>
+        <text class="until">{{ formatDot(share.expiresOn) }} 前有效</text>
+        <image class="mark" src="/static/gym/mark.png" mode="widthFix" />
+      </view>
+      <text class="p hint">{{ hint }}</text>
+      <view class="foot">
+        <Button variant="primary" block @click="claim">{{ auth.loggedIn() ? '领取到我的卡包' : '登录后领取' }}</Button>
+      </view>
+    </template>
 
     <view v-else-if="share" class="box">
       <view class="head">
@@ -87,13 +113,12 @@ const goHome = () => uni.switchTab({ url: '/pages/index/index' });
         <text class="p strong">{{ codeMessage(share.blockedBy) }}</text>
         <Button block @click="goHome">去首页</Button>
       </template>
-      <Button v-else variant="dark" block @click="claim">{{ auth.loggedIn() ? '领取' : '登录后领取' }}</Button>
     </view>
   </view>
 </template>
 
 <style scoped>
-.page { padding: 12px 16px 32px; }
+.page { padding: 12px 16px 96px; }
 .box { margin-top: 16px; padding: 14px 12px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); background: var(--surface); display: flex; flex-direction: column; gap: 10px; }
 .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .h { font-family: var(--font-display); font-size: 20px; }
@@ -101,4 +126,18 @@ const goHome = () => uni.switchTab({ url: '/pages/index/index' });
 .chip.expired, .chip.returned, .chip.used { background: var(--surface); color: var(--ink-muted); }
 .p { font-size: 14px; line-height: 1.6; }
 .strong { font-weight: 600; }
+.box.bad { margin-top: 48px; }
+
+.gift { position: relative; overflow: hidden; margin-top: 16px; padding: 20px 16px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); background: var(--accent); box-shadow: 0 4px 0 var(--ink); }
+.from { display: flex; align-items: center; gap: 10px; }
+.avatar { width: 36px; height: 36px; line-height: 36px; border-radius: 50%; text-align: center; background: var(--brand); color: var(--on-brand); font-weight: 700; }
+.from-name { font-size: 15px; font-weight: 600; }
+.big { display: flex; align-items: baseline; gap: 4px; margin-top: 18px; }
+.num { font-family: var(--font-number); font-size: 48px; font-weight: 800; line-height: 1; }
+.unit { font-size: 16px; font-weight: 600; }
+.big-h { display: block; margin-top: 18px; font-family: var(--font-display); font-size: 28px; }
+.until { display: block; margin-top: 8px; font-size: 13px; color: var(--ink-muted); }
+.mark { position: absolute; right: 8px; bottom: 8px; width: 96px; opacity: 0.15; pointer-events: none; }
+.hint { display: block; margin-top: 14px; color: var(--ink-muted); }
+.foot { position: fixed; left: 16px; right: 16px; bottom: 24px; }
 </style>

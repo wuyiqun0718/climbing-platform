@@ -7,6 +7,8 @@ import Button from '@climb/ui-mp/Button.vue';
 import { onShareAppMessage } from '@dcloudio/uni-app';
 import { computed, ref } from 'vue';
 import { api, run } from '../../api';
+import AskSheet from '../../components/AskSheet.vue';
+import { ask } from '../../lib/ask';
 import { codeMessage } from '../../lib/errors';
 import { useRequireLogin } from '../../lib/use-login';
 import { member } from '../../stores';
@@ -28,9 +30,7 @@ const pending = computed(() => data.value?.records.find(r => r.state === 'pendin
 const toSend = ref<string | null>(null);
 const sendToken = computed(() => toSend.value ?? pending.value?.token ?? null);
 
-const confirm = (title: string, content: string) => new Promise<boolean>(resolve => {
-  uni.showModal({ title, content, success: r => resolve(r.confirm), fail: () => resolve(false) });
-});
+const confirm = (title: string, content: string) => ask({ title, content });
 
 async function create() {
   if (!status.value || status.value.blockedBy) return;
@@ -55,11 +55,12 @@ const recordText = (r: ReferralRecordView) => {
   return SHARE_STATUS_TEXT[r.state];
 };
 const sameDay = gym.rules.referralRequiresInviterSameDay;
+const goShop = () => uni.navigateTo({ url: '/pages/shop/index?seg=period' });
 </script>
 
 <template>
   <view class="page">
-    <view v-if="status" class="box">
+    <view v-if="status" class="board">
       <text class="h">老带新</text>
       <text class="p">期限卡会员每个月可以带 {{ status.perMonth }} 位新朋友免费来爬一次。{{ sameDay ? '朋友要跟你同一天来，你先扫码入场，TA 再扫码。' : '' }}体验券当月底前有效。</text>
       <view class="quota">
@@ -73,11 +74,15 @@ const sameDay = gym.rules.referralRequiresInviterSameDay;
         <Button variant="dark" block open-type="share">发给微信好友</Button>
         <!-- #endif -->
         <!-- #ifndef MP-WEIXIN -->
-        <text class="fine">{{ message && message.title }} · {{ claimPath(sendToken) }}</text>
+        <view>
+          <text class="share-title">{{ message && message.title }}</text>
+          <text class="share-path">{{ claimPath(sendToken) }}</text>
+        </view>
         <Button variant="dark" block @click="copyPath">复制领取路径</Button>
         <!-- #endif -->
       </template>
       <text v-else-if="status.blockedBy" class="p warn">{{ codeMessage(status.blockedBy) }}</text>
+      <Button v-if="status.blockedBy === 'no-period-card'" variant="primary" block @click="goShop">去办期限卡</Button>
       <Button v-if="!status.blockedBy" :variant="sendToken ? 'default' : 'dark'" block @click="create">发一个新邀请</Button>
     </view>
 
@@ -89,17 +94,21 @@ const sameDay = gym.rules.referralRequiresInviterSameDay;
         <text class="state" :class="r.state">{{ recordText(r) }}</text>
       </view>
     </view>
+    <AskSheet />
   </view>
 </template>
 
 <style scoped>
 .page { padding: 12px 16px 32px; }
 .box { margin-top: 16px; padding: 14px 12px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); background: var(--surface); display: flex; flex-direction: column; gap: 10px; }
+.board { margin-top: 16px; padding: 16px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); background: var(--accent); box-shadow: 0 4px 0 var(--ink); display: flex; flex-direction: column; gap: 10px; }
 .h { font-family: var(--font-display); font-size: 20px; }
 .h2 { font-size: 16px; font-weight: 600; }
 .p { font-size: 14px; line-height: 1.6; }
 .warn { color: var(--ink-muted); }
-.fine { font-size: 12px; line-height: 1.6; color: var(--ink-muted); word-break: break-all; }
+.fine { font-size: 12px; line-height: 1.6; color: var(--ink-muted); }
+.share-title { display: block; font-size: 14px; color: var(--ink); }
+.share-path { display: block; margin-top: 8px; font-size: 12px; line-height: 1.5; color: var(--ink-muted); overflow-wrap: anywhere; }
 .quota { display: flex; flex-direction: column; align-items: center; }
 .num { font-family: var(--font-number); font-size: 40px; font-weight: 700; }
 .unit { font-size: 14px; margin-left: 4px; }
