@@ -6,6 +6,7 @@ import MemberCard from '@climb/ui-mp/MemberCard.vue';
 import { addDays, daysBetween, formatDot, toDateKey } from '@climb/utils';
 import { onLoad } from '@dcloudio/uni-app';
 import gym from '@gym';
+import DevPanel from '../../mock/dev-panel.vue';
 
 const today = toDateKey(new Date());
 
@@ -55,6 +56,8 @@ onLoad(() => {
     </view>
 
     <text class="note">完整的交互原型在仓库的 prototype/ 目录。这里是正式工程的起点，页面会按原型逐个实现。</text>
+
+    <DevPanel />
   </view>
 </template>
 

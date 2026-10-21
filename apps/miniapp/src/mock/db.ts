@@ -69,3 +69,37 @@ export function seedDb(today: DateKey): MockDb {
     seq: 0,
   };
 }
+
+/** mock 数据存哪：小程序和 H5 里是 uni 本地存储，测试里用内存 */
+export interface MockStorage {
+  get(key: string): unknown;
+  set(key: string, value: unknown): void;
+}
+
+const DB_KEY = 'mock:db';
+const MEMBER_KEY = 'mock:member';
+/** 示例数据的结构改了就加 1，存着的旧数据会被丢掉、重新生成 */
+const DB_VERSION = 1;
+
+/** 读存着的数据；没有或者版本不对就用示例数据重新生成 */
+export function loadDb(storage: MockStorage, today: DateKey): MockDb {
+  const saved = storage.get(DB_KEY) as { version?: number; db?: MockDb } | null | undefined;
+  if (saved?.version === DB_VERSION && saved.db) return saved.db;
+  const db = seedDb(today);
+  saveDb(storage, db);
+  return db;
+}
+
+export function saveDb(storage: MockStorage, db: MockDb) {
+  storage.set(DB_KEY, { version: DB_VERSION, db: JSON.parse(JSON.stringify(db)) });
+}
+
+/** 开发时当前用哪位示例会员的身份，默认阿杰 */
+export function loadCurrentMember(storage: MockStorage, db: MockDb): string {
+  const id = storage.get(MEMBER_KEY);
+  return typeof id === 'string' && db.members.some(m => m.id === id) ? id : MOCK_MEMBERS.ajie;
+}
+
+export function saveCurrentMember(storage: MockStorage, memberId: string) {
+  storage.set(MEMBER_KEY, memberId);
+}

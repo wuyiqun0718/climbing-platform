@@ -17,7 +17,7 @@
 |---|---|---|---|---|
 | 1 ✅ | **mock 接口层**：按路由表实现一个 `RequestAdapter`，内存里放示例数据；先实现 `@climb/api` 现有的全部接口（卡种、卡包、入场、次卡转赠、老带新、领取），规则调 `@climb/core`；`VITE_API_BASE` 为空时自动用 mock | — | `apps/miniapp/src/mock/*`、`src/api.ts`、`src/env.d.ts`、`package.json`（加 test） | 单测覆盖：带 token 才能访问、入场扣次、同日再次入场不扣、转赠扣次和领取、不能领自己的、老带新名额；规则错误返回 4xx + `{ code }` |
 | 1.5 ✅ | **字体加载修复**：标题 ZCOOL QingKe HuangYou、数字 Bricolage Grotesque 原来只写了名字没加载，全部回退成系统字体。H5 打包 `@fontsource` 的分片（主题里的 `Bricolage Grotesque` 用别名 `@font-face` 对上）；小程序在 `onLaunch` 用 `uni.loadFontFace({ global: true })` 加载子集 woff2，地址先用占位，等上传 COS 并加 downloadFile 合法域名；子集脚本可以重跑。不改 `packages/theme`（后台分支在那里加字体模块，合并时统一） | 1 | `src/main.ts`、`src/App.vue`、`src/styles/fonts.h5.css`、`src/config/fonts.ts`、`scripts/subset-fonts.mjs`、`scripts/fonts/display-text.txt`、`fonts/*.woff2`、`package.json` | H5 里 `document.fonts` 两个字体都是 loaded，标题和数字看着跟原型一样；body 不再是 Times；ZCOOL 子集几十 KB；小程序包里不含 fontsource 文件 |
-| 2 | **mock 的会员切换和重置**：mock 里有两位示例会员（年卡阿杰、新客小鹿，和原型一致），开发时能切换当前身份、重置数据；数据存 `uni` 本地存储，刷新不丢 | 1 | `src/mock/db.ts`、`src/mock/dev-panel.vue` | H5 里切到小鹿能领阿杰发的分享；重置后回到初始数据 |
+| 2 ✅ | **mock 的会员切换和重置**：mock 里有两位示例会员（年卡阿杰、新客小鹿，和原型一致），开发时能切换当前身份、重置数据；数据存 `uni` 本地存储，刷新不丢 | 1 | `src/mock/db.ts`、`src/mock/dev-panel.vue` | H5 里切到小鹿能领阿杰发的分享；重置后回到初始数据 |
 | 3 | **请求封装**：统一的 loading、错误提示（把 `ApiError.data.code` 翻成中文提示，表放在一个文件里）、401 时重新登录 | 1 | `src/api.ts`、`src/lib/request.ts`、`src/lib/errors.ts` | 规则错误在页面上提示成对应中文；单测覆盖错误码翻译 |
 | 4 | **页面骨架和 tabBar**：首页、卡包、我的三个 tab；按原型建好空页面和路由；全局主题变量注入到 `page` | — | `src/pages.json`、`src/App.vue`、`src/pages/*` | 三个 tab 能切换，导航栏颜色来自主题 |
 | 5 | **会员状态 store**：当前会员、卡包、告知书是否签过，启动时拉取，页面共享 | 1, 4 | `src/stores/member.ts` | 卡包改变（入场、领取、购卡）后各页面同步刷新 |
