@@ -115,6 +115,7 @@
 - 涉及文件：`src/components/DeskCheckInModal.vue`、契约 `POST /admin/check-ins/preview`、`POST /admin/check-ins`、mock
 - 内容：给手机没电的会员登记：选门店、列出能用的卡（mock 用 `@climb/core` 判断）、确认；同日再次入场不扣次；没签告知书的提示前台让会员补签。
 - 完成标准：mock 单测：同一天第二次 `deducted = 0`；带幂等键重复提交不重复扣。
+- 补（2026-10-21）：每次入场含保险，一人一天一张保单（`@climb/core` 的 `insuranceForEntry`）：当天第一次入场新投一张 `pending`，同日再次入场复用；待退保、已退保的不算，撤销后再入场新投。预览和结果带保险状态。撤销后标记待退保留给 16/33。
 
 **16. 撤销入场**
 - 依赖：5、15

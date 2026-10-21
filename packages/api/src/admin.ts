@@ -1,4 +1,4 @@
-import { MEMBER_SOURCES, type Card, type EntryCard, type EntryOption, type DeskPayChannel, type LedgerEntry, type MemberSource, type PayChannel, type Product, type RevenueBucket, type RevenueCategory, type RevenueChannel } from '@climb/core';
+import { MEMBER_SOURCES, type Card, type EntryCard, type EntryOption, type PolicyStatus, type DeskPayChannel, type LedgerEntry, type MemberSource, type PayChannel, type Product, type RevenueBucket, type RevenueCategory, type RevenueChannel } from '@climb/core';
 import type { Cents, DateKey } from '@climb/utils';
 import { createHttp, type ClientOptions } from './client';
 
@@ -299,7 +299,9 @@ export interface DeskOrderResult {
  * 同一天再次入场（撤销的不算）不扣次；没签告知书先不拦，返回 waiverSigned = false，页面提示前台让会员在小程序里补签。
  * 卡三店通用，门店是这次入场的门店，必须是员工能操作的店，否则 403；会员、门店、卡没有 404；卡现在不能用 422（data.code 是 @climb/core 的 RuleErrorCode）。
  * 成功后：写入场记录（method = desk），次卡扣次并记一笔 check_in 流水（操作人是员工），体验券记下用掉的日期；
- * 会员还没来过店的记下第一次到店（日期、门店）。保单见任务 33。
+ * 会员还没来过店的记下第一次到店（日期、门店）。
+ * 保险按 @climb/core 的 insuranceForEntry：当天第一次入场新投一张（status = pending，带会员、门店、日期、checkInId），同一天再次入场复用当天那张。
+ * 投保记录页见任务 33，撤销后退保见任务 16。
  */
 export interface CheckInPreviewBody {
   memberId: string;
@@ -313,6 +315,7 @@ export interface CheckInPreview {
   /** 今天已经入过场，这次不扣次 */
   reentry: boolean;
   waiverSigned: boolean;
+  insurance: CheckInInsurance;
   /** 能用的在前，规则见 @climb/core 的 checkInPlan；没有能用的卡为空数组（先去收款开卡，比如买单次票） */
   options: EntryOption[];
 }
@@ -329,6 +332,15 @@ export interface DeskCheckInResult {
   deducted: number;
   reentry: boolean;
   waiverSigned: boolean;
+  /** 这次入场的保单：新投的或复用的，policyId、status 一定有 */
+  insurance: CheckInInsurance;
+}
+
+/** 入场的保险：needed 为 true 是这次新投一张（预览里还没投，policyId、status 为 null）；false 是复用今天已有的那张 */
+export interface CheckInInsurance {
+  needed: boolean;
+  policyId: string | null;
+  status: PolicyStatus | null;
 }
 
 export const PAY_CHANNEL_TEXT: Record<PayChannel, string> = {

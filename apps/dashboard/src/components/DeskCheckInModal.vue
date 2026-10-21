@@ -4,7 +4,7 @@
  * 能用哪些卡、扣几次、同日再次入场不扣都由接口按 @climb/core 的 checkIn.ts 算好返回，这里只负责显示和提交。登记好 emit created。
  */
 import type { CheckInPreview, DeskCheckInResult } from '@climb/api';
-import { ENTRY_BLOCKED_TEXT, cardText, type Card } from '@climb/core';
+import { ENTRY_BLOCKED_TEXT, POLICY_STATUS_TEXT, cardText, type Card } from '@climb/core';
 import { Field, Modal, errorText } from '@climb/ui-web';
 import { toDateKey } from '@climb/utils';
 import { computed, ref, useId, watch } from 'vue';
@@ -104,6 +104,7 @@ async function submit() {
 
       <p v-if="preview && !preview.waiverSigned" class="warn" role="status">还没签风险告知书。登记后请让会员手机有电时在小程序里补签。</p>
       <p v-if="preview?.reentry" class="note">今天已经入过场，这次不扣次。</p>
+      <p v-if="preview" class="note">{{ preview.insurance.needed ? '确认后投当日保险。' : `今天的保险已经投了（${POLICY_STATUS_TEXT[preview.insurance.status!]}），不再重复投。` }}</p>
 
       <fieldset class="cards" :disabled="busy">
         <legend>用哪张卡</legend>

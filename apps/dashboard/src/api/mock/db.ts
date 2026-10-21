@@ -1,5 +1,5 @@
 import { MEMBER_SOURCES, type DeskCheckInResult, type DeskOrderResult, type EntryMethod, type MemberSource, type Staff, type Store } from '@climb/api';
-import { defaultRules, type Card, type CountCard, type GymRules, type LedgerEntry, type Product, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
+import { defaultRules, type Card, type InsurancePolicy, type CountCard, type GymRules, type LedgerEntry, type Product, type RevenueCategory, type RevenueOrder, type RevenueRefund } from '@climb/core';
 import { addDays, addMonths, daysBetween, monthOf, type DateKey } from '@climb/utils';
 
 /** 会员（对应 members 表），目前放了看板「新客从哪来」和会员列表用到的字段 */
@@ -86,6 +86,8 @@ export interface MockDb {
   refunds: MockRefund[];
   /** 入场记录：每个到过店的会员最近几次；次卡扣的次数记在 ledger 里，跟卡上的剩余对得上 */
   checkIns: MockCheckIn[];
+  /** 入场保单（对应 insurance_policies），一人一天一张；示例入场记录没有配保单，只有 mock 里新登记的入场才有 */
+  policies: InsurancePolicy[];
   /** 卡流水（对应 card_ledger），按写入顺序；改卡的地方都要在这里追加一笔 */
   ledger: LedgerEntry[];
   /** 当前的告知书版本（对应 waiver_versions 里最新的一版） */
@@ -116,6 +118,7 @@ export function createMockDb(today: DateKey, rules: GymRules = defaultRules): Mo
     products: sampleProducts(),
     deskOrderRequests: {},
     deskCheckInRequests: {},
+    policies: [],
     waiverVersion: '2026-01',
     storeStats: {
       bingang: { monthRevenueCents: 6_194_200, todayEntries: 45, lastWeekSameTimeEntries: 41, todayBookings: 9, activeMembers: 138 },

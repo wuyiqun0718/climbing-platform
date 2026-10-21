@@ -572,6 +572,37 @@ describe('后台 mock：手动登记入场', () => {
     expect(await api.checkIns.create(body({ requestId: 'ci-req-2', cardId: ticket.card.id }))).toMatchObject({ deducted: 0 });
   });
 
+  it('保险：当天第一次入场生成一张 pending 保单；同一天再次入场复用，不再生成；预览里带保险状态', async () => {
+    const { api, db, m, body } = await withCard();
+    expect((await api.checkIns.preview({ memberId: m.id, storeId: 'bingang' })).insurance).toEqual({ needed: true, policyId: null, status: null });
+    const first = await api.checkIns.create(body());
+    expect(first.insurance).toMatchObject({ needed: true, status: 'pending' });
+    expect(db.policies).toEqual([{ id: first.insurance.policyId, memberId: m.id, storeId: 'bingang', on: '2026-10-21', checkInId: first.checkIn.id, status: 'pending' }]);
+
+    expect((await api.checkIns.preview({ memberId: m.id, storeId: 'bingang' })).insurance).toEqual({ needed: false, policyId: first.insurance.policyId, status: 'pending' });
+    const second = await api.checkIns.create(body({ requestId: 'ci-req-2' }));
+    expect(second.insurance).toEqual({ needed: false, policyId: first.insurance.policyId, status: 'pending' });
+    expect(db.policies).toHaveLength(1);
+  });
+
+  it('保险：同一个幂等键重复提交不重复投保', async () => {
+    const { api, db, body } = await withCard();
+    await api.checkIns.create(body());
+    await api.checkIns.create(body());
+    expect(db.policies).toHaveLength(1);
+  });
+
+  it('保险：今天的保单待退保（撤销入场后）再入场新投一张', async () => {
+    const { api, db, body } = await withCard();
+    const first = await api.checkIns.create(body());
+    db.checkIns.find(c => c.id === first.checkIn.id)!.voided = true;
+    db.policies[0]!.status = 'refund_pending';
+    const again = await api.checkIns.create(body({ requestId: 'ci-req-2' }));
+    expect(again).toMatchObject({ reentry: false, insurance: { needed: true, status: 'pending' } });
+    expect(again.insurance.policyId).not.toBe(first.insurance.policyId);
+    expect(db.policies.map(p => p.checkInId)).toEqual([first.checkIn.id, again.checkIn.id]);
+  });
+
   it('冻结的卡 422；别人的卡、没这个会员、没这家店 404；别的店 403；没有 requestId 400', async () => {
     const { api, db, body, card } = await withCard();
     const other = db.cards.find(c => c.memberId !== body().memberId)!;

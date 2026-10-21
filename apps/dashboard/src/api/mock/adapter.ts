@@ -35,6 +35,8 @@ import {
   checkInLedgerEntry,
   checkInPlan,
   checkInWith,
+  insuranceForEntry,
+  newPolicy,
   countsAsCardPurchase,
   deskOrderErrors,
   expiringPeriodCards,
@@ -347,7 +349,16 @@ function checkInPreview(db: MockDb, staff: Staff, body: Partial<CreateDeskCheckI
   if ('status' in scope) return scope;
   const { m, args } = scope;
   const plan = checkInPlan(args);
-  const res: CheckInPreview = { memberId: m.id, memberName: m.name, storeId: args.storeId, reentry: plan.reentry, waiverSigned: !!m.waiverSignedOn, options: plan.options };
+  const ins = insuranceForEntry(db.policies, m.id, db.today);
+  const res: CheckInPreview = {
+    memberId: m.id,
+    memberName: m.name,
+    storeId: args.storeId,
+    reentry: plan.reentry,
+    waiverSigned: !!m.waiverSignedOn,
+    insurance: { needed: ins.needed, policyId: ins.policy?.id ?? null, status: ins.policy?.status ?? null },
+    options: plan.options,
+  };
   return ok(res);
 }
 
@@ -385,11 +396,14 @@ function createDeskCheckIn(db: MockDb, staff: Staff, body: Partial<CreateDeskChe
     method: 'desk',
     voided: false,
   };
+  const ins = insuranceForEntry(db.policies, m.id, db.today);
+  const policy = ins.policy ?? newPolicy({ id: nextId('ip-', db.policies), memberId: m.id, storeId: args.storeId, on: db.today, checkInId: checkIn.id });
   const entry = checkInLedgerEntry({ id: nextId('l-', db.ledger), card, deducted, at: nowAt(db), checkInId: checkIn.id, operator: { operatorType: 'staff', operatorId: staff.id } });
 
   db.checkIns.push(checkIn);
   db.cards[idx] = card;
   if (entry) db.ledger.push(entry);
+  if (ins.needed) db.policies.push(policy);
   if (card.kind === 'referral') {
     const r = db.referrals.find(x => x.id === card.shareId);
     if (r && !r.usedOn) r.usedOn = card.usedOn ?? db.today;
@@ -400,7 +414,14 @@ function createDeskCheckIn(db: MockDb, staff: Staff, body: Partial<CreateDeskChe
     m.firstVisitStoreId = args.storeId;
   }
   const { memberId: _m, ...row } = checkIn;
-  const res: DeskCheckInResult = { checkIn: row, card, deducted, reentry, waiverSigned: !!m.waiverSignedOn };
+  const res: DeskCheckInResult = {
+    checkIn: row,
+    card,
+    deducted,
+    reentry,
+    waiverSigned: !!m.waiverSignedOn,
+    insurance: { needed: ins.needed, policyId: policy.id, status: policy.status },
+  };
   db.deskCheckInRequests[requestId] = res;
   return ok(res);
 }
