@@ -16,6 +16,8 @@ export interface Product {
   validMonths?: number;
   perks: string[];
   onSale: boolean;
+  /** 后台（mvp/dashboard 任务 19）：列表里的顺序，同一组里小的在前；没填算 0（见 product.ts 的 sortProducts） */
+  sort?: number;
 }
 
 /** 卡的状态：正常、冻结、作废、已退款。只有正常的卡能入场、转赠、发老带新 */
@@ -138,11 +140,17 @@ export interface LedgerEntry {
   remainingAfter?: number;
   expiresOnAfter: DateKey;
   reason: LedgerReason;
-  refType?: 'check_in' | 'order' | 'share' | 'class_booking' | 'pt_booking';
+  refType?: 'check_in' | 'order' | 'share' | 'class_booking' | 'pt_booking' | 'import';
   refId?: string;
   /** 业务日期 */
   on: DateKey;
   /** 记录时间（ISO） */
   at: string;
   note?: string;
+  /** 后台（mvp/dashboard）：谁做的这笔，会员、员工还是系统（冻满自动解冻）；会员端可以不填 */
+  operatorType?: LedgerOperatorType;
+  /** 会员 ID 或员工 ID；system 为 null */
+  operatorId?: string | null;
 }
+
+export type LedgerOperatorType = 'member' | 'staff' | 'system';

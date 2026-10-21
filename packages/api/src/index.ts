@@ -2,6 +2,9 @@ import type { Card, CheckIn, ClassBooking, ClimbDay, ClassBookingStatus, ClassSe
 import { createHttp, type ClientOptions } from './client';
 
 export * from './client';
+// 后台（mvp/dashboard）的接口在 admin.ts、前台平板的在 desk.ts
+export * from './admin';
+export * from './desk';
 
 /** 会员端：`GET /me` 的返回 */
 export interface Me {

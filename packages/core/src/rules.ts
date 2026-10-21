@@ -50,7 +50,29 @@ export type RuleErrorCode =
   | 'pt-started'
   | 'pt-cancel-too-late'
   | 'pt-booking-not-pending'
-  | 'pt-reason-required';
+  | 'pt-reason-required'
+  // 下面是后台（mvp/dashboard）用的，小程序用不到
+  | 'already-voided'
+  | 'reason-required'
+  | 'freeze-days-invalid'
+  | 'card-not-adjustable'
+  | 'adjust-invalid'
+  | 'adjust-nothing-changed'
+  | 'follower-started'
+  | 'order-not-paid'
+  | 'refund-channel-unsupported'
+  | 'order-fully-refunded'
+  | 'refund-amount-invalid'
+  | 'refund-exceeds'
+  | 'staff-self-deactivate'
+  | 'staff-self-demote'
+  | 'staff-last-owner'
+  | 'class-type-inactive'
+  | 'class-time-invalid'
+  | 'class-coach-busy'
+  | 'class-store-busy'
+  | 'class-time-locked'
+  | 'class-checkin-not-open';
 
 export class RuleError extends Error {
   constructor(public code: RuleErrorCode, message: string) {

@@ -16,6 +16,11 @@ export function fromDateKey(key: DateKey): Date {
   return new Date(y, m - 1, d);
 }
 
+/** 是不是合法的 YYYY-MM-DD（真实存在的日期，2026-02-30 不算） */
+export function isDateKey(v: unknown): v is DateKey {
+  return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && toDateKey(fromDateKey(v)) === v;
+}
+
 export function addDays(key: DateKey, n: number): DateKey {
   const d = fromDateKey(key);
   d.setDate(d.getDate() + n);
@@ -52,6 +57,12 @@ export function formatMonthDay(key: DateKey): string {
 /** 2026.10.12 */
 export function formatDot(key: DateKey): string {
   return key.replace(/-/g, '.');
+}
+
+/** ISO 时间按本地时区显示成 2026.10.12 14:05 */
+export function formatDotTime(iso: string): string {
+  const d = new Date(iso);
+  return `${formatDot(toDateKey(d))} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 export function weekdayOf(key: DateKey): string {

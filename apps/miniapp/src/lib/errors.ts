@@ -1,8 +1,32 @@
 import { ApiError } from '@climb/api';
 import type { RuleErrorCode } from '@climb/core';
 
-/** @climb/core 的规则错误：用 Record 写全，core 加了新的错误码这里会类型报错 */
-const RULE_MESSAGES: Record<RuleErrorCode, string> = {
+/** 只有后台（员工操作）会报的规则错误，会员端碰不到，不配文案 */
+type AdminRuleErrorCode =
+  | 'already-voided'
+  | 'reason-required'
+  | 'freeze-days-invalid'
+  | 'card-not-adjustable'
+  | 'adjust-invalid'
+  | 'adjust-nothing-changed'
+  | 'follower-started'
+  | 'order-not-paid'
+  | 'refund-channel-unsupported'
+  | 'order-fully-refunded'
+  | 'refund-amount-invalid'
+  | 'refund-exceeds'
+  | 'staff-self-deactivate'
+  | 'staff-self-demote'
+  | 'staff-last-owner'
+  | 'class-type-inactive'
+  | 'class-time-invalid'
+  | 'class-coach-busy'
+  | 'class-store-busy'
+  | 'class-time-locked'
+  | 'class-checkin-not-open';
+
+/** @climb/core 的规则错误：用 Record 写全，core 加了新的错误码这里会类型报错（后台专用的加到上面） */
+const RULE_MESSAGES: Record<Exclude<RuleErrorCode, AdminRuleErrorCode>, string> = {
   'card-not-usable': '这张卡现在不能用来入场',
   'card-not-shareable': '只有自己买的次卡可以分给朋友，好友送的不能再转送',
   'card-inactive': '这张卡冻结中或已经停用，现在不能用',
