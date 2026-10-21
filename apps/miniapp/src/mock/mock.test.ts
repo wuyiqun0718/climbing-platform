@@ -8,9 +8,10 @@ const TODAY = '2026-10-21';
 /** 两位示例会员共用一份数据，像原型里的两部手机 */
 function setup() {
   const mock = createMock({ rules: defaultRules, today: () => TODAY });
+  const entry = (storeId: string, cardId: string) => ({ ...mock.issueEntryQr(storeId), cardId, idempotencyKey: `key-${Math.random()}` });
   const as = (memberId: string | null) =>
     createApi({ baseURL: '', gymId: 'benchmark', adapter: mock.adapter, getToken: () => (memberId ? mockToken(memberId) : null) });
-  return { db: mock.db, ajie: as(MOCK_MEMBERS.ajie), xiaolu: as(MOCK_MEMBERS.xiaolu), guest: as(null) };
+  return { mock, entry, db: mock.db, ajie: as(MOCK_MEMBERS.ajie), xiaolu: as(MOCK_MEMBERS.xiaolu), guest: as(null) };
 }
 
 const codeOf = async (p: Promise<unknown>) => {
@@ -28,9 +29,9 @@ describe('mock 接口', () => {
   });
 
   it('次卡入场扣 1 次，同一天再次入场不扣', async () => {
-    const { ajie } = setup();
-    const first = await ajie.checkIns.create({ qrToken: 'store:binggang', cardId: 'card-ajie-c10' });
-    const again = await ajie.checkIns.create({ qrToken: 'store:binggang', cardId: 'card-ajie-c10' });
+    const { entry, ajie } = setup();
+    const first = await ajie.checkIns.create(entry('binggang', 'card-ajie-c10'));
+    const again = await ajie.checkIns.create(entry('binggang', 'card-ajie-c10'));
     expect([first.deducted, again.deducted]).toEqual([1, 0]);
     const c10 = (await ajie.me.cards()).find(c => c.id === 'card-ajie-c10');
     expect(c10).toMatchObject({ remaining: 5 });
@@ -38,14 +39,14 @@ describe('mock 接口', () => {
 
   it('不是本馆的码被拒', async () => {
     const { ajie } = setup();
-    expect(await codeOf(ajie.checkIns.create({ qrToken: 'whatever', cardId: 'card-ajie-year' }))).toEqual({ status: 400, code: 'invalid-qr' });
+    expect(await codeOf(ajie.checkIns.create({ storeId: 'binggang', qrToken: 'whatever', cardId: 'card-ajie-year', idempotencyKey: 'k1' }))).toEqual({ status: 400, code: 'invalid-qr' });
   });
 
   it('冻结中的卡不能入场，也不能转赠', async () => {
-    const { db, ajie } = setup();
+    const { entry, db, ajie } = setup();
     for (const c of db.cards) if (c.memberId === MOCK_MEMBERS.ajie) c.status = 'frozen';
-    expect(await codeOf(ajie.checkIns.create({ qrToken: 'store:binggang', cardId: 'card-ajie-year' }))).toEqual({ status: 409, code: 'card-inactive' });
-    expect(await codeOf(ajie.checkIns.create({ qrToken: 'store:binggang', cardId: 'card-ajie-c10' }))).toEqual({ status: 409, code: 'card-inactive' });
+    expect(await codeOf(ajie.checkIns.create(entry('binggang', 'card-ajie-year')))).toEqual({ status: 409, code: 'card-not-usable' });
+    expect(await codeOf(ajie.checkIns.create(entry('binggang', 'card-ajie-c10')))).toEqual({ status: 409, code: 'card-not-usable' });
     expect(await codeOf(ajie.shares.createCount({ cardId: 'card-ajie-c10', quantity: 1 }))).toEqual({ status: 409, code: 'card-inactive' });
     expect(db.checkIns.filter(c => c.memberId === MOCK_MEMBERS.ajie && c.on === TODAY)).toEqual([]);
   });
@@ -68,20 +69,20 @@ describe('mock 接口', () => {
   });
 
   it('老带新：每月 1 次；邀请人当天先入场，体验券才能用', async () => {
-    const { ajie, xiaolu } = setup();
+    const { entry, ajie, xiaolu } = setup();
     const share = await ajie.shares.createReferral();
     expect(await codeOf(ajie.shares.createReferral())).toEqual({ status: 409, code: 'referral-quota-used' });
     expect(await codeOf(xiaolu.shares.createReferral())).toEqual({ status: 409, code: 'no-period-card' });
 
     const { card } = await xiaolu.shares.claim(share.id);
-    expect(await codeOf(xiaolu.checkIns.create({ qrToken: 'store:huiju', cardId: card.id }))).toEqual({ status: 409, code: 'inviter-not-checked-in' });
-    await ajie.checkIns.create({ qrToken: 'store:huiju', cardId: 'card-ajie-year' });
-    expect(await xiaolu.checkIns.create({ qrToken: 'store:huiju', cardId: card.id })).toMatchObject({ deducted: 0, memberId: MOCK_MEMBERS.xiaolu });
+    expect(await codeOf(xiaolu.checkIns.create(entry('huiju', card.id)))).toEqual({ status: 409, code: 'inviter-not-checked-in' });
+    await ajie.checkIns.create(entry('huiju', 'card-ajie-year'));
+    expect(await xiaolu.checkIns.create(entry('huiju', card.id))).toMatchObject({ deducted: 0, memberId: MOCK_MEMBERS.xiaolu });
   });
 
   it('不能用别人的卡，没有的接口返回 404', async () => {
-    const { xiaolu, db } = setup();
-    expect(await codeOf(xiaolu.checkIns.create({ qrToken: 'store:binggang', cardId: 'card-ajie-c10' }))).toEqual({ status: 404, code: 'card-not-found' });
+    const { entry, xiaolu, db } = setup();
+    expect(await codeOf(xiaolu.checkIns.create(entry('binggang', 'card-ajie-c10')))).toEqual({ status: 404, code: 'card-not-found' });
     const res = await createMock({ rules: defaultRules, db }).adapter({ method: 'GET', url: '/nope', headers: {} });
     expect(res.status).toBe(404);
   });
@@ -98,10 +99,10 @@ describe('使用记录 GET /me/cards/:id/ledger', () => {
   });
 
   it('入场扣次多一条，同日再次入场、期限卡入场不记', async () => {
-    const { ajie } = setup();
-    await ajie.checkIns.create({ qrToken: 'store:binggang', cardId: 'card-ajie-c10' });
-    await ajie.checkIns.create({ qrToken: 'store:binggang', cardId: 'card-ajie-c10' });
-    await ajie.checkIns.create({ qrToken: 'store:binggang', cardId: 'card-ajie-year' });
+    const { entry, ajie } = setup();
+    await ajie.checkIns.create(entry('binggang', 'card-ajie-c10'));
+    await ajie.checkIns.create(entry('binggang', 'card-ajie-c10'));
+    await ajie.checkIns.create(entry('binggang', 'card-ajie-year'));
     const [latest, prev] = await ajie.me.cardLedger('card-ajie-c10');
     expect(latest).toMatchObject({ reason: 'check_in', delta: -1, remainingAfter: 5, storeName: '滨港店', on: TODAY, refType: 'check_in' });
     expect(prev.remainingAfter).toBe(6);
@@ -109,21 +110,21 @@ describe('使用记录 GET /me/cards/:id/ledger', () => {
   });
 
   it('转赠：原卡记 share_out -N，领取人的卡记 claim +N，用掉再记入场', async () => {
-    const { ajie, xiaolu } = setup();
+    const { entry, ajie, xiaolu } = setup();
     const share = await ajie.shares.createCount({ cardId: 'card-ajie-c10', quantity: 2 });
     expect((await ajie.me.cardLedger('card-ajie-c10'))[0]).toMatchObject({ reason: 'share_out', delta: -2, remainingAfter: 4, refId: share.id });
 
     const { card } = await xiaolu.shares.claim(share.id);
     expect(await xiaolu.me.cardLedger(card.id)).toMatchObject([{ reason: 'claim', delta: 2, remainingAfter: 2, refId: share.id }]);
-    await xiaolu.checkIns.create({ qrToken: 'store:huiju', cardId: card.id });
+    await xiaolu.checkIns.create(entry('huiju', card.id));
     expect((await xiaolu.me.cardLedger(card.id)).map(l => [l.reason, l.remainingAfter])).toEqual([['check_in', 1], ['claim', 2]]);
   });
 
   it('体验券：领取记一条，用掉记一条', async () => {
-    const { ajie, xiaolu } = setup();
+    const { entry, ajie, xiaolu } = setup();
     const { card } = await xiaolu.shares.claim((await ajie.shares.createReferral()).id);
-    await ajie.checkIns.create({ qrToken: 'store:huiju', cardId: 'card-ajie-year' });
-    await xiaolu.checkIns.create({ qrToken: 'store:huiju', cardId: card.id });
+    await ajie.checkIns.create(entry('huiju', 'card-ajie-year'));
+    await xiaolu.checkIns.create(entry('huiju', card.id));
     expect((await xiaolu.me.cardLedger(card.id)).map(l => [l.reason, l.delta, l.remainingAfter])).toEqual([['check_in', -1, 0], ['claim', 1, 1]]);
   });
 
@@ -143,7 +144,8 @@ describe('mock 数据持久化、切换身份、重置', () => {
   const open = (storage: MockStorage) => {
     const mock = createMock({ rules: defaultRules, today: () => TODAY, storage });
     const api = createApi({ baseURL: '', gymId: 'benchmark', adapter: mock.adapter, getToken: () => mockToken(mock.currentMember() ?? '') });
-    return { mock, api };
+    const entry = (storeId: string, cardId: string) => ({ ...mock.issueEntryQr(storeId), cardId, idempotencyKey: `key-${Math.random()}` });
+    return { mock, api, entry };
   };
 
   it('刷新（重新创建 mock）后数据和身份还在；切到小鹿能领阿杰发的分享', async () => {
@@ -178,8 +180,8 @@ describe('mock 数据持久化、切换身份、重置', () => {
 
   it('重置后回到示例数据，身份不变，重置结果也存下来', async () => {
     const storage = memoryStorage();
-    const { mock, api } = open(storage);
-    await api.checkIns.create({ qrToken: 'store:binggang', cardId: 'card-ajie-c10' });
+    const { entry, mock, api } = open(storage);
+    await api.checkIns.create(entry('binggang', 'card-ajie-c10'));
     await api.shares.createReferral();
     mock.switchMember(MOCK_MEMBERS.xiaolu);
     mock.reset();

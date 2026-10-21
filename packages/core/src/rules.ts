@@ -23,7 +23,10 @@ export type RuleErrorCode =
   | 'freeze-days-out-of-range'
   | 'freeze-month-quota-used'
   | 'freeze-year-quota-used'
-  | 'card-not-frozen';
+  | 'card-not-frozen'
+  | 'waiver-required'
+  | 'qr-expired'
+  | 'qr-used';
 
 export class RuleError extends Error {
   constructor(public code: RuleErrorCode, message: string) {

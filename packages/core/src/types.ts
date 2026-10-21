@@ -96,6 +96,8 @@ export interface CheckIn {
   id: string;
   memberId: string;
   cardId: string;
+  /** 在哪家店入的场（卡三店通用，入场记录带门店） */
+  storeId: string;
   on: DateKey;
   /** 扣了几次（期限卡和同日再次入场为 0） */
   deducted: number;

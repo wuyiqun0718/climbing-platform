@@ -1,4 +1,4 @@
-import { ledgerEntry, snapshotOf, type Card, type CheckIn, type LedgerEntry, type Order, type Product, type Share } from '@climb/core';
+import { ledgerEntry, snapshotOf, type Card, type CheckIn, type EntryQr, type InsurancePolicy, type LedgerEntry, type Order, type Product, type Share } from '@climb/core';
 import { addDays, type DateKey } from '@climb/utils';
 
 export interface MockMember {
@@ -17,13 +17,24 @@ export interface MockStore {
   name: string;
 }
 
+/** 入场记录：后端 check_ins 表里多存的是不是再次入场、幂等键、当天保单 */
+export interface MockCheckIn extends CheckIn {
+  reentry: boolean;
+  idempotencyKey?: string;
+  policyId: string;
+}
+
 export interface MockDb {
   members: MockMember[];
   stores: MockStore[];
   products: Product[];
   cards: Card[];
   shares: Share[];
-  checkIns: (CheckIn & { storeId: string })[];
+  checkIns: MockCheckIn[];
+  /** 前台平板签发过的入场码 */
+  entryQrs: EntryQr[];
+  /** 入场保险，一人一天一张 */
+  policies: InsurancePolicy[];
   /** 卡的流水，只追加 */
   ledger: LedgerEntry[];
   orders: Order[];
@@ -53,7 +64,10 @@ export function seedDb(today: DateKey): MockDb {
   const c20: Card = { id: 'card-laozhou-c20', kind: 'count', memberId: MOCK_MEMBERS.laozhou, productId: 'c20', name: '20 次卡', total: 20, remaining: 8, expiresOn: addDays(today, 200) };
   // 阿杰的 10 次卡：买了以后带朋友来用过 4 次，流水和入场记录对得上
   const c10Visits = [[-50, 'binggang'], [-36, 'huiju'], [-21, 'binggang'], [-7, 'huanqiugang']] as const;
-  const checkIns = c10Visits.map(([d, storeId], i) => ({ id: `ci-seed-${i + 1}`, memberId: MOCK_MEMBERS.ajie, cardId: c10.id, on: addDays(today, d), deducted: 1, storeId }));
+  const checkIns: MockCheckIn[] = c10Visits.map(([d, storeId], i) => ({
+    id: `ci-seed-${i + 1}`, memberId: MOCK_MEMBERS.ajie, cardId: c10.id, on: addDays(today, d), deducted: 1, storeId, reentry: false, policyId: `ip-seed-${i + 1}`,
+  }));
+  const policies: InsurancePolicy[] = checkIns.map(ci => ({ id: ci.policyId, memberId: ci.memberId, storeId: ci.storeId, on: ci.on, checkInId: ci.id, status: 'insured' }));
   const at = (on: DateKey) => `${on}T03:00:00.000Z`;
   const ledger: LedgerEntry[] = [
     ledgerEntry({ id: 'led-seed-1', card: year, delta: 0, reason: 'purchase', on: year.startsOn, at: at(year.startsOn) }),
@@ -109,6 +123,8 @@ export function seedDb(today: DateKey): MockDb {
     cards: [year, c10, c20],
     shares: [],
     checkIns,
+    entryQrs: [],
+    policies,
     ledger,
     orders,
     seq: 0,
@@ -124,7 +140,7 @@ export interface MockStorage {
 const DB_KEY = 'mock:db';
 const WX_KEY = 'mock:wx';
 /** 示例数据的结构改了就加 1，存着的旧数据会被丢掉、重新生成 */
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 
 /** 读存着的数据；没有或者版本不对就用示例数据重新生成 */
 export function loadDb(storage: MockStorage, today: DateKey): MockDb {

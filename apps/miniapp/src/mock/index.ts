@@ -1,8 +1,9 @@
-import type { RequestAdapter } from '@climb/api';
+import type { EntryQrBody, RequestAdapter } from '@climb/api';
 import type { GymRules } from '@climb/core';
 import { toDateKey, type DateKey } from '@climb/utils';
 import { loadCurrentWx, loadDb, saveCurrentWx, saveDb, seedDb, type MockDb, type MockStorage } from './db';
 import { createRoutes } from './routes';
+import { issueEntryQr } from './routes/checkins';
 import { createMockAdapter, type MockIdentity } from './router';
 
 export { MOCK_LEGACY_PHONE, MOCK_MEMBERS, mockToken, mockWxToken, seedDb, type MockDb, type MockStorage } from './db';
@@ -37,6 +38,8 @@ export interface Mock {
    * 重复调用跟微信重复回调一样，不会再发卡。
    */
   simulatePayment(orderId: string): Promise<void>;
+  /** 前台平板在某家店显示一个新的入场码（后端的 `GET /desk/qr`）；H5 的「模拟扫码」和测试用 */
+  issueEntryQr(storeId: string): EntryQrBody;
   /** 数据回到示例数据（不改当前身份） */
   reset(): void;
 }
@@ -93,6 +96,11 @@ export function createMock(opts: MockOptions): Mock {
         body: { outTradeNo: order.id, transactionId: `mock-wx-${order.id}`, amountCents: order.amountCents },
       });
       if (res.status !== 200) throw new Error(`模拟支付失败：${JSON.stringify(res.data)}`);
+    },
+    issueEntryQr(storeId) {
+      const qr = issueEntryQr(db, storeId, now());
+      if (storage) saveDb(storage, db);
+      return qr;
     },
     reset() {
       // 路由里拿的是同一个 db 对象，所以原地替换内容

@@ -24,7 +24,7 @@ describe('错误码翻译', () => {
     await xiaolu.shares.claim(share.id);
     expect(errorMessage(await fail(xiaolu.shares.claim(share.id)))).toBe('已经被人领走了');
     expect(errorMessage(await fail(api.shares.createCount({ cardId: 'card-ajie-c10', quantity: 99 })))).toBe('卡里剩的次数不够');
-    expect(errorMessage(await fail(api.checkIns.create({ qrToken: 'nope', cardId: 'card-ajie-c10' })))).toBe('这个码不是本馆的入场码');
+    expect(errorMessage(await fail(api.checkIns.create({ storeId: 'binggang', qrToken: 'nope', cardId: 'card-ajie-c10', idempotencyKey: 'k1' })))).toBe('这个码不是本馆的入场码');
   });
 
   it('不认识的 code 用后端带回的 message，没有 message 按状态码', () => {

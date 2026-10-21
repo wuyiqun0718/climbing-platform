@@ -13,7 +13,8 @@ function setup() {
   const fetchMe = vi.fn((): Promise<Me | null> => api.me.get());
   const fetchCards = vi.fn(() => api.me.cards());
   const store = createMemberStore({ fetchMe, fetchCards });
-  return { mock, api, store, fetchMe, fetchCards };
+  const entry = (storeId: string, cardId: string) => ({ ...mock.issueEntryQr(storeId), cardId, idempotencyKey: `key-${Math.random()}` });
+  return { mock, api, store, fetchMe, fetchCards, entry };
 }
 
 const remaining = (cards: readonly Card[], id: string) => {
@@ -56,9 +57,9 @@ describe('会员 store', () => {
   });
 
   it('入场扣次后卡包刷新', async () => {
-    const { store, api } = setup();
+    const { entry, store, api } = setup();
     await store.load();
-    await store.changeCards(() => api.checkIns.create({ qrToken: 'store:binggang', cardId: 'card-ajie-c10' }));
+    await store.changeCards(() => api.checkIns.create(entry('binggang', 'card-ajie-c10')));
     expect(remaining(store.state.cards, 'card-ajie-c10')).toBe(5);
   });
 
@@ -89,16 +90,16 @@ describe('会员 store', () => {
   it('操作失败不刷新，错误照常抛出', async () => {
     const { store, api, fetchCards } = setup();
     await store.load();
-    await expect(store.changeCards(() => api.checkIns.create({ qrToken: 'nope', cardId: 'card-ajie-c10' }))).rejects.toThrow();
+    await expect(store.changeCards(() => api.checkIns.create({ storeId: 'binggang', qrToken: 'nope', cardId: 'card-ajie-c10', idempotencyKey: 'k1' }))).rejects.toThrow();
     expect(fetchCards).toHaveBeenCalledTimes(1);
   });
 
   it('操作成功但刷新失败，结果照常返回', async () => {
-    const { store, api, fetchCards } = setup();
+    const { entry, store, api, fetchCards } = setup();
     await store.load();
     fetchCards.mockRejectedValueOnce(new Error('断网'));
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const ci = await store.changeCards(() => api.checkIns.create({ qrToken: 'store:binggang', cardId: 'card-ajie-c10' }));
+    const ci = await store.changeCards(() => api.checkIns.create(entry('binggang', 'card-ajie-c10')));
     expect(ci.deducted).toBe(1);
     expect(remaining(store.state.cards, 'card-ajie-c10')).toBe(6);
     warn.mockRestore();

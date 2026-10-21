@@ -7,3 +7,6 @@ export * from './wallet';
 export * from './shop';
 export * from './orders';
 export * from './freeze';
+export * from './checkIn';
+export * from './insurance';
+export * from './entryQr';

@@ -1,12 +1,10 @@
-import {
-  applyEntry, claimShare, createReferral, entryLedgerDelta, ledgerEntry, shareFromCountCard,
-  type Card, type EntryCard, type EntryContext, type GymRules, type LedgerEntry,
-} from '@climb/core';
+import { claimShare, createReferral, ledgerEntry, shareFromCountCard, type Card, type GymRules, type LedgerEntry } from '@climb/core';
 import type { DateKey } from '@climb/utils';
 import type { MockDb } from './db';
 import { MockHttpError, type MockContext, type MockHandler, type MockRoutes } from './router';
 import { createAuthRoutes } from './routes/auth';
 import { createCardRoutes, settleFrozenCards } from './routes/cards';
+import { createCheckInRoutes } from './routes/checkins';
 import { createOrderRoutes } from './routes/orders';
 
 /**
@@ -22,12 +20,6 @@ export function createRoutes(db: MockDb, env: { rules: GymRules; today: () => Da
     if (!ctx.memberId) throw new MockHttpError(401, 'unauthorized', '请先登录');
     return ctx.memberId;
   };
-
-  const entryContext = (today: DateKey): EntryContext => ({
-    today,
-    rules: env.rules,
-    hasCheckedIn: (memberId, on) => db.checkIns.some(c => c.memberId === memberId && c.on === on),
-  });
 
   const myCard = (memberId: string, cardId: string) => {
     const card = db.cards.find(c => c.id === cardId && c.memberId === memberId);
@@ -51,28 +43,9 @@ export function createRoutes(db: MockDb, env: { rules: GymRules; today: () => Da
     ...createAuthRoutes(db, { nextId, requireMember }),
     ...createCardRoutes(db, { ...env, requireMember, myCard, replaceCard, record }),
     ...createOrderRoutes(db, { ...env, nextId, requireMember, record }),
+    ...createCheckInRoutes(db, { ...env, nextId, requireMember, replaceCard, record }),
 
     'GET /products': () => db.products.filter(p => p.onSale),
-
-    'POST /check-ins': ctx => {
-      const me = requireMember(ctx);
-      const { qrToken, cardId } = ctx.body as { qrToken: string; cardId: string };
-      // mock 的前台码就是 `store:<门店 id>`；真后端会验签和过期时间（任务 17）
-      const store = db.stores.find(s => `store:${s.id}` === qrToken);
-      if (!store) throw new MockHttpError(400, 'invalid-qr', '这个码不是本馆的入场码');
-      const card = myCard(me, cardId);
-      if (card.kind === 'pt' || card.kind === 'class') throw new MockHttpError(409, 'card-not-usable', '课时卡不能用来入场');
-      const today = env.today();
-      const ctxEntry = entryContext(today);
-      const reentry = ctxEntry.hasCheckedIn(me, today);
-      const { card: updated, deducted } = applyEntry(card as EntryCard, ctxEntry, reentry);
-      replaceCard(updated);
-      const checkIn = { id: nextId('ci'), memberId: me, cardId, on: today, deducted, storeId: store.id };
-      db.checkIns.push(checkIn);
-      const delta = entryLedgerDelta(card, updated, deducted);
-      if (delta !== null) record(updated, delta, 'check_in', { type: 'check_in', id: checkIn.id });
-      return checkIn;
-    },
 
     'POST /shares/count': ctx => {
       const me = requireMember(ctx);

@@ -1,4 +1,4 @@
-import type { Card, CheckIn, LedgerEntry, Order, Product, RuleErrorCode, Share } from '@climb/core';
+import type { Card, CheckIn, EntryOption, InsurancePolicy, LedgerEntry, Order, Product, RuleErrorCode, Share } from '@climb/core';
 import { createHttp, type ClientOptions } from './client';
 
 export * from './client';
@@ -60,6 +60,34 @@ export interface CreateOrderResult {
   payment: WxPayParams;
 }
 
+export interface Store {
+  id: string;
+  name: string;
+}
+
+/** 前台平板入场码里的内容：门店和一次性 token（怎么从扫码结果里解析出来见任务 18） */
+export interface EntryQrBody {
+  storeId: string;
+  qrToken: string;
+}
+
+/** `POST /check-ins/preview` 的返回：扫的是哪家店、这次能用哪些卡（可用的在前）、今天是不是再次入场 */
+export interface CheckInPreview {
+  store: Store;
+  /** 今天已经入过场（不管哪家店），这次不扣次（岩馆规则允许时） */
+  reentry: boolean;
+  options: EntryOption[];
+  /** 今天已经投的那张保单；为 null 时这次入场会新投一张 */
+  todayPolicy: InsurancePolicy | null;
+}
+
+/** `POST /check-ins` 的返回：入场记录，加上门店名、是不是再次入场、当天的保单（新投的或复用的） */
+export interface CheckInResult extends CheckIn {
+  storeName: string;
+  reentry: boolean;
+  policy: InsurancePolicy;
+}
+
 /**
  * 接口定义（后端还没开始写，路径是约定稿）。
  * 新增接口时在这里加方法，两个端都能直接用上。
@@ -99,8 +127,13 @@ export function createApi(opts: ClientOptions) {
       pay: (id: string) => http<CreateOrderResult>('POST', `/orders/${encodeURIComponent(id)}/pay`),
     },
     checkIns: {
-      /** 扫前台码入场：qrToken 是前台二维码里的内容 */
-      create: (body: { qrToken: string; cardId: string }) => http<CheckIn>('POST', '/check-ins', body),
+      /** 扫了前台的码：验码（不作废），列出能用的卡。码用过或过期返回 409 qr-used / qr-expired */
+      preview: (body: EntryQrBody) => http<CheckInPreview>('POST', '/check-ins/preview', body),
+      /**
+       * 确认入场：成功后码作废；当天第一次入场新投一张保单，再次入场复用。
+       * idempotencyKey 由页面在进签到页时生成一次，网络重试、连点都带同一个，后端只入场一次、返回同一条记录。
+       */
+      create: (body: EntryQrBody & { cardId: string; idempotencyKey: string }) => http<CheckInResult>('POST', '/check-ins', body),
     },
     shares: {
       createCount: (body: { cardId: string; quantity: number }) => http<Share>('POST', '/shares/count', body),

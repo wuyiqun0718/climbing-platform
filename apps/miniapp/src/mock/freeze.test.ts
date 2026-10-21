@@ -12,8 +12,9 @@ const YEAR_EXPIRES = addDays(TODAY, 155);
 function setup(rules: GymRules = defaultRules) {
   let today = TODAY;
   const mock = createMock({ rules, today: () => today });
+  const entry = (storeId: string, cardId: string) => ({ ...mock.issueEntryQr(storeId), cardId, idempotencyKey: `key-${Math.random()}` });
   const ajie = createApi({ baseURL: '', gymId: 'benchmark', adapter: mock.adapter, getToken: () => mockToken(MOCK_MEMBERS.ajie) });
-  return { mock, ajie, goTo: (d: string) => { today = d; } };
+  return { mock, entry, ajie, goTo: (d: string) => { today = d; } };
 }
 
 const codeOf = async (p: Promise<unknown>) => {
@@ -24,11 +25,11 @@ const codeOf = async (p: Promise<unknown>) => {
 
 describe('mock 期限卡自助冻结', () => {
   it('冻结后不能入场、不能发老带新，这个月不能再冻；流水记 freeze', async () => {
-    const { ajie } = setup();
+    const { entry, ajie } = setup();
     expect(await ajie.me.freezeOptions(YEAR)).toEqual({ blockedBy: null, minDays: 1, maxDays: 30, monthLeft: 1, yearLeft: null });
     const card = await ajie.me.freezeCard(YEAR, { days: 10 });
     expect(card).toMatchObject({ status: 'frozen', frozenFrom: TODAY, frozenUntil: '2026-10-30', expiresOn: YEAR_EXPIRES });
-    expect(await codeOf(ajie.checkIns.create({ qrToken: 'store:binggang', cardId: YEAR }))).toBe('card-inactive');
+    expect(await codeOf(ajie.checkIns.create(entry('binggang', YEAR)))).toBe('card-not-usable');
     expect(await codeOf(ajie.shares.createReferral())).toBe('no-period-card');
     expect((await ajie.me.cardLedger(YEAR))[0]).toMatchObject({ reason: 'freeze', delta: 0 });
     expect(await ajie.me.freezeOptions(YEAR)).toMatchObject({ blockedBy: 'freeze-card-not-active' });

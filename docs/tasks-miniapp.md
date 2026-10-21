@@ -54,7 +54,7 @@
 
 | # | 任务 | 依赖 | 涉及文件 | 完成标准 |
 |---|---|---|---|---|
-| 17 | 契约 + mock：`POST /check-ins/preview`（码里的门店 + 一次性 token → 门店 + 可用的卡，调 `entryOptions`）、`POST /check-ins` 带 token、幂等键和门店；token 入场成功后作废 | 1 | `packages/api`、`src/mock/routes/checkins.ts`、`packages/core`（入场带门店） | 单测：过期或用过的 token 被拒；同一个幂等键提交两次只入场一次；冻结中的卡不在可用列表里 |
+| 17 ✅ | 契约 + mock：`POST /check-ins/preview`（码里的门店 + 一次性 token → 门店 + 可用的卡，调 `entryOptions`）、`POST /check-ins` 带 token、幂等键和门店；token 入场成功后作废 | 1 | `packages/api`、`src/mock/routes/checkins.ts`、`packages/core`（入场带门店） | 单测：过期或用过的 token 被拒；同一个幂等键提交两次只入场一次；冻结中的卡不在可用列表里 |
 | 18 | 扫码进签到页（已定）：会员用微信扫前台平板的动态码（普通二维码跳转小程序 / 小程序码），直接打开签到页，从启动参数（`q` 或 `scene`）里解析门店和 token；没登录先登录再回来。首页的扫码按钮用 `uni.scanCode` 兜底，解析同一套；H5 下用「模拟扫码」按钮选门店 | 7, 17 | `src/pages/checkin/scan.ts`、`src/pages/checkin/confirm.vue`、`src/pages.json`、`src/pages/index/index.vue` | 解析有单测（两种码、坏码）；扫到不是本馆的码给出提示；微信扫一扫和小程序内扫码进到同一个签到页 |
 | 19 | 入场确认页：选卡（期限卡优先）、当日保险（标「卡里含」）、没卡时只能买单次票 | 17, 18 | `src/pages/checkin/confirm.vue` | 和原型一致；体验券在邀请人没入场时显示原因并禁用 |
 | 20 | 契约 + mock + 页面：风险告知书 `POST /waivers`，第一次入场必须先勾选同意；告知书文本按版本取 | 19 | `packages/api`、`src/mock/routes/waivers.ts`、`src/pages/checkin/waiver.vue` | 签过一次以后不再出现；告知书换版本后要重签 |
