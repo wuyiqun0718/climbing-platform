@@ -1,4 +1,4 @@
-import type { Card, CheckIn, LedgerEntry, Product, Share } from '@climb/core';
+import type { Card, CheckIn, LedgerEntry, Order, Product, Share } from '@climb/core';
 import { createHttp, type ClientOptions } from './client';
 
 export * from './client';
@@ -34,6 +34,22 @@ export interface PhoneBindResult {
   legacyBound: boolean;
 }
 
+/** 拉起微信支付要的参数，原样传给 `uni.requestPayment`（后端调微信下单接口后签名生成） */
+export interface WxPayParams {
+  timeStamp: string;
+  nonceStr: string;
+  /** `prepay_id=...` */
+  package: string;
+  signType: 'RSA';
+  paySign: string;
+}
+
+/** `POST /orders` 的返回：待支付的订单和支付参数 */
+export interface CreateOrderResult {
+  order: Order;
+  payment: WxPayParams;
+}
+
 /**
  * 接口定义（后端还没开始写，路径是约定稿）。
  * 新增接口时在这里加方法，两个端都能直接用上。
@@ -55,6 +71,14 @@ export function createApi(opts: ClientOptions) {
       cards: () => http<Card[]>('GET', '/me/cards'),
       /** 一张卡的使用记录，最新的在前 */
       cardLedger: (cardId: string) => http<CardLedgerItem[]>('GET', `/me/cards/${encodeURIComponent(cardId)}/ledger`),
+      /** 自己的订单，最新的在前 */
+      orders: () => http<Order[]>('GET', '/me/orders'),
+    },
+    orders: {
+      /** 下单：后端建待支付订单。卡要等微信支付回调（`POST /pay/wechat/notify`，微信调后端）验证过才发 */
+      create: (body: { productId: string }) => http<CreateOrderResult>('POST', '/orders', body),
+      /** 支付完以后查结果；还是待支付时后端会去微信查一次单补上回调 */
+      get: (id: string) => http<Order>('GET', `/orders/${encodeURIComponent(id)}`),
     },
     checkIns: {
       /** 扫前台码入场：qrToken 是前台二维码里的内容 */

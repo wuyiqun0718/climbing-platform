@@ -7,12 +7,13 @@ import type { MockDb } from './db';
 import { MockHttpError, type MockContext, type MockRoutes } from './router';
 import { createAuthRoutes } from './routes/auth';
 import { createCardRoutes } from './routes/cards';
+import { createOrderRoutes } from './routes/orders';
 
 /**
  * 按 @climb/api 的契约实现接口。规则全部调 @climb/core，这里只负责存取数据。
  * 新加接口时，先在 packages/api 里加方法，再在这里加同样路径的实现。
  */
-export function createRoutes(db: MockDb, env: { rules: GymRules; today: () => DateKey }): MockRoutes {
+export function createRoutes(db: MockDb, env: { rules: GymRules; today: () => DateKey; now: () => Date }): MockRoutes {
   const nextId = (prefix: string) => `${prefix}-${++db.seq}`;
 
   const requireMember = (ctx: MockContext) => {
@@ -46,6 +47,7 @@ export function createRoutes(db: MockDb, env: { rules: GymRules; today: () => Da
   return {
     ...createAuthRoutes(db, { nextId, requireMember }),
     ...createCardRoutes(db, { requireMember, myCard }),
+    ...createOrderRoutes(db, { ...env, nextId, requireMember, record }),
 
     'GET /products': () => db.products.filter(p => p.onSale),
 

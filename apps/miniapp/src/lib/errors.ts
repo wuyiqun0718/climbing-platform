@@ -13,6 +13,9 @@ const RULE_MESSAGES: Record<RuleErrorCode, string> = {
   'share-expired': '这个链接已经过期了',
   'referral-quota-used': '这个月的老带新名额用完了',
   'no-period-card': '有期限卡才能发老带新邀请',
+  'product-off-sale': '这个已经不卖了，换一个看看',
+  'order-closed': '订单超时关闭了，重新下一单吧',
+  'order-amount-mismatch': '支付金额不对，找前台帮你处理',
 };
 
 /** 接口层的错误（后端约定的 code，mock 里也一样） */
@@ -28,6 +31,8 @@ const API_MESSAGES: Record<string, string> = {
   'invalid-phone-code': '手机号没验证成功，再试一次',
   'phone-taken': '这个手机号已经绑了别的微信，找前台帮你处理',
   'wx-already-bound': '这个微信已经绑过手机号了',
+  'product-not-found': '没找到这个商品，可能已经下架了',
+  'order-not-found': '没找到这个订单',
 };
 
 const MESSAGES: Record<string, string> = { ...API_MESSAGES, ...RULE_MESSAGES };

@@ -8,6 +8,8 @@ export interface GymRules {
   referralRequiresInviterSameDay: boolean;
   /** 同一天再次入场是否免扣次 */
   sameDayReentryFree: boolean;
+  /** 下单后多少分钟内没付就关单（占位 15 分钟，等馆方确认） */
+  orderPayMinutes: number;
 }
 
 export interface GymFeatures {
@@ -37,6 +39,7 @@ export const defaultRules: GymRules = {
   referralsPerMonth: 1,
   referralRequiresInviterSameDay: true,
   sameDayReentryFree: true,
+  orderPayMinutes: 15,
 };
 
 export const defaultFeatures: GymFeatures = {

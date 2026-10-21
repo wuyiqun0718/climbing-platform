@@ -12,7 +12,10 @@ export type RuleErrorCode =
   | 'already-claimed'
   | 'share-expired'
   | 'referral-quota-used'
-  | 'no-period-card';
+  | 'no-period-card'
+  | 'product-off-sale'
+  | 'order-closed'
+  | 'order-amount-mismatch';
 
 export class RuleError extends Error {
   constructor(public code: RuleErrorCode, message: string) {

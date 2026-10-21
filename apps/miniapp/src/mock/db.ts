@@ -1,4 +1,4 @@
-import { ledgerEntry, type Card, type CheckIn, type LedgerEntry, type Product, type Share } from '@climb/core';
+import { ledgerEntry, type Card, type CheckIn, type LedgerEntry, type Order, type Product, type Share } from '@climb/core';
 import { addDays, type DateKey } from '@climb/utils';
 
 export interface MockMember {
@@ -26,6 +26,7 @@ export interface MockDb {
   checkIns: (CheckIn & { storeId: string })[];
   /** 卡的流水，只追加 */
   ledger: LedgerEntry[];
+  orders: Order[];
   /** 自增序号，用来生成 id */
   seq: number;
 }
@@ -94,6 +95,7 @@ export function seedDb(today: DateKey): MockDb {
     shares: [],
     checkIns,
     ledger,
+    orders: [],
     seq: 0,
   };
 }
@@ -107,7 +109,7 @@ export interface MockStorage {
 const DB_KEY = 'mock:db';
 const WX_KEY = 'mock:wx';
 /** 示例数据的结构改了就加 1，存着的旧数据会被丢掉、重新生成 */
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 /** 读存着的数据；没有或者版本不对就用示例数据重新生成 */
 export function loadDb(storage: MockStorage, today: DateKey): MockDb {
