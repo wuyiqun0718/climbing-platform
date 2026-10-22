@@ -2,7 +2,7 @@
 import { STAFF_ROLE_TEXT } from '@climb/core';
 import { ToastHost, UiSelect } from '@climb/ui-web';
 import gym from '@gym';
-import { computed } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { NAV_ICONS } from './navIcons';
 import { canDo, storeOptions } from './permissions';
@@ -11,6 +11,23 @@ import { session } from './session';
 
 const logo = `/gym/${gym.logo}`;
 const route = useRoute();
+
+// 窄屏时导航是一行横滑，加了图标后前台 768 宽也放不下了：换页后把当前项滑进来（只动导航的 scrollLeft，不滚整页）
+const navEl = ref<HTMLElement | null>(null);
+watch(
+  () => route.meta.page,
+  async () => {
+    await nextTick();
+    const n = navEl.value;
+    const a = n?.querySelector<HTMLElement>('.nav-item.on');
+    if (!n || !a || n.scrollWidth <= n.clientWidth) return;
+    const nr = n.getBoundingClientRect();
+    const ar = a.getBoundingClientRect();
+    if (ar.left < nr.left) n.scrollLeft -= nr.left - ar.left + 12;
+    else if (ar.right > nr.right) n.scrollLeft += ar.right - nr.right + 12;
+  },
+  { immediate: true },
+);
 const router = useRouter();
 const ROLE_LABEL = STAFF_ROLE_TEXT;
 
@@ -37,7 +54,7 @@ function logout() {
         <img :src="logo" alt="" />
         <span>{{ gym.shortName }}</span>
       </div>
-      <nav>
+      <nav ref="navEl">
         <!-- 按 meta.page 判断当前项，会员详情也算「会员」 -->
         <RouterLink
           v-for="n in nav"
