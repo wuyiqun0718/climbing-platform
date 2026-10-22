@@ -127,6 +127,7 @@ async function inviterCheckIn() {
 </script>
 
 <template>
+  <!-- 比弹层（z-index 999）低一层，弹层打开时浮钮在遮罩下面 -->
   <view v-if="mock" class="dev">
     <view v-if="open" class="panel">
       <text class="h">开发面板（mock）</text>
@@ -170,7 +171,7 @@ async function inviterCheckIn() {
 </template>
 
 <style scoped>
-.dev { position: fixed; right: 12px; bottom: calc(64px + env(safe-area-inset-bottom)); z-index: 999; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.dev { position: fixed; right: 12px; bottom: calc(64px + env(safe-area-inset-bottom)); z-index: 998; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
 .panel { width: 280px; max-height: 70vh; overflow-y: auto; padding: 12px; background: var(--surface); color: var(--ink); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 6px; }
 .h { font-weight: 700; font-size: 15px; }
 .label { margin-top: 6px; font-size: 12px; color: var(--ink-muted); }

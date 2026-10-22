@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ApiError, type CreateOrderResult, type EntryQrBody } from '@climb/api';
+import type { CreateOrderResult, EntryQrBody } from '@climb/api';
 import { entryBlockedText, entrySheet, pickEntryCard, type EntryOption, type EntrySheet, type WaiverVersion } from '@climb/core';
 import { formatDot, formatYuan, toDateKey } from '@climb/utils';
 import Button from '@climb/ui-mp/Button.vue';
@@ -10,7 +10,7 @@ import { api, pay, run } from '../../api';
 import AskSheet from '../../components/AskSheet.vue';
 import { ask } from '../../lib/ask';
 import { iconStyle } from '../../lib/icons';
-import { errorCode, errorMessage, isRetryable } from '../../lib/errors';
+import { errorCode, errorMessage, isRetryable, payFailedText } from '../../lib/errors';
 import { requireLogin } from '../../lib/use-login';
 import { member } from '../../stores';
 import { CHECKIN_PAGE, fromPageQuery, NOT_OURS_MESSAGE } from './scan';
@@ -124,7 +124,7 @@ async function enter(cardId: string, cardName: string, bought: boolean) {
     } else if (code === 'qr-expired' || code === 'qr-used') {
       bad(bought ? `${cardName}已经买好，放进卡包了。${errorMessage(e)}` : errorMessage(e));
     } else {
-      uni.showToast({ title: errorMessage(e), icon: 'none' });
+      modal(bought ? '票买好了，入场没成功' : '入场没成功', bought ? `${cardName}已经放进卡包。\n${errorMessage(e)}\n再点一次「确认入场」就行。` : `${errorMessage(e)}\n再点一次「确认入场」就行。`);
     }
   } finally {
     member.refreshCards().catch(() => {});
@@ -138,7 +138,7 @@ async function buyAndEnter() {
   if (!order) return;
   pendingOrder = order;
   const outcome = await pay.pay(order).catch(e => {
-    uni.showToast({ title: e instanceof ApiError ? errorMessage(e) : '支付没成功，再试一次', icon: 'none' });
+    modal('支付没成功', payFailedText(e));
     return null;
   });
   if (!outcome) return;
@@ -158,7 +158,7 @@ async function signWaiver(): Promise<boolean> {
     await run(() => api.waivers.sign({ waiverVersionId: w.id }), { loading: '提交中', silent: true });
   } catch (e) {
     if (errorCode(e) !== 'waiver-outdated') {
-      uni.showToast({ title: errorMessage(e), icon: 'none' });
+      modal('告知书没签上', `${errorMessage(e)}\n还没付款、没入场，再点一次就行。`);
       return false;
     }
     await loadPreview();

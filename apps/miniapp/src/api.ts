@@ -22,6 +22,8 @@ const mockStorage: MockStorage = {
  * 登录照样走 /auth，只是 `uni.login` 的 code 换成开发面板里选的微信（默认阿杰的）。
  */
 export const mock = baseURL ? null : createMock({ rules: gym.rules, storage: mockStorage });
+// H5 开发、截图脚本用：浏览器控制台里能直接拿到 mock（比如 __mock.setOffline(true) 看支付失败的样子）。真后端下不挂
+if (mock) (globalThis as { __mock?: typeof mock }).__mock = mock;
 
 const SESSION_KEY = 'session';
 const PRIVACY_KEY = 'privacy';

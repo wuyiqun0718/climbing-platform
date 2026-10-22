@@ -1,12 +1,13 @@
 import gym from '@gym';
 import { mock } from '../../api';
-import { choose } from '../../lib/ask';
-import { checkinUrl, fromScanCode, NOT_OURS_MESSAGE, type ScanResult } from './scan';
+import { ask, choose } from '../../lib/ask';
+import { checkinUrl, fromScanCode, type ScanResult } from './scan';
 
 type Nav = 'navigateTo' | 'redirectTo';
 
 function go(r: ScanResult, method: Nav) {
-  if (!r.ok) return uni.showToast({ title: NOT_OURS_MESSAGE, icon: 'none', duration: 2500 });
+  // 扫错码要会员看清楚再重扫，用弹层不用一闪而过的 toast（调用的页面都放了 AskSheet）
+  if (!r.ok) return void ask({ title: '这不是本馆的入场码', content: '扫前台平板上显示的那个码就能入场。', showCancel: false, confirmText: '知道了' });
   const url = checkinUrl(r.qr);
   if (method === 'redirectTo') uni.redirectTo({ url });
   else uni.navigateTo({ url });

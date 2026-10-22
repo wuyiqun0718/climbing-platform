@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ApiError } from '@climb/api';
 import { isPayable, ORDER_CHANNEL_LABELS, ORDER_STATUS_LABELS, type Order } from '@climb/core';
 import Button from '@climb/ui-mp/Button.vue';
 import Empty from '@climb/ui-mp/Empty.vue';
@@ -9,7 +8,7 @@ import { api, pay, run } from '../../api';
 import LoadFailed from '../../components/LoadFailed.vue';
 import AskSheet from '../../components/AskSheet.vue';
 import { ask } from '../../lib/ask';
-import { errorMessage } from '../../lib/errors';
+import { errorMessage, payFailedText } from '../../lib/errors';
 import { useRequireLogin } from '../../lib/use-login';
 import { member } from '../../stores';
 
@@ -77,7 +76,7 @@ async function resume(orderId: string) {
     const result = await run(() => pay.resume(orderId), { loading: '加载中' }).catch(() => null);
     if (!result) return void load();
     const outcome = await pay.pay(result).catch(e => {
-      uni.showToast({ title: e instanceof ApiError ? errorMessage(e) : '支付没成功，再试一次', icon: 'none' });
+      modal('支付没成功', payFailedText(e));
       return null;
     });
     if (!outcome || outcome.status === 'cancelled') return;

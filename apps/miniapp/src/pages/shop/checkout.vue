@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ApiError, type CreateOrderResult } from '@climb/api';
+import type { CreateOrderResult } from '@climb/api';
 import { cardFromProduct, isSingleTicket, productPerks, SHOP_SECTION_LABELS, shopSectionOf, snapshotOf, type Product } from '@climb/core';
 import { formatDot, formatYuan, toDateKey } from '@climb/utils';
 import Button from '@climb/ui-mp/Button.vue';
@@ -11,7 +11,7 @@ import LoadFailed from '../../components/LoadFailed.vue';
 import AskSheet from '../../components/AskSheet.vue';
 import { ask } from '../../lib/ask';
 import { REFUND_NOTE } from '../../config/checkout';
-import { errorMessage } from '../../lib/errors';
+import { errorMessage, payFailedText } from '../../lib/errors';
 import { useRequireLogin } from '../../lib/use-login';
 import { member } from '../../stores';
 
@@ -81,7 +81,7 @@ async function submit() {
     pending = result;
     const outcome = await pay.pay(result).catch(e => {
       // 拉起支付本身失败（不是取消）或者查单出错
-      uni.showToast({ title: e instanceof ApiError ? errorMessage(e) : '支付没成功，再试一次', icon: 'none' });
+      modal('支付没成功', payFailedText(e));
       return null;
     });
     if (!outcome) return;

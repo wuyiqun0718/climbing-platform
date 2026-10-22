@@ -116,6 +116,13 @@ function byStatus(status: number) {
   return '没办成，稍后再试';
 }
 
+/**
+ * 支付这一步出错（拉起微信支付失败，或者付完查单出错）时弹层里的说明。
+ * 查单出错时钱可能已经扣了，所以要说会自动到账
+ */
+export const payFailedText = (e: unknown) =>
+  e instanceof ApiError ? errorMessage(e) : '网络不太好，没确认到付款结果。扣了款的话卡会自动到账，没扣就再点一次。';
+
 /** 网络问题或服务器 5xx：重试可能就好了；4xx 是请求本身的问题，重试没用 */
 export const isRetryable = (e: unknown) => !(e instanceof ApiError) || e.status >= 500;
 

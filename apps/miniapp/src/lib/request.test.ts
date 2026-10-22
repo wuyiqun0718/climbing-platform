@@ -2,7 +2,7 @@ import { ApiError, createApi, type ApiRequest, type RequestAdapter } from '@clim
 import { defaultRules } from '@climb/core';
 import { describe, expect, it, vi } from 'vitest';
 import { createMock, MOCK_MEMBERS, mockToken } from '../mock';
-import { errorMessage, NETWORK_ERROR, isRetryable } from './errors';
+import { errorMessage, isRetryable, NETWORK_ERROR, payFailedText } from './errors';
 import { createRunner, withRelogin } from './request';
 
 const TODAY = '2026-10-21';
@@ -109,5 +109,12 @@ describe('isRetryable', () => {
     expect(isRetryable(new ApiError(502, null))).toBe(true);
     expect(isRetryable(new ApiError(403, { code: 'forbidden' }))).toBe(false);
     expect(isRetryable(new ApiError(404, null))).toBe(false);
+  });
+});
+
+describe('payFailedText', () => {
+  it('接口的错用接口的说法，断网说会自动到账', () => {
+    expect(payFailedText(new ApiError(502, null))).toBe('服务器出了点问题，稍后再试');
+    expect(payFailedText(new Error('断网'))).toContain('自动到账');
   });
 });
