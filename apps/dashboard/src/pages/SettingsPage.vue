@@ -118,8 +118,7 @@ async function submit() {
 /* Field 给插槽里的 input 都设了 width: 100%，这里多一个类压过去，不然「不限」会被挤成两行 */
 .form .row input[type='number'] { width: 120px; max-width: 120px; flex: 0 0 120px; }
 .form input.short[type='number'] { width: 120px; }
-.form .check input[type='checkbox'] { width: auto; padding: 0; }
-.check { display: inline-flex; flex: none; align-items: center; gap: 6px; font-size: 13.5px; white-space: nowrap; }
+.check { display: inline-flex; flex: none; align-items: center; gap: 8px; font-size: 13.5px; white-space: nowrap; }
 .err { margin: 0; padding: 9px 12px; font-size: 13px; background: var(--accent-soft); border-radius: var(--radius-sm); }
 .actions { display: flex; align-items: center; gap: 12px; }
 </style>

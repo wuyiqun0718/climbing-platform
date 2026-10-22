@@ -143,7 +143,7 @@ const back = () => (window.history.state?.back ? router.back() : router.push({ n
 
 <template>
   <header class="page-h">
-    <button type="button" class="back" @click="back">← 返回</button>
+    <button type="button" class="back" @click="back"><svg class="arr" viewBox="0 0 14 14" aria-hidden="true"><path d="M12 7H2.5M6.5 3 2.5 7l4 4" /></svg><span>返回</span></button>
     <div class="title">
       <h1>{{ data?.name ?? '会员详情' }}</h1>
       <span class="actions">
@@ -195,7 +195,7 @@ const back = () => (window.history.state?.back ? router.back() : router.push({ n
         <strong class="name">{{ c.card.name }}</strong>
         <span class="value"><b>{{ c.text.value }}</b> {{ c.text.unit }}</span>
         <small>{{ c.text.meta }}</small>
-        <span class="more">看流水 →</span>
+        <span class="more"><span>看流水</span><svg class="arr" viewBox="0 0 14 14" aria-hidden="true"><path d="M2 7h9.5M7.5 3l4 4-4 4" /></svg></span>
         </button>
         <div v-if="editable(c.card) && (canAdjust || canFreeze)" class="card-ops">
           <UiButton variant="link" v-if="canAdjust" @click="openAdjust(c.card, 'adjust')">调整</UiButton>
@@ -246,8 +246,11 @@ const back = () => (window.history.state?.back ? router.back() : router.push({ n
 .page-h h1 { margin: 4px 0 16px; font-family: var(--font-display); font-size: 34px; font-weight: 400; }
 .title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .actions { display: flex; gap: 8px; }
-.back { min-height: 32px; padding: 0; font: inherit; font-size: 14px; font-weight: 600; color: var(--ink); background: none; border: 0; cursor: pointer; }
-.back:hover { text-decoration: underline; }
+.back { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0; font: inherit; font-size: 14px; font-weight: 600; color: var(--ink); background: none; border: 0; cursor: pointer; }
+.back:hover span { text-decoration: underline; }
+/* 文字旁的小箭头：14px SVG，和文字间距 4px（前置图标是 10px），不用字符箭头，免得大小跟着字体变 */
+.arr { flex: none; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
 h2 { margin: 22px 0 10px; font-family: var(--font-display); font-size: 22px; font-weight: 400; }
 .state { margin: 0 0 16px; font-size: 13px; color: var(--ink-muted); }
 .state.error { display: flex; align-items: center; gap: 12px; padding: 10px 14px; color: var(--ink); background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }
@@ -263,7 +266,8 @@ h2 { margin: 22px 0 10px; font-family: var(--font-display); font-size: 22px; fon
 .cards li { display: flex; flex-direction: column; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
 .card-btn { display: flex; flex: 1; flex-direction: column; gap: 2px; padding: 12px 14px; font: inherit; color: inherit; text-align: left; background: none; border: 0; border-radius: inherit; cursor: pointer; }
 .card-ops { display: flex; gap: 14px; margin-top: -6px; padding: 0 14px 12px; }
-.more { margin-top: 6px; font-size: 13px; font-weight: 700; color: var(--ink); text-decoration: underline; }
+.more { display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; font-size: 13px; font-weight: 700; color: var(--ink); }
+.more span { text-decoration: underline; }
 .cards li.dim { opacity: 0.6; }
 .card-h { display: flex; justify-content: space-between; align-items: center; }
 .kind { font-size: 12px; font-weight: 700; }

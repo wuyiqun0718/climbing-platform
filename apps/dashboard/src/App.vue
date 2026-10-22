@@ -51,7 +51,7 @@ function logout() {
           <span>{{ n.label }}</span>
         </RouterLink>
         <!-- 前台平板页没有侧栏，新开一页，绑完这边后台还在 -->
-        <a v-if="canBindDesk" class="nav-item desk-link" :href="router.resolve({ name: 'desk' }).href" target="_blank" rel="noopener"><svg class="nav-ic" viewBox="0 0 24 24" aria-hidden="true" v-html="NAV_ICONS.desk" /><span>前台平板<span aria-hidden="true"> ↗</span></span><span class="sr-only">（新窗口）</span></a>
+        <a v-if="canBindDesk" class="nav-item desk-link" :href="router.resolve({ name: 'desk' }).href" target="_blank" rel="noopener"><svg class="nav-ic" viewBox="0 0 24 24" aria-hidden="true" v-html="NAV_ICONS.desk" /><span>前台平板</span><svg class="arr" viewBox="0 0 14 14" aria-hidden="true"><path d="M4 10l6-6M5 4h5v5" /></svg><span class="sr-only">（新窗口）</span></a>
       </nav>
       <div v-if="session.state.staff" class="me">
         <div class="me-name">{{ session.state.staff.name }}</div>
@@ -92,6 +92,8 @@ nav { display: grid; gap: 4px; }
 .nav-ic { flex: none; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .nav-item:hover { background: var(--side-hover); color: var(--surface); }
 /* relative：里面的 .sr-only 是绝对定位，不然窄屏横滑的导航里它会把整页撑宽 */
+/* 「前台平板」后面的新窗口箭头：14px，离文字 4px（nav-item 的 gap 是 10，这里收回 6） */
+.desk-link .arr { width: 14px; height: 14px; margin-left: -6px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .desk-link { position: relative; margin-top: 8px; color: var(--side-muted); }
 .nav-item.on { background: var(--brand); color: var(--on-brand); font-weight: 700; }
 .me { margin-top: auto; display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 8px; padding: 12px 8px 0; border-top: 1px solid var(--side-line); }

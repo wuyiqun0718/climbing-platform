@@ -51,8 +51,8 @@ defineSlots<{ default(props: { id: string; attrs: typeof attrs.value }): unknown
 .req { margin-left: 2px; color: var(--brand); }
 .hint { margin: 0; font-size: 12px; color: var(--ink-muted); }
 .error { margin: 0; padding: 6px 10px; font-size: 12.5px; background: var(--accent-soft); border-radius: var(--radius-sm); }
-/* 输入框的边框、高度、聚焦圈在 forms.css，这里只让它们占满一行 */
-.field :slotted(input),
+/* 输入框的边框、高度、聚焦圈在 forms.css，这里只让它们占满一行；复选框、单选框保持 18px，不拉宽 */
+.field :slotted(input:not([type='checkbox'], [type='radio'])),
 .field :slotted(textarea),
 .field :slotted(.ui-select),
 .field :slotted(.ui-date) { display: block; width: 100%; }

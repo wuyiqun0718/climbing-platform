@@ -161,7 +161,7 @@ const emptyText = () => (qFromRoute() ? `没找到「${qFromRoute()}」，换个
 .page-h p { margin: 4px 0 16px; font-size: 13px; color: var(--ink-muted); }
 .search { display: flex; gap: 8px; max-width: 420px; margin-bottom: 16px; }
 .search-box { position: relative; display: flex; flex: 1; min-width: 0; }
-.search-box input { flex: 1; min-width: 0; padding-left: 32px; }
+.search-box input { flex: 1; min-width: 0; padding-left: 36px; } /* 放大镜 11 + 15，再空 10px，和其它图标到文字一样 */
 .search-icon { position: absolute; top: 50%; left: 11px; width: 15px; height: 15px; fill: none; stroke: var(--ink-muted); stroke-width: 2; stroke-linecap: round; transform: translateY(-50%); pointer-events: none; }
 .state { margin: 0 0 16px; font-size: 13px; color: var(--ink-muted); }
 .state.error { display: flex; align-items: center; gap: 12px; padding: 10px 14px; color: var(--ink); background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }
