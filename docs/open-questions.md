@@ -42,6 +42,11 @@
 
 （21 来自 mvp/dashboard eval-2.md 第四轮，22 来自 mvp/miniapp eval-2.md 第三轮，2026-10-23。）
 
+23. 入场预览接口在会员已签过告知书时 `waiver` 为 null，确认页为显示「已签过」多调一次 `/me/insurance`。要不要让 preview 直接带 `waiverSigned: { title, version, signedAt }`（改 packages/api 和后台）。
+24. 小程序 tab 栏要不要换成自定义组件：原生 tabBar 只能用正方形图片，选中胶囊只能画到约 24×17（原型约 44×22）。自定义能完全照原型，但小程序和 H5 各写一份。
+
+（23–24 来自 mvp/miniapp eval-2.md 第三轮，2026-10-23。）
+
 ## 要跟岩馆沟通
 
 ### 规则
