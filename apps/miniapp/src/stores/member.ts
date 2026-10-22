@@ -17,6 +17,8 @@ export interface MemberState {
   /** 至少成功拉过一次 */
   loaded: boolean;
   loading: boolean;
+  /** 最近一次拉取失败了（断网、接口出错）；页面据此显示「重试」，下次开始拉时清掉 */
+  failed: boolean;
 }
 
 /**
@@ -24,7 +26,7 @@ export interface MemberState {
  * 会改卡包的操作（入场、转赠、领取、购卡……）用 `changeCards` 包一层，成功后重新拉卡包，各页面跟着刷新。
  */
 export function createMemberStore(deps: MemberStoreDeps) {
-  const state = reactive<MemberState>({ me: null, cards: [], loaded: false, loading: false });
+  const state = reactive<MemberState>({ me: null, cards: [], loaded: false, loading: false, failed: false });
   let pending: Promise<void> | null = null;
   /** 每次重新拉都加 1；换了身份后，旧的请求晚回来也不覆盖新数据 */
   let generation = 0;
@@ -43,7 +45,11 @@ export function createMemberStore(deps: MemberStoreDeps) {
     if (pending) return pending;
     const gen = ++generation;
     state.loading = true;
-    pending = fetchAll(gen).finally(() => {
+    state.failed = false;
+    pending = fetchAll(gen).catch(e => {
+      if (gen === generation) state.failed = true;
+      throw e;
+    }).finally(() => {
       if (gen !== generation) return;
       pending = null;
       state.loading = false;

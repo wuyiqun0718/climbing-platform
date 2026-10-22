@@ -125,3 +125,31 @@ describe('会员 store', () => {
     expect(fetchMe).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('拉取失败', () => {
+  it('失败时 failed 为 true、loaded 不变；重试成功后清掉', async () => {
+    const { store, fetchMe } = setup();
+    fetchMe.mockRejectedValueOnce(new Error('断网'));
+    await expect(store.load()).rejects.toThrow('断网');
+    expect(store.state.failed).toBe(true);
+    expect(store.state.loaded).toBe(false);
+    const again = store.load();
+    expect(store.state.failed).toBe(false);
+    await again;
+    expect(store.state.loaded).toBe(true);
+    expect(store.state.failed).toBe(false);
+  });
+
+  it('换了身份后，旧请求晚失败不标 failed', async () => {
+    const { store, fetchMe } = setup();
+    const slow = deferred<Me | null>();
+    fetchMe.mockImplementationOnce(() => slow.promise.then(() => { throw new Error('旧的'); }));
+    const old = store.load().catch(() => {});
+    const fresh = store.reset();
+    slow.resolve(null);
+    await old;
+    await fresh;
+    expect(store.state.failed).toBe(false);
+    expect(store.state.loaded).toBe(true);
+  });
+});

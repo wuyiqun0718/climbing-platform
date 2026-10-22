@@ -49,6 +49,9 @@ export interface Mock {
   publishWaiver(): WaiverVersion;
   /** 数据回到示例数据（不改当前身份） */
   reset(): void;
+  /** 模拟断网：打开后所有请求都失败（不是 ApiError，页面按网络问题处理）；开发面板用来看加载失败的样子 */
+  setOffline(on: boolean): void;
+  offline(): boolean;
 }
 
 /**
@@ -72,7 +75,9 @@ export function createMock(opts: MockOptions): Mock {
     return { memberId: db.members.some(m => m.id === id) ? id : null, openid: null };
   };
   const inner = createMockAdapter(createRoutes(db, { rules: opts.rules, today, now }), resolveToken);
+  let offline = false;
   const adapter: RequestAdapter = async req => {
+    if (offline) throw new Error('mock 断网');
     try {
       return await inner(req);
     } finally {
@@ -83,6 +88,8 @@ export function createMock(opts: MockOptions): Mock {
   return {
     adapter,
     db,
+    setOffline: on => { offline = on; },
+    offline: () => offline,
     currentWx: () => current,
     currentMember: () => db.members.find(m => m.openid === current)?.id ?? null,
     switchMember(memberId) {

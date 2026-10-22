@@ -8,6 +8,9 @@ import { api } from '../../api';
 import { iconStyle, type IconName } from '../../lib/icons';
 import { useRequireLogin } from '../../lib/use-login';
 import { member } from '../../stores';
+import Button from '@climb/ui-mp/Button.vue';
+import Empty from '@climb/ui-mp/Empty.vue';
+import { NETWORK_ERROR } from '../../lib/errors';
 
 // 要登录：没登录先去登录页，登录完回到这里
 useRequireLogin(() => member.ensureLoaded().catch(() => {}));
@@ -72,46 +75,52 @@ const menu = computed(() => {
 });
 
 const go = (url: string) => uni.navigateTo({ url });
+const retry = () => { member.load().catch(() => {}); loadCalendar(); };
 </script>
 
 <template>
   <view class="page">
-    <view v-if="me" class="head">
-      <view class="avatar"><text>{{ initial }}</text></view>
-      <view class="who">
-        <text class="name">{{ me.name }}</text>
-        <text class="phone">{{ phone }}</text>
+    <Empty v-if="!member.state.loaded && member.state.failed" title="没加载出来" :text="NETWORK_ERROR">
+      <Button mini @tap="retry">重试</Button>
+    </Empty>
+    <template v-else>
+      <view v-if="me" class="head">
+        <view class="avatar"><text>{{ initial }}</text></view>
+        <view class="who">
+          <text class="name">{{ me.name }}</text>
+          <text class="phone">{{ phone }}</text>
+        </view>
+        <text v-if="summary.period" class="pill">{{ summary.period.card.name }}</text>
       </view>
-      <text v-if="summary.period" class="pill">{{ summary.period.card.name }}</text>
-    </view>
 
-    <view class="stats">
-      <view v-for="s in stats" :key="s.label" class="stat">
-        <text class="stat-n">{{ s.value }}</text>
-        <text class="stat-l">{{ s.label }}</text>
-      </view>
-    </view>
-
-    <view class="cal" @tap="go('/pages/me/calendar')">
-      <view class="cal-h">
-        <text class="cal-t">{{ calTitle }}</text>
-        <view class="legend"><view class="legend-dot" /><text>来过</text></view>
-      </view>
-      <view class="grid">
-        <text v-for="w in WD" :key="w" class="wd">{{ w }}</text>
-        <view v-for="(d, i) in cells" :key="i" class="cell">
-          <text v-if="d" class="dn" :class="{ on: climbed.has(d), today: d === today, future: d > today }">{{ Number(d.slice(8)) }}</text>
+      <view class="stats">
+        <view v-for="s in stats" :key="s.label" class="stat">
+          <text class="stat-n">{{ s.value }}</text>
+          <text class="stat-l">{{ s.label }}</text>
         </view>
       </view>
-    </view>
 
-    <view class="menu">
-      <view v-for="r in menu" :key="r.url" class="item" hover-class="item-down" @tap="go(r.url)">
-        <view class="item-ic" :style="r.style" />
-        <text class="item-t">{{ r.label }}</text>
-        <text class="item-arrow">›</text>
+      <view class="cal" @tap="go('/pages/me/calendar')">
+        <view class="cal-h">
+          <text class="cal-t">{{ calTitle }}</text>
+          <view class="legend"><view class="legend-dot" /><text>来过</text></view>
+        </view>
+        <view class="grid">
+          <text v-for="w in WD" :key="w" class="wd">{{ w }}</text>
+          <view v-for="(d, i) in cells" :key="i" class="cell">
+            <text v-if="d" class="dn" :class="{ on: climbed.has(d), today: d === today, future: d > today }">{{ Number(d.slice(8)) }}</text>
+          </view>
+        </view>
       </view>
-    </view>
+
+      <view class="menu">
+        <view v-for="r in menu" :key="r.url" class="item" hover-class="item-down" @tap="go(r.url)">
+          <view class="item-ic" :style="r.style" />
+          <text class="item-t">{{ r.label }}</text>
+          <text class="item-arrow">›</text>
+        </view>
+      </view>
+    </template>
   </view>
 </template>
 

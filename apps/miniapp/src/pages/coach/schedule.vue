@@ -99,12 +99,12 @@ async function tap(s: CoachSlotView) {
         <text class="fine">点空闲的时段占上（线下约的、有事），会员那边马上约不了。</text>
       </view>
       <view class="days">
-        <view v-for="d in days" :key="d" class="day" :class="{ on: d === day }" @tap="day = d">
+        <view v-for="d in days" :key="d" class="day" :class="{ on: d === day }" role="button" :aria-pressed="d === day" :aria-label="`${dayLabel(d)} ${Number(d.slice(8))} 号`" @tap="day = d">
           <text class="dl">{{ dayLabel(d) }}</text>
           <text class="dn">{{ Number(d.slice(8)) }}</text>
         </view>
       </view>
-      <view v-for="s in slots" :key="s.hour" class="row" :class="[s.status, { past: s.past }]" @tap="tap(s)">
+      <view v-for="s in slots" :key="s.hour" class="row" :class="[s.status, { past: s.past }]" :role="s.past ? undefined : 'button'" @tap="tap(s)">
         <text class="time">{{ hh(s.hour) }}</text>
         <text class="what">{{ slotText(s) }}</text>
       </view>

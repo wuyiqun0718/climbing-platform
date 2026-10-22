@@ -74,7 +74,6 @@ const goHome = () => uni.switchTab({ url: '/pages/index/index' });
         <text class="h">{{ view.title }}</text>
         <!-- 入场结果只有日期，没有几点几分 -->
         <text class="when">{{ formatDot(result.on) }}</text>
-        <text class="p">{{ result.storeName }}</text>
       </view>
       <view class="panel">
         <view class="row"><text class="k">门店</text><text class="v">{{ result.storeName }}</text></view>

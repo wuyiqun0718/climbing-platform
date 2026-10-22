@@ -63,7 +63,8 @@ const goShop = () => uni.navigateTo({ url: '/pages/shop/index?seg=period' });
     <view v-if="status" class="board">
       <text class="h">老带新</text>
       <text class="p">期限卡会员每个月可以带 {{ status.perMonth }} 位新朋友免费来爬一次。{{ sameDay ? '朋友要跟你同一天来，你先扫码入场，TA 再扫码。' : '' }}体验券当月底前有效。</text>
-      <view class="quota">
+      <!-- 没期限卡、冻结中时名额没意义，只写原因；名额用完的还显示 0/N -->
+      <view v-if="status.blockedBy !== 'no-period-card' && status.blockedBy !== 'referral-card-frozen'" class="quota">
         <text class="num">{{ status.left }}<text class="unit">/ {{ status.perMonth }}</text></text>
         <text class="fine">本月还能发</text>
       </view>

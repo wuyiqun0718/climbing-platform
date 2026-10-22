@@ -13,13 +13,15 @@ import { useRequireLogin } from '../../lib/use-login';
 import { member } from '../../stores';
 import { startScan } from '../checkin/start-scan';
 import AskSheet from '../../components/AskSheet.vue';
-import { codeMessage } from '../../lib/errors';
+import { codeMessage, NETWORK_ERROR } from '../../lib/errors';
 
 // 要登录：没登录先去登录页，登录完回到这里
 useRequireLogin(() => {
   member.ensureLoaded().catch(() => {});
   loadReferral();
 });
+
+const retry = () => { member.load().catch(() => {}); loadReferral(); };
 
 /** 期限卡上带一句本月还能带几位朋友；数据和老带新页同一个接口，拿不到就不显示 */
 const referral = ref<ReferralStatus | null>(null);
@@ -73,7 +75,10 @@ function open(key: string, cardId?: string) {
 
 <template>
   <view class="page">
-    <Empty v-if="member.state.loaded && !member.state.cards.length" class="empty" title="卡包还是空的" text="买一张卡，或者请有卡的朋友把次数送给你。">
+    <Empty v-if="!member.state.loaded && member.state.failed" class="empty" title="卡包没加载出来" :text="NETWORK_ERROR">
+      <Button mini @tap="retry">重试</Button>
+    </Empty>
+    <Empty v-else-if="member.state.loaded && !member.state.cards.length" class="empty" title="卡包还是空的" text="买一张卡，或者请有卡的朋友把次数送给你。">
       <Button variant="primary" mini @tap="open('shop')">去购卡</Button>
     </Empty>
 

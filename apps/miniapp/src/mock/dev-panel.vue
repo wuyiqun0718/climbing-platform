@@ -84,6 +84,16 @@ function newWx() {
   relogin();
 }
 
+/** 断网后重开当前页，看页面加载失败的样子；恢复后同样重开 */
+const offline = ref(mock?.offline() ?? false);
+function toggleOffline() {
+  if (!mock) return;
+  offline.value = !offline.value;
+  mock.setOffline(offline.value);
+  member.reset().catch(() => {});
+  reloadPage();
+}
+
 function reset() {
   ask({ title: '重置 mock 数据', content: '卡包、分享、入场记录都回到初始状态', confirmText: '重置' }).then(ok => {
     if (!ok || !mock) return;
@@ -152,6 +162,7 @@ async function inviterCheckIn() {
       <view class="row foot">
         <text class="chip" @click="newWaiver">告知书出新版</text>
         <text class="chip" @click="reset">重置数据</text>
+        <text class="chip" :class="{ on: offline }" @click="toggleOffline">{{ offline ? '恢复网络' : '模拟断网' }}</text>
       </view>
     </view>
     <text class="fab" @click="toggle">{{ open ? '收起' : current ? nameOf(current) : '没登录' }}</text>
@@ -159,7 +170,7 @@ async function inviterCheckIn() {
 </template>
 
 <style scoped>
-.dev { position: fixed; right: 12px; bottom: 24px; z-index: 999; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.dev { position: fixed; right: 12px; bottom: calc(64px + env(safe-area-inset-bottom)); z-index: 999; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
 .panel { width: 280px; max-height: 70vh; overflow-y: auto; padding: 12px; background: var(--surface); color: var(--ink); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 6px; }
 .h { font-weight: 700; font-size: 15px; }
 .label { margin-top: 6px; font-size: 12px; color: var(--ink-muted); }

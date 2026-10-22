@@ -33,8 +33,13 @@ const sessions = ref<ClassSessionView[]>([]);
 const mine = ref<MyClassBooking[]>([]);
 const loaded = ref(false);
 
+/** 每次拉课表加 1；快速切日期、门店时，先发的请求晚回来不覆盖后面的 */
+let scheduleSeq = 0;
 async function loadSchedule() {
-  sessions.value = await run(() => api.classes.list({ store: storePick.currentId, from: day.value, days: 1 })).catch(() => sessions.value);
+  const seq = ++scheduleSeq;
+  const list = await run(() => api.classes.list({ store: storePick.currentId, from: day.value, days: 1 })).catch(() => null);
+  if (seq !== scheduleSeq) return;
+  if (list) sessions.value = list;
   loaded.value = true;
 }
 async function loadMine() {
@@ -163,17 +168,17 @@ const history = computed(() => mine.value.filter(b => b.status !== 'booked' && b
 
 <template>
   <view class="page">
-    <view class="segs">
-      <text class="seg" :class="{ on: tab === 'schedule' }" @tap="tab = 'schedule'">课表</text>
-      <text class="seg" :class="{ on: tab === 'mine' }" @tap="tab = 'mine'">我的预约{{ active.length ? ` ${active.length}` : '' }}</text>
+    <view class="segs" role="tablist">
+      <text class="seg" :class="{ on: tab === 'schedule' }" role="tab" :aria-selected="tab === 'schedule'" @tap="tab = 'schedule'">课表</text>
+      <text class="seg" :class="{ on: tab === 'mine' }" role="tab" :aria-selected="tab === 'mine'" @tap="tab = 'mine'">我的预约{{ active.length ? ` ${active.length}` : '' }}</text>
     </view>
 
     <template v-if="tab === 'schedule'">
       <scroll-view scroll-x class="stores">
-        <text v-for="s in storePick.stores" :key="s.id" class="chip" :class="{ on: s.id === storePick.currentId }" @tap="chooseStore(s.id)">{{ s.name }}</text>
+        <text v-for="s in storePick.stores" :key="s.id" class="chip" :class="{ on: s.id === storePick.currentId }" role="button" :aria-pressed="s.id === storePick.currentId" @tap="chooseStore(s.id)">{{ s.name }}</text>
       </scroll-view>
       <view class="days">
-        <view v-for="d in days" :key="d" class="day" :class="{ on: d === day }" @tap="chooseDay(d)">
+        <view v-for="d in days" :key="d" class="day" :class="{ on: d === day }" role="button" :aria-pressed="d === day" :aria-label="`${dayLabel(d)} ${Number(d.slice(8))} 号`" @tap="chooseDay(d)">
           <text class="dl">{{ dayLabel(d) }}</text>
           <text class="dn">{{ Number(d.slice(8)) }}</text>
         </view>
