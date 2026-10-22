@@ -32,7 +32,10 @@ export function withUnauthorizedHook(adapter: RequestAdapter, cb: () => void): R
 function mockAdapter(): RequestAdapter {
   const db = createMockDb(toDateKey(new Date()), gym.rules);
   db.entryQrLink = gym.entryQrLink;
-  return createMockAdapter(db, { delayMs: 200 });
+  const adapter = createMockAdapter(db, { delayMs: 200 });
+  // 本地开发时挂到 window，走查脚本可以模拟「会员扫平板上的码」（POST /check-ins 带 X-Mock-Member），打包后没有
+  if (import.meta.env.DEV) (globalThis as { __climbMock?: unknown }).__climbMock = { db, adapter };
+  return adapter;
 }
 
 /** 后台和前台平板共用一个 adapter（mock 时是同一份数据） */

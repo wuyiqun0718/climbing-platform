@@ -124,6 +124,8 @@ onBeforeUnmount(deactivate);
   inset: 0;
   z-index: 100;
   display: grid;
+  /* 列宽钉在屏幕宽以内，面板的 max-width: 100% 才按屏幕算；不写的话列按 width 撑开，窄屏左右都被切掉 */
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   padding: 24px 16px;
   overflow-y: auto;

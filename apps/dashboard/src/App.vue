@@ -97,7 +97,8 @@ nav { display: grid; gap: 4px; }
 .topbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
 .store { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-muted); }
 @media (max-width: 900px) {
-  .shell { grid-template-columns: 1fr; }
+  /* 行高写死：内容不满一屏时不让顶栏分走多出来的高度 */
+  .shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   .side { position: static; height: auto; min-width: 0; flex-direction: row; align-items: center; gap: 12px; }
   .brand { flex: none; border: 0; padding: 0; }
   nav { display: flex; flex: 1 1 auto; min-width: 0; overflow-x: auto; }
