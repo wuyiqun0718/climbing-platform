@@ -260,8 +260,8 @@ h2 { margin: 22px 0 10px; font-family: var(--font-display); font-size: 22px; fon
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
 .cards li { display: flex; flex-direction: column; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
 .card-btn { display: flex; flex: 1; flex-direction: column; gap: 2px; padding: 12px 14px; font: inherit; color: inherit; text-align: left; background: none; border: 0; border-radius: inherit; cursor: pointer; }
-.card-ops { display: flex; gap: 14px; padding: 0 14px 10px; }
-.more { margin-top: 4px; font-size: 12px; font-weight: 600; color: var(--ink-muted); }
+.card-ops { display: flex; gap: 14px; margin-top: -6px; padding: 0 14px 12px; }
+.more { margin-top: 6px; font-size: 13px; font-weight: 700; color: var(--ink); text-decoration: underline; }
 .cards li.dim { opacity: 0.6; }
 .card-h { display: flex; justify-content: space-between; align-items: center; }
 .kind { font-size: 12px; font-weight: 700; }

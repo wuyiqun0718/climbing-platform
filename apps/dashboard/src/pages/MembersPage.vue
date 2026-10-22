@@ -57,7 +57,7 @@ function search(v = input.value) {
 
 const columns: Column<MemberListRow>[] = [
   { key: 'name', label: '名字', format: r => r.name || '（没填）' },
-  { key: 'phoneMasked', label: '手机号', num: true },
+  { key: 'phoneMasked', label: '手机号', num: true, align: 'left' },
   { key: 'source', label: '来源', format: r => MEMBER_SOURCE_TEXT[r.source] },
   { key: 'firstVisitOn', label: '首次到店', format: r => (r.firstVisitOn ? formatDot(r.firstVisitOn) : '还没来过') },
   { key: 'validCards', label: '有效卡', num: true, format: r => (r.validCards ? `${r.validCards} 张` : '没有') },

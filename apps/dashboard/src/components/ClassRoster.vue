@@ -39,7 +39,7 @@ watch(() => [props.open, props.sessionId], () => props.open && load(), { immedia
 const STATUS_TEXT: Record<RosterRow['status'], string> = { booked: '已约', waitlisted: '候补', attended: '到了', absent: '缺席', cancelled: '已取消', voided: '课取消了' };
 const columns: Column<RosterRow>[] = [
   { key: 'memberName', label: '会员', format: r => r.memberName || '（没填名字）' },
-  { key: 'phoneMasked', label: '手机号', num: true },
+  { key: 'phoneMasked', label: '手机号', num: true, align: 'left' },
   { key: 'cardRemaining', label: '课包剩余', num: true, format: r => (r.cardRemaining === null ? '—' : `${r.cardRemaining} 次`) },
   { key: 'status', label: '状态', format: r => STATUS_TEXT[r.status] },
   { key: 'actions', label: '' },

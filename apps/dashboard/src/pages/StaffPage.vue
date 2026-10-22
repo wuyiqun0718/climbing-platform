@@ -37,7 +37,7 @@ const isMe = (r: StaffRow) => r.id === session.state.staff?.id;
 
 const columns: Column<StaffRow>[] = [
   { key: 'name', label: '名字', format: r => (isMe(r) ? `${r.name}（我）` : r.name) },
-  { key: 'phone', label: '手机号', num: true },
+  { key: 'phone', label: '手机号', num: true, align: 'left' },
   { key: 'role', label: '角色', format: r => STAFF_ROLE_TEXT[r.role] },
   { key: 'storeIds', label: '可操作门店', format: storeText },
   { key: 'coach', label: '教练', format: r => (r.coach ? `单节 ${formatYuan(r.coach.priceCents)}，${r.coach.storeIds.map(storeLabel).join('、')}` : '—') },

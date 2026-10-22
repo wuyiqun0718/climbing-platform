@@ -93,10 +93,10 @@ async function submit() {
         </div>
       </Field>
       <Field label="每次最少冻几天" :error="errs.minDays" v-slot="f">
-        <input v-model.number="form.minDays" v-bind="f.attrs" type="number" min="1" :max="FREEZE_DAYS_LIMIT" step="1" @input="errs.minDays = undefined" />
+        <input v-model.number="form.minDays" v-bind="f.attrs" class="short" type="number" min="1" :max="FREEZE_DAYS_LIMIT" step="1" @input="errs.minDays = undefined" />
       </Field>
       <Field label="每次最多冻几天" :error="errs.maxDays" v-slot="f">
-        <input v-model.number="form.maxDays" v-bind="f.attrs" type="number" min="1" :max="FREEZE_DAYS_LIMIT" step="1" @input="errs.maxDays = undefined" />
+        <input v-model.number="form.maxDays" v-bind="f.attrs" class="short" type="number" min="1" :max="FREEZE_DAYS_LIMIT" step="1" @input="errs.maxDays = undefined" />
       </Field>
       <p v-if="submitErr" class="err" role="alert">{{ submitErr }}</p>
       <div class="actions">
@@ -117,6 +117,7 @@ async function submit() {
 .row { display: flex; align-items: center; gap: 12px; }
 /* Field 给插槽里的 input 都设了 width: 100%，这里多一个类压过去，不然「不限」会被挤成两行 */
 .form .row input[type='number'] { width: 120px; max-width: 120px; flex: 0 0 120px; }
+.form input.short[type='number'] { width: 120px; }
 .form .check input[type='checkbox'] { width: auto; padding: 0; }
 .check { display: inline-flex; flex: none; align-items: center; gap: 6px; font-size: 13.5px; white-space: nowrap; }
 .err { margin: 0; padding: 9px 12px; font-size: 13px; background: var(--accent-soft); border-radius: var(--radius-sm); }

@@ -151,6 +151,8 @@ function label(s: AdminPtSlot): string {
 
 <style scoped>
 .days { margin-bottom: 12px; }
+/* 7 天的日期一行横滑，手机宽度不折成四行；留 4px 给聚焦描边 */
+.days.ui-tabs { flex-wrap: nowrap; overflow-x: auto; margin: -4px -4px 8px; padding: 4px; }
 .grid { display: grid; gap: 2px; overflow-x: auto; font-size: 12px; }
 .head { padding: 4px; color: var(--ink-muted); text-align: center; }
 .coach { display: flex; align-items: center; padding: 4px 8px; font-weight: 600; }

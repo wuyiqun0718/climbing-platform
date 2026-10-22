@@ -26,3 +26,7 @@ textarea:focus {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 55%, transparent);
 }
 :where(input, textarea):disabled { color: var(--ink-muted); background: var(--neutral-soft); cursor: not-allowed; }
+/* 填错的输入框：浅米色底，和下面的错误提示块同色 */
+:where(input, textarea)[aria-invalid='true'] { background: var(--accent-soft); }
+/* 复选框、单选框用主题深绿，不用浏览器默认蓝（原型 olive-700） */
+:where(input[type='checkbox'], input[type='radio']) { accent-color: var(--brand-strong); }
