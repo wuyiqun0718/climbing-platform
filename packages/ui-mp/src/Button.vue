@@ -46,8 +46,12 @@ function onTap(e: unknown) {
   font-weight: 600;
 }
 .btn::after { border: none; }
+/* 普通按钮 44px 高，跟原型一致，也够手指点 */
+.btn:not(.mini) { height: 44px; line-height: calc(44px - 2 * var(--stroke)); }
 .btn.block { width: 100%; }
-.btn.mini { font-size: 13px; }
+/* mini 看起来 34px（原型的小按钮），点击区上下各多 5px 凑够 44px；按钮自带 overflow: hidden 会把伪元素裁掉 */
+.btn.mini { font-size: 13px; position: relative; overflow: visible; }
+.btn.mini::before { content: ''; position: absolute; left: 0; right: 0; top: -5px; bottom: -5px; }
 .btn.primary { background: var(--brand); color: var(--on-brand); }
 .btn.dark { background: var(--ink); color: var(--surface); }
 .btn.ghost { background: var(--brand-soft); }

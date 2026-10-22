@@ -24,11 +24,13 @@ const expanded = ref(false);
 
 <style scoped>
 .waiver { margin-bottom: 10px; padding: 14px 16px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); background: var(--surface); }
-.agree { display: flex; align-items: center; gap: 10px; }
+/* 整行都能点，上下补够 44px，不改位置 */
+.agree { display: flex; align-items: center; gap: 10px; margin: -12px 0; padding: 12px 0; }
 .box { display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: var(--stroke) solid var(--ink); border-radius: 4px; background: var(--surface); color: var(--ink); font-size: 12px; font-weight: 700; }
 .box.on { background: var(--brand); }
 .t { font-size: 14px; font-weight: 600; }
-.toggle { display: block; margin-top: 8px; font-size: 12px; color: var(--ink-muted); text-decoration: underline; }
+/* 跟上面的勾选行各自够 44px 点击区，字比原来往下 6px */
+.toggle { display: block; margin-bottom: -13px; padding: 14px 0 13px; font-size: 12px; color: var(--ink-muted); text-decoration: underline; }
 .points { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 .point { font-size: 13px; line-height: 1.6; }
 .ver { font-size: 12px; color: var(--ink-muted); }

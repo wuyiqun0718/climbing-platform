@@ -135,7 +135,7 @@ function open(key: string, cardId?: string) {
 .cards.done { margin-top: 10px; opacity: 0.6; }
 .extra { margin-top: 10px; font-size: 12px; font-weight: 600; }
 .acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
-.done-h { display: flex; justify-content: space-between; margin-top: 22px; padding: 10px 0; font-size: 13px; color: var(--ink-muted); border-top: 1px dashed var(--ink-muted); }
+.done-h { display: flex; justify-content: space-between; margin-top: 22px; padding: 13px 0; font-size: 13px; color: var(--ink-muted); border-top: 1px dashed var(--ink-muted); }
 
 .empty { margin-top: 32px; }
 

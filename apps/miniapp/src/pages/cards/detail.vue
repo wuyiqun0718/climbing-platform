@@ -180,8 +180,8 @@ const retry = async () => {
 .pick-l { display: flex; flex-direction: column; gap: 2px; }
 .pick-s { font-size: 12px; line-height: 1.5; color: var(--ink-muted); }
 .chips { display: flex; gap: 8px; }
-.chip { flex: 1; padding: 8px 0; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); background: var(--surface); text-align: center; font-size: 14px; font-weight: 600; }
+.chip { flex: 1; padding: 10px 0; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); background: var(--surface); text-align: center; font-size: 14px; font-weight: 600; }
 .chip.on { background: var(--brand); color: var(--on-brand); }
 .date.wide { width: auto; flex: 1; }
-.link { font-size: 13px; font-weight: 600; text-decoration: underline; }
+.link { margin: -13px 0; padding: 13px 0; font-size: 13px; font-weight: 600; text-decoration: underline; }
 </style>

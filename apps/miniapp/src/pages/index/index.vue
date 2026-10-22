@@ -283,5 +283,6 @@ onShow(() => {
 
 .sec-h { display: flex; align-items: baseline; justify-content: space-between; margin: 22px 16px 10px; }
 .h { font-family: var(--font-display); font-size: 20px; }
-.link { font-size: 13px; color: var(--brand-strong); }
+/* 「课表」「全部」字小，四周补够 44px 点击区，不改位置 */
+.link { margin: -13px -9px; padding: 13px 9px; font-size: 13px; color: var(--brand-strong); }
 </style>

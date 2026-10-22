@@ -66,7 +66,7 @@ function buy(productId: string) {
     <LoadFailed v-if="error && !products.length" :text="error" @retry="load" />
     <template v-else>
     <view v-if="groups.length" class="segs">
-      <text v-for="g in groups" :key="g.section" class="seg" :class="{ on: g.section === current?.section }" @tap="seg = g.section">{{ SHOP_SECTION_LABELS[g.section] }}</text>
+      <view v-for="g in groups" :key="g.section" class="seg" :class="{ on: g.section === current?.section }" @tap="seg = g.section">{{ SHOP_SECTION_LABELS[g.section] }}</view>
     </view>
 
     <view v-if="current" class="pad">
@@ -97,7 +97,9 @@ function buy(productId: string) {
 <style scoped>
 .page { padding-bottom: 32px; }
 .segs { display: flex; gap: 8px; padding: 10px 16px; overflow-x: auto; background: var(--surface); border-bottom: var(--stroke) solid var(--ink); }
-.seg { flex-shrink: 0; padding: 6px 12px; border-radius: var(--radius-sm); font-size: 14px; color: var(--ink-muted); }
+/* 看起来 32px，点击区上下各多 6px（.segs 上下有 10px 留白，横向滚动时不会被裁） */
+.seg { position: relative; flex-shrink: 0; padding: 6px 12px; border-radius: var(--radius-sm); font-size: 14px; color: var(--ink-muted); }
+.seg::before { content: ''; position: absolute; left: 0; right: 0; top: -6px; bottom: -6px; }
 .seg.on { background: var(--brand); color: var(--on-brand); font-weight: 600; }
 .pad { padding: 12px 16px; }
 .hint { display: block; font-size: 13px; color: var(--ink-muted); }

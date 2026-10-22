@@ -86,7 +86,8 @@ const climbed = computed(() => [...byDay.value.values()]);
 <style scoped>
 .page { padding: 12px 16px 32px; }
 .nav { display: flex; align-items: center; justify-content: space-between; }
-.arrow { padding: 4px 16px; font-size: 24px; }
+/* 点击区 44px 高，上下负边距让标题行还是原来的高度 */
+.arrow { margin: -4px 0; padding: 0 16px; min-width: 44px; box-sizing: border-box; text-align: center; line-height: 44px; font-size: 24px; }
 .arrow.off { color: var(--ink-muted); opacity: 0.4; }
 .title { font-family: var(--font-display); font-size: 20px; }
 .sum { display: block; margin: 4px 0 10px; text-align: center; font-size: 13px; color: var(--ink-muted); }

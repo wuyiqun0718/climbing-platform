@@ -75,7 +75,7 @@ const waiver = computed(() => {
     <view v-for="p in policies" :key="p.id" class="panel">
       <view class="row"><text class="name">{{ p.date }}</text><text class="tag" :class="{ off: p.off }">{{ p.status }}</text></view>
       <view v-for="e in p.entries" :key="e.id" class="row">
-        <text class="k">{{ e.text }}</text><text class="k">{{ e.how }}</text>
+        <text class="k e-text">{{ e.text }}</text><text class="k e-how">{{ e.how }}</text>
       </view>
     </view>
     <Empty v-if="loaded && !policies.length" title="还没有保单" text="扫码入场后这里会有记录" />
@@ -97,7 +97,11 @@ const waiver = computed(() => {
 .top-at { flex: none; font-size: 12px; color: var(--ink-muted); }
 .tag { padding: 2px 8px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; }
 .tag.off { color: var(--ink-muted); }
-.toggle { font-size: 12px; color: var(--ink-muted); text-decoration: underline; }
+/* 卡名很长时折行的是左边，「入场时投保」不折 */
+.e-text { flex: 1; min-width: 0; }
+.e-how { flex: none; }
+/* 字小，上下补够 44px 点击区，不改位置 */
+.toggle { align-self: flex-start; margin: -14px 0; padding: 14px 0; font-size: 12px; color: var(--ink-muted); text-decoration: underline; }
 .points { display: flex; flex-direction: column; gap: 6px; }
 .point { font-size: 13px; line-height: 1.6; }
 .fine { display: block; margin-bottom: 10px; font-size: 12px; line-height: 1.6; color: var(--ink-muted); }

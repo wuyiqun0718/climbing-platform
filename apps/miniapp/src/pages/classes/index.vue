@@ -179,13 +179,13 @@ const history = computed(() => mine.value.filter(b => b.status !== 'booked' && b
 <template>
   <view class="page">
     <view class="segs" role="tablist">
-      <text class="seg" :class="{ on: tab === 'schedule' }" role="tab" :aria-selected="tab === 'schedule'" @tap="tab = 'schedule'">课表</text>
-      <text class="seg" :class="{ on: tab === 'mine' }" role="tab" :aria-selected="tab === 'mine'" @tap="tab = 'mine'">我的预约{{ active.length ? ` ${active.length}` : '' }}</text>
+      <view class="seg" :class="{ on: tab === 'schedule' }" role="tab" :aria-selected="tab === 'schedule'" @tap="tab = 'schedule'">课表</view>
+      <view class="seg" :class="{ on: tab === 'mine' }" role="tab" :aria-selected="tab === 'mine'" @tap="tab = 'mine'">我的预约{{ active.length ? ` ${active.length}` : '' }}</view>
     </view>
 
     <template v-if="tab === 'schedule'">
       <scroll-view scroll-x class="stores">
-        <text v-for="s in storePick.stores" :key="s.id" class="chip" :class="{ on: s.id === storePick.currentId }" role="button" :aria-pressed="s.id === storePick.currentId" @tap="chooseStore(s.id)">{{ s.name }}</text>
+        <view v-for="s in storePick.stores" :key="s.id" class="chip" :class="{ on: s.id === storePick.currentId }" role="button" :aria-pressed="s.id === storePick.currentId" @tap="chooseStore(s.id)">{{ s.name }}</view>
       </scroll-view>
       <view class="days">
         <view v-for="d in days" :key="d" class="day" :class="{ on: d === day }" role="button" :aria-pressed="d === day" :aria-label="`${dayLabel(d)} ${Number(d.slice(8))} 号`" @tap="chooseDay(d)">
@@ -259,19 +259,24 @@ const history = computed(() => mine.value.filter(b => b.status !== 'booked' && b
 <style scoped>
 .page { padding-bottom: 32px; }
 .segs { display: flex; gap: 8px; padding: 10px 16px; background: var(--surface); border-bottom: var(--stroke) solid var(--ink); }
-.seg { padding: 6px 12px; border-radius: var(--radius-sm); font-size: 14px; color: var(--ink-muted); }
+/* 看起来 32px，点击区上下各多 6px（.segs 上下有 10px 留白） */
+.seg { position: relative; padding: 6px 12px; border-radius: var(--radius-sm); font-size: 14px; color: var(--ink-muted); }
+.seg::before { content: ''; position: absolute; left: 0; right: 0; top: -6px; bottom: -6px; }
 .seg.on { background: var(--brand); color: var(--on-brand); font-weight: 600; }
-.stores { box-sizing: border-box; width: 100%; white-space: nowrap; padding: 10px 16px 0; }
-.chip { display: inline-block; margin-right: 8px; padding: 4px 12px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); font-size: 13px; background: var(--surface); }
+/* 门店 chip 看起来 30px，点击区往上多 10px、往下多 4px；scroll-view 会裁掉超出的部分，所以下面留 4px，日期条上面少 4px */
+.stores { box-sizing: border-box; width: 100%; white-space: nowrap; padding: 10px 16px 4px; }
+.chip { position: relative; display: inline-block; margin-right: 8px; padding: 4px 12px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); font-size: 13px; background: var(--surface); }
+.chip::before { content: ''; position: absolute; left: 0; right: 0; top: -10px; bottom: -4px; }
 .chip.on { background: var(--ink); color: var(--surface); }
-.days { display: flex; gap: 6px; padding: 10px 16px; }
+.days { display: flex; gap: 6px; padding: 6px 16px 10px; }
 .day { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 6px 0; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); background: var(--surface); }
 .day.on { background: var(--brand); color: var(--on-brand); }
 .dl { font-size: 11px; }
 .dn { font-family: var(--font-number); font-size: 16px; font-weight: 700; }
 .hint { display: flex; flex-direction: column; gap: 2px; padding: 0 16px 8px; font-size: 13px; line-height: 1.6; }
 .fine { font-size: 12px; color: var(--ink-muted); }
-.link { color: var(--brand-strong); text-decoration: underline; }
+/* 句子里的链接：上下补点击区，行内元素的 padding 不撑高行 */
+.link { padding: 12px 0; color: var(--brand-strong); text-decoration: underline; }
 .row { display: flex; align-items: center; gap: 12px; margin: 8px 16px 0; padding: 10px 12px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); background: var(--surface); }
 .row.off { opacity: 0.6; }
 .time { display: flex; flex-direction: column; align-items: center; width: 48px; }

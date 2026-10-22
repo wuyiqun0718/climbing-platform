@@ -127,5 +127,5 @@ function onH5Submit() {
 .privacy-item { display: flex; flex-direction: column; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .privacy-what { font-size: 15px; }
 .privacy-why { font-size: 13px; color: var(--ink-muted); }
-.link { margin: 4px 0 20px; font-size: 14px; color: var(--brand-strong); }
+.link { margin: -8px 0 8px; padding: 12px 0; font-size: 14px; color: var(--brand-strong); }
 </style>
