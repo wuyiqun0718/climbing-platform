@@ -5,7 +5,7 @@
  */
 import type { AdminClassRow, ClassWeek } from '@climb/api';
 import { weekStartOf, type ClassType } from '@climb/core';
-import { ConfirmButton, Field, Modal, errorText, useToast, UiButton } from '@climb/ui-web';
+import { ConfirmButton, Field, Modal, errorText, useToast, UiButton, UiSelect } from '@climb/ui-web';
 import { addDays, formatDot, toDateKey, weekdayOf } from '@climb/utils';
 import { computed, reactive, ref, useId, watch } from 'vue';
 import { api } from '../api';
@@ -59,6 +59,12 @@ const form = reactive({ classTypeId: '', storeId: '', on: '', startTime: '19:00'
 const formErr = ref('');
 const busy = ref(false);
 const activeTypes = computed(() => props.types.filter(t => t.active));
+// 现在的教练不在列表里（停用了）也留着显示
+const coachOptions = computed(() => [
+  { value: '', label: editing.value ? '不指定' : '用默认' },
+  ...props.coaches.map(c => ({ value: c.id, label: c.name })),
+  ...(form.coachId && !props.coaches.some(c => c.id === form.coachId) ? [{ value: form.coachId, label: editing.value?.coachName ?? form.coachId }] : []),
+]);
 function openForm(s: AdminClassRow | null) {
   editing.value = s;
   Object.assign(form, {
@@ -182,14 +188,10 @@ async function copyLastWeek() {
     <form :id="formId" class="form" novalidate @submit.prevent="submit">
       <template v-if="!editing">
         <Field label="课程" required v-slot="f">
-          <select v-model="form.classTypeId" v-bind="f.attrs" :disabled="busy">
-            <option v-for="t in activeTypes" :key="t.id" :value="t.id">{{ t.name }}（{{ t.minutes }} 分钟，{{ t.capacity }} 人）</option>
-          </select>
+          <UiSelect v-model="form.classTypeId" v-bind="f.attrs" :disabled="busy" :options="activeTypes.map(t => ({ value: t.id, label: `${t.name}（${t.minutes} 分钟，${t.capacity} 人）` }))" />
         </Field>
         <Field label="门店" required v-slot="f">
-          <select v-model="form.storeId" v-bind="f.attrs" :disabled="busy">
-            <option v-for="st in session.state.stores" :key="st.id" :value="st.id">{{ st.name }}</option>
-          </select>
+          <UiSelect v-model="form.storeId" v-bind="f.attrs" :disabled="busy" :options="session.state.stores.map(st => ({ value: st.id, label: st.name }))" />
         </Field>
       </template>
       <Field label="日期" required v-slot="f"><input v-model="form.on" v-bind="f.attrs" type="date" :disabled="busy" /></Field>
@@ -198,11 +200,7 @@ async function copyLastWeek() {
         <input v-model="form.capacity" v-bind="f.attrs" type="number" min="1" step="1" :disabled="busy" />
       </Field>
       <Field label="教练" :hint="editing ? '' : '不填用课程的默认教练'" v-slot="f">
-        <select v-model="form.coachId" v-bind="f.attrs" :disabled="busy">
-          <option value="">{{ editing ? '不指定' : '用默认' }}</option>
-          <option v-for="c in coaches" :key="c.id" :value="c.id">{{ c.name }}</option>
-          <option v-if="form.coachId && !coaches.some(c => c.id === form.coachId)" :value="form.coachId">{{ editing?.coachName ?? form.coachId }}</option>
-        </select>
+        <UiSelect v-model="form.coachId" v-bind="f.attrs" :disabled="busy" :options="coachOptions" />
       </Field>
       <p v-if="formErr" class="state error" role="alert">{{ formErr }}</p>
     </form>
@@ -217,7 +215,7 @@ async function copyLastWeek() {
 .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-bottom: 12px; font-size: 13.5px; }
 .grow { flex: 1; }
 .form { display: grid; gap: 14px; }
-.form input, .form select { font: inherit; }
+.form input { font: inherit; }
 .off { margin: 0; font-size: 12px; color: var(--ink-muted); }
 .state { margin: 0 0 12px; font-size: 13px; color: var(--ink-muted); }
 /* 七列装不下（窄屏）就整周横滑，列宽不再往下压 */

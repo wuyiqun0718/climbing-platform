@@ -6,7 +6,7 @@
 import type { ShareList, ShareRow } from '@climb/api';
 import { SHARE_KIND_TEXT } from '@climb/api';
 import { SHARE_STATUS_TEXT, type Share } from '@climb/core';
-import { DataTable, errorText, type Column, UiButton } from '@climb/ui-web';
+import { DataTable, errorText, type Column, UiButton, UiSelect } from '@climb/ui-web';
 import { formatDot } from '@climb/utils';
 import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
@@ -15,6 +15,11 @@ import { createLatest } from '../pages/dashboard';
 import { session, storeLabel } from '../session';
 
 const kind = ref<Share['kind'] | ''>('');
+const KIND_OPTIONS = [
+  { value: '', label: '全部' },
+  { value: 'count', label: SHARE_KIND_TEXT.count },
+  { value: 'referral', label: SHARE_KIND_TEXT.referral },
+] as const;
 const data = ref<ShareList | null>(null);
 const loading = ref(false);
 const error = ref('');
@@ -54,11 +59,7 @@ const columns = computed<Column<ShareRow>[]>(() => [
 <template>
   <div class="bar">
     <label>类型
-      <select v-model="kind">
-        <option value="">全部</option>
-        <option value="count">{{ SHARE_KIND_TEXT.count }}</option>
-        <option value="referral">{{ SHARE_KIND_TEXT.referral }}</option>
-      </select>
+      <UiSelect v-model="kind" size="sm" :options="KIND_OPTIONS" />
     </label>
   </div>
   <p v-if="error" class="state error" role="alert">
@@ -81,7 +82,6 @@ const columns = computed<Column<ShareRow>[]>(() => [
 <style scoped>
 .bar { display: flex; gap: 12px; margin-bottom: 12px; font-size: 13px; }
 .bar label { display: flex; align-items: center; gap: 8px; }
-.bar select { padding: 5px 8px; font: inherit; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); }
 .state { margin: 0 0 16px; font-size: 13px; color: var(--ink-muted); }
 .state.error { display: flex; align-items: center; gap: 12px; padding: 10px 14px; color: var(--ink); background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }
 </style>

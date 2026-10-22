@@ -7,11 +7,13 @@
  */
 import type { StaffRow } from '@climb/api';
 import { STAFF_ROLES, STAFF_ROLE_TEXT, coachProfileErrors, newStaffErrors, parseYuanInput, staffPatchErrors, type CoachProfile, type StaffErrors, type StaffInput, type StaffPatch, type StaffRole } from '@climb/core';
-import { Field, Modal, errorText, UiButton } from '@climb/ui-web';
+import { Field, Modal, errorText, UiButton, UiSelect } from '@climb/ui-web';
 import { computed, reactive, ref, useId, watch } from 'vue';
 import { api } from '../api';
 import { session } from '../session';
 import { badField } from './memberForm';
+
+const ROLE_OPTIONS = STAFF_ROLES.map(r => ({ value: r, label: STAFF_ROLE_TEXT[r] }));
 
 const props = defineProps<{ open: boolean; staff: StaffRow | null; all: StaffRow[] }>();
 const emit = defineEmits<{ 'update:open': [open: boolean]; saved: [row: StaffRow, created: boolean] }>();
@@ -97,9 +99,7 @@ async function submit() {
         <input v-model="form.name" v-bind="f.attrs" :disabled="busy" />
       </Field>
       <Field label="角色" required :error="errs.role" v-slot="f">
-        <select v-model="form.role" v-bind="f.attrs" :disabled="busy">
-          <option v-for="r in STAFF_ROLES" :key="r" :value="r">{{ STAFF_ROLE_TEXT[r] }}</option>
-        </select>
+        <UiSelect v-model="form.role" v-bind="f.attrs" :disabled="busy" :options="ROLE_OPTIONS" />
       </Field>
       <fieldset class="stores" :disabled="busy">
         <legend>可操作门店</legend>
@@ -137,7 +137,7 @@ async function submit() {
 
 <style scoped>
 .form { display: grid; gap: 14px; }
-.form input, .form select { font: inherit; }
+.form input { font: inherit; }
 .stores { display: grid; gap: 6px; margin: 0; padding: 0; border: 0; font-size: 13.5px; }
 .stores legend { margin-bottom: 6px; font-weight: 600; }
 .check { display: flex; align-items: center; gap: 8px; }

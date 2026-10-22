@@ -64,6 +64,8 @@ defineSlots<{ default(props: { id: string; attrs: typeof attrs.value }): unknown
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
 }
+/* UiSelect 自带样式，这里只让它占满一行 */
+.field :slotted(.ui-select) { display: block; width: 100%; }
 .field :slotted(textarea) { resize: vertical; min-height: 72px; }
 .field :slotted(input:focus),
 .field :slotted(select:focus),

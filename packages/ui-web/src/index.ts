@@ -11,6 +11,8 @@ export { default as ToastHost } from './ToastHost.vue';
 export { default as ConfirmButton } from './ConfirmButton.vue';
 export { default as UiButton } from './UiButton.vue';
 export { default as Tabs } from './Tabs.vue';
+export { default as UiSelect } from './UiSelect.vue';
+export type { SelectOption } from './select';
 export { useToast, createToaster, TOAST_DURATION } from './toast';
 export type { Toaster, ToastItem, ToastKind } from './toast';
 export { reasonError, errorText, REASON_MAX_LENGTH } from './overlay';

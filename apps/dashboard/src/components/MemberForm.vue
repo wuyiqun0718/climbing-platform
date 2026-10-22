@@ -5,7 +5,7 @@
  */
 import { MEMBER_SOURCE_TEXT, type MemberDetail, type MemberExistsError } from '@climb/api';
 import { DEFAULT_DESK_MEMBER_SOURCE, DESK_MEMBER_SOURCES, MEMBER_NAME_MAX, newMemberErrors, normalizePhone, type MemberSource, type NewMemberErrors } from '@climb/core';
-import { Field, Modal, errorText, UiButton } from '@climb/ui-web';
+import { Field, Modal, errorText, UiButton, UiSelect } from '@climb/ui-web';
 import { computed, ref, useId, watch } from 'vue';
 import { api } from '../api';
 import { storeOptions } from '../permissions';
@@ -26,6 +26,7 @@ const exists = ref<MemberExistsError | null>(null);
 const busy = ref(false);
 
 // 建档门店：员工能操作的店；顶部选了单店就默认那家
+const SOURCE_OPTIONS = DESK_MEMBER_SOURCES.map(s => ({ value: s, label: MEMBER_SOURCE_TEXT[s] }));
 const stores = computed(() => (session.state.staff ? storeOptions(session.state.staff, session.state.stores).filter(o => o.id !== null) : []));
 
 watch(
@@ -102,14 +103,10 @@ function openExisting() {
         <input v-model="name" v-bind="f.attrs" :maxlength="MEMBER_NAME_MAX" autocomplete="off" @input="errs.name = undefined" />
       </Field>
       <Field label="来源" required :error="errs.source" v-slot="f">
-        <select v-model="source" v-bind="f.attrs">
-          <option v-for="s in DESK_MEMBER_SOURCES" :key="s" :value="s">{{ MEMBER_SOURCE_TEXT[s] }}</option>
-        </select>
+        <UiSelect v-model="source" v-bind="f.attrs" :options="SOURCE_OPTIONS" />
       </Field>
       <Field label="建档门店" required v-slot="f">
-        <select v-model="storeId" v-bind="f.attrs">
-          <option v-for="s in stores" :key="s.id!" :value="s.id">{{ s.name }}</option>
-        </select>
+        <UiSelect v-model="storeId" v-bind="f.attrs" :options="stores.map(s => ({ value: s.id!, label: s.name }))" />
       </Field>
       <p v-if="submitErr" class="err" role="alert">{{ submitErr }}</p>
     </form>

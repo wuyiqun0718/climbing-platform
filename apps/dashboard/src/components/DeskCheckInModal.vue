@@ -5,7 +5,7 @@
  */
 import type { DeskCheckInPreview, DeskCheckInResult } from '@climb/api';
 import { ENTRY_BLOCKED_TEXT, POLICY_STATUS_TEXT, cardText, type Card } from '@climb/core';
-import { Field, Modal, errorText, UiButton } from '@climb/ui-web';
+import { Field, Modal, errorText, UiButton, UiSelect } from '@climb/ui-web';
 import { toDateKey } from '@climb/utils';
 import { computed, ref, useId, watch } from 'vue';
 import { api } from '../api';
@@ -97,9 +97,7 @@ async function submit() {
     <form :id="formId" class="form" novalidate @submit.prevent="submit">
       <p class="picked">会员：<b>{{ member.name || '没填名字' }}</b></p>
       <Field label="入场门店" required v-slot="f">
-        <select v-model="storeId" v-bind="f.attrs" :disabled="busy">
-          <option v-for="s in stores" :key="s.id!" :value="s.id">{{ s.name }}</option>
-        </select>
+        <UiSelect v-model="storeId" v-bind="f.attrs" :disabled="busy" :options="stores.map(s => ({ value: s.id!, label: s.name }))" />
       </Field>
 
       <p v-if="preview && !preview.waiverSigned" class="warn" role="status">还没签风险告知书。登记后请让会员手机有电时在小程序里补签。</p>

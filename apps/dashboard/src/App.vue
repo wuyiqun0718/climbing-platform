@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { STAFF_ROLE_TEXT } from '@climb/core';
-import { ToastHost } from '@climb/ui-web';
+import { ToastHost, UiSelect } from '@climb/ui-web';
 import gym from '@gym';
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -15,7 +15,7 @@ const ROLE_LABEL = STAFF_ROLE_TEXT;
 
 const nav = computed(() => (session.state.staff ? navFor(session.state.staff.role) : []));
 const stores = computed(() => (session.state.staff ? storeOptions(session.state.staff, session.state.stores) : []));
-// <select> 的值只能是字符串，「全部门店」用空字符串
+// 下拉的值只能是字符串，「全部门店」用空字符串
 const storeValue = computed({
   get: () => session.state.storeId ?? '',
   set: v => session.setStore(v || null),
@@ -48,9 +48,7 @@ function logout() {
       <div v-if="stores.length" class="topbar">
         <label class="store">
           <span>门店</span>
-          <select v-model="storeValue" :disabled="stores.length < 2">
-            <option v-for="s in stores" :key="s.id ?? ''" :value="s.id ?? ''">{{ s.name }}</option>
-          </select>
+          <UiSelect v-model="storeValue" size="sm" :disabled="stores.length < 2" :options="stores.map(s => ({ value: s.id ?? '', label: s.name }))" />
         </label>
       </div>
       <RouterView />
@@ -85,7 +83,6 @@ nav { display: grid; gap: 4px; }
 .main { min-width: 0; padding: 24px 28px 56px; }
 .topbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
 .store { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-muted); }
-.store select { padding: 7px 10px; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); }
 @media (max-width: 900px) {
   .shell { grid-template-columns: 1fr; }
   .side { position: static; height: auto; min-width: 0; flex-direction: row; align-items: center; gap: 12px; }

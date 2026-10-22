@@ -5,12 +5,14 @@
  */
 import { type AuditLogRow, type PageOf } from '@climb/api';
 import { AUDIT_ACTIONS, AUDIT_ACTION_TEXT, type AuditAction } from '@climb/core';
-import { DataTable, Pager, errorText, type Column, UiButton } from '@climb/ui-web';
+import { DataTable, Pager, errorText, type Column, UiButton, UiSelect } from '@climb/ui-web';
 import { formatDotTime } from '@climb/utils';
 import { computed, ref, watch } from 'vue';
 import { api } from '../api';
 import { session, storeLabel } from '../session';
 import { createLatest } from './dashboard';
+
+const ACTION_OPTIONS = [{ value: '' as const, label: '全部' }, ...AUDIT_ACTIONS.map(a => ({ value: a, label: AUDIT_ACTION_TEXT[a] }))];
 
 const action = ref<AuditAction | ''>('');
 const page = ref(1);
@@ -61,10 +63,7 @@ const columns = computed<Column<AuditLogRow>[]>(() => [
       <p>开卡、入场、撤销、调整、冻结、退款、改卡种、员工变更都记在这里；只能看，不能改</p>
     </div>
     <label class="filter">操作
-      <select v-model="action">
-        <option value="">全部</option>
-        <option v-for="a in AUDIT_ACTIONS" :key="a" :value="a">{{ AUDIT_ACTION_TEXT[a] }}</option>
-      </select>
+      <UiSelect v-model="action" size="sm" :options="ACTION_OPTIONS" />
     </label>
   </header>
   <p v-if="error" class="state error" role="alert">
@@ -85,7 +84,6 @@ const columns = computed<Column<AuditLogRow>[]>(() => [
 .page-h h1 { margin: 0; font-family: var(--font-display); font-size: 34px; font-weight: 400; }
 .page-h p { margin: 4px 0 16px; font-size: 13px; color: var(--ink-muted); }
 .filter { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-.filter select { padding: 5px 8px; font: inherit; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); }
 .change { margin: 0; font: inherit; font-size: 12px; white-space: pre-wrap; word-break: break-all; color: var(--ink-muted); }
 .state { margin: 0 0 16px; font-size: 13px; color: var(--ink-muted); }
 .state.error { display: flex; align-items: center; gap: 12px; padding: 10px 14px; color: var(--ink); background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }

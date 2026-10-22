@@ -16,13 +16,15 @@ import {
   type ProductInput,
   type ProductPatch,
 } from '@climb/core';
-import { Field, Modal, errorText, UiButton } from '@climb/ui-web';
+import { Field, Modal, errorText, UiButton, UiSelect } from '@climb/ui-web';
 import { formatYuan } from '@climb/utils';
 import { computed, reactive, ref, useId, watch } from 'vue';
 import { api } from '../api';
 import { canDo } from '../permissions';
 import { session } from '../session';
 import { badField } from './memberForm';
+
+const CATEGORY_OPTIONS = PRODUCT_CATEGORIES.map(c => ({ value: c, label: PRODUCT_CATEGORY_TEXT[c] }));
 
 const props = defineProps<{ open: boolean; product: Product | null; products: Product[] }>();
 const emit = defineEmits<{ 'update:open': [open: boolean]; saved: [product: Product, created: boolean] }>();
@@ -109,9 +111,7 @@ async function submit() {
     <form :id="formId" class="form" novalidate @submit.prevent="submit">
       <template v-if="!editing">
         <Field label="品类" required :error="errs.category" v-slot="f">
-          <select v-model="form.category" v-bind="f.attrs" :disabled="busy">
-            <option v-for="c in PRODUCT_CATEGORIES" :key="c" :value="c">{{ PRODUCT_CATEGORY_TEXT[c] }}</option>
-          </select>
+          <UiSelect v-model="form.category" v-bind="f.attrs" :disabled="busy" :options="CATEGORY_OPTIONS" />
         </Field>
         <Field v-if="form.category === 'period'" label="天数" required :error="errs.days" v-slot="f">
           <input v-model="form.days" v-bind="f.attrs" type="number" min="1" step="1" :disabled="busy" />
@@ -153,7 +153,7 @@ async function submit() {
 
 <style scoped>
 .form { display: grid; gap: 14px; }
-.form input, .form textarea, .form select { font: inherit; }
+.form input, .form textarea { font: inherit; }
 .note { margin: 0; font-size: 13px; color: var(--ink-muted); }
 .check { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
 .err { margin: 0; padding: 9px 12px; font-size: 13px; background: var(--accent-soft); border-radius: var(--radius-sm); }

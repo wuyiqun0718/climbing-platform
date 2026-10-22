@@ -15,7 +15,7 @@ import {
   type DeskPayChannel,
   type Product,
 } from '@climb/core';
-import { Field, Modal, errorText, UiButton } from '@climb/ui-web';
+import { Field, Modal, errorText, UiButton, UiSelect } from '@climb/ui-web';
 import { formatYuan } from '@climb/utils';
 import { computed, ref, useId, watch } from 'vue';
 import { api } from '../api';
@@ -49,6 +49,10 @@ let requestId = '';
 
 const stores = computed(() => (session.state.staff ? storeOptions(session.state.staff, session.state.stores).filter(o => o.id !== null) : []));
 const onSale = computed(() => products.value.filter(p => p.onSale));
+const productOptions = computed(() =>
+  onSale.value.map(p => ({ value: p.id, label: `${REVENUE_CATEGORY_TEXT[productRevenueCategory(p)]} · ${p.name} · ${formatYuan(p.priceCents)}` })),
+);
+const CHANNEL_OPTIONS = DESK_PAY_CHANNELS.map(c => ({ value: c, label: PAY_CHANNEL_TEXT[c] }));
 const product = computed(() => onSale.value.find(p => p.id === productId.value) ?? null);
 const amountCents = computed(() => parseYuanInput(amount.value));
 const repriced = computed(() => !!product.value && Number.isInteger(amountCents.value) && amountCents.value !== product.value.priceCents);
@@ -183,17 +187,15 @@ async function submit() {
       </section>
 
       <Field label="卡种" required :error="productsErr" v-slot="f">
-        <select v-model="productId" v-bind="f.attrs">
-          <option value="" disabled>选一个</option>
-          <option v-for="p in onSale" :key="p.id" :value="p.id">
-            {{ REVENUE_CATEGORY_TEXT[productRevenueCategory(p)] }} · {{ p.name }} · {{ formatYuan(p.priceCents) }}
-          </option>
-        </select>
+        <UiSelect
+          v-model="productId"
+          v-bind="f.attrs"
+          placeholder="选一个"
+          :options="productOptions"
+        />
       </Field>
       <Field label="收款方式" required :error="errs.channel" v-slot="f">
-        <select v-model="channel" v-bind="f.attrs">
-          <option v-for="c in DESK_PAY_CHANNELS" :key="c" :value="c">{{ PAY_CHANNEL_TEXT[c] }}</option>
-        </select>
+        <UiSelect v-model="channel" v-bind="f.attrs" :options="CHANNEL_OPTIONS" />
       </Field>
       <Field label="实收（元）" required :hint="product ? `标价 ${formatYuan(product.priceCents)}` : undefined" :error="errs.amountCents" v-slot="f">
         <input v-model="amount" v-bind="f.attrs" inputmode="decimal" autocomplete="off" :disabled="!product" @input="errs.amountCents = undefined" />
@@ -202,9 +204,7 @@ async function submit() {
         <input v-model="priceReason" v-bind="f.attrs" :maxlength="DESK_PRICE_REASON_MAX" autocomplete="off" @input="errs.priceReason = undefined" />
       </Field>
       <Field label="收款门店" required v-slot="f">
-        <select v-model="storeId" v-bind="f.attrs">
-          <option v-for="s in stores" :key="s.id!" :value="s.id">{{ s.name }}</option>
-        </select>
+        <UiSelect v-model="storeId" v-bind="f.attrs" :options="stores.map(s => ({ value: s.id!, label: s.name }))" />
       </Field>
       <p v-if="submitErr" class="err" role="alert">{{ submitErr }}</p>
     </form>

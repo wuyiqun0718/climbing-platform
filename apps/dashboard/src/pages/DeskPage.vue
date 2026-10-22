@@ -7,7 +7,7 @@
  * 右侧实时入场列表（任务 38）：增量轮询 GET /desk/feed（deskFeed.ts），首次入场的高亮，提醒前台讲安全须知；撤销的从列表去掉。
  */
 import { ApiError } from '@climb/api';
-import { errorText, UiButton } from '@climb/ui-web';
+import { errorText, UiButton, UiSelect } from '@climb/ui-web';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { api, deskApi, deskDevice } from '../api';
 import { canDo, canSeeStore } from '../permissions';
@@ -86,10 +86,7 @@ const unbound = computed(() => display.value.kind === 'unbound' || (state.value.
       </template>
       <p v-else-if="!canBind">只有店长以上能绑定前台平板。</p>
       <form v-else class="row" @submit.prevent="bind">
-        <select v-model="storeId" aria-label="门店">
-          <option value="" disabled>选门店</option>
-          <option v-for="st in stores" :key="st.id" :value="st.id">{{ st.name }}</option>
-        </select>
+        <UiSelect v-model="storeId" aria-label="门店" placeholder="选门店" :options="stores.map(st => ({ value: st.id, label: st.name }))" />
         <UiButton variant="primary" type="submit" :disabled="binding || !storeId">{{ binding ? '绑定中…' : '绑定这家店' }}</UiButton>
       </form>
       <p v-if="bindErr" class="warn" role="alert">{{ bindErr }}</p>
@@ -155,7 +152,6 @@ h1 { margin: 0; font-family: var(--font-display); font-size: 40px; font-weight: 
 .count { margin: 0; font-family: var(--font-number); font-size: 28px; }
 .offline { max-width: 520px; padding: 32px; background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
 .row { display: flex; gap: 8px; }
-.row select { padding: 6px 10px; font: inherit; }
 .btn { padding: 8px 16px; font: inherit; font-weight: 600; color: var(--on-brand); text-decoration: none; background: var(--brand); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); }
 .warn { margin: 0; padding: 8px 12px; background: var(--accent-soft); border-radius: var(--radius-sm); }
 </style>

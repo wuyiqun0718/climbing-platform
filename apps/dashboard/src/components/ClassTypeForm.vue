@@ -5,8 +5,8 @@
  * 默认教练从教练列表选（GET /admin/coaches，在用、有教练资料的员工），列表里没有的只显示现在的。
  */
 import { classTypePatchErrors, newClassTypeErrors, type ClassType, type ClassTypeErrors, type ClassTypeInput, type ClassTypePatch } from '@climb/core';
-import { Field, Modal, errorText, UiButton } from '@climb/ui-web';
-import { reactive, ref, useId, watch } from 'vue';
+import { Field, Modal, errorText, UiButton, UiSelect } from '@climb/ui-web';
+import { computed, reactive, ref, useId, watch } from 'vue';
 import { api } from '../api';
 import { badField } from './memberForm';
 
@@ -18,6 +18,12 @@ const form = reactive({ name: '', minutes: '', capacity: '', credits: '1', coach
 const errs = ref<ClassTypeErrors>({});
 const err = ref('');
 const busy = ref(false);
+// 现在的教练不在列表里（停用了）也留着显示
+const coachOptions = computed(() => [
+  { value: '', label: '不指定' },
+  ...props.coaches.map(c => ({ value: c.id, label: c.name })),
+  ...(form.coachId && !props.coaches.some(c => c.id === form.coachId) ? [{ value: form.coachId, label: form.coachId }] : []),
+]);
 
 watch(
   () => props.open,
@@ -80,11 +86,7 @@ async function submit() {
         <input v-model="form.credits" v-bind="f.attrs" type="number" min="1" step="1" :disabled="busy" />
       </Field>
       <Field label="默认教练" :error="errs.coachId" v-slot="f">
-        <select v-model="form.coachId" v-bind="f.attrs" :disabled="busy">
-          <option value="">不指定</option>
-          <option v-for="c in coaches" :key="c.id" :value="c.id">{{ c.name }}</option>
-          <option v-if="form.coachId && !coaches.some(c => c.id === form.coachId)" :value="form.coachId">{{ form.coachId }}</option>
-        </select>
+        <UiSelect v-model="form.coachId" v-bind="f.attrs" :disabled="busy" :options="coachOptions" />
       </Field>
       <p v-if="err" class="err" role="alert">{{ err }}</p>
     </form>
@@ -97,7 +99,7 @@ async function submit() {
 
 <style scoped>
 .form { display: grid; gap: 14px; }
-.form input, .form select { font: inherit; }
+.form input { font: inherit; }
 .note { margin: 0; font-size: 13px; color: var(--ink-muted); }
 .err { margin: 0; padding: 9px 12px; font-size: 13px; background: var(--accent-soft); border-radius: var(--radius-sm); }
 </style>
