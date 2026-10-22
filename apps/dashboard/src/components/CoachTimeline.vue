@@ -96,7 +96,7 @@ function label(s: AdminPtSlot): string {
 <template>
   <Tabs class="days" variant="chips" label="日期" :options="dayOptions" :model-value="day" @update:model-value="v => (day = v)" />
   <p v-if="error" class="err" role="alert">{{ error }}<UiButton variant="link" class="retry" @click="load">重试</UiButton></p>
-  <p v-else-if="loading && !data" class="muted">加载中…</p>
+  <p v-else-if="loading && !data" class="muted wait">加载中…</p>
   <p v-else-if="data && !rows.length" class="muted">这家店还没有接私教的教练（在「员工」里给员工勾上「是教练」）</p>
   <div v-else-if="data" class="grid" :style="{ gridTemplateColumns: `120px repeat(${data.hours.length}, minmax(64px, 1fr))` }">
     <div class="head" />
@@ -173,5 +173,7 @@ function label(s: AdminPtSlot): string {
 .legend .cell:not(.member) { color: var(--ink); }
 .retry { margin-left: 8px; }
 .muted { font-size: 13px; color: var(--ink-muted); }
+/* 第一次加载占住日期条 + 两位教练的高度，数据回来下面的图例和团课规则不跳 */
+.muted.wait { display: grid; place-items: center; min-height: 116px; margin: 0; }
 .err { padding: 9px 12px; font-size: 13px; background: var(--accent-soft); border-radius: var(--radius-sm); }
 </style>

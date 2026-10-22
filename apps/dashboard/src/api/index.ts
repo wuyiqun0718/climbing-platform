@@ -29,13 +29,46 @@ export function withUnauthorizedHook(adapter: RequestAdapter, cb: () => void): R
   };
 }
 
+/**
+ * 走查用的故障开关（只在本地开发时有）：改 window.__climbMock.fault，之后的请求按它出错。
+ * network：像断网一样抛 TypeError；server：返回 500 没有说明；empty：GET 列表返回空的；delayMs：再慢这么多毫秒。
+ * match 给了就只影响 url 里带它的请求（比如 '/admin/members'），登录请求不受影响。
+ */
+export interface MockFault {
+  mode?: 'network' | 'server' | 'empty' | null;
+  delayMs?: number;
+  match?: string;
+}
+
+/** 列表接口变成空的：数组 → []，分页 → 0 条 */
+const emptied = (data: unknown): unknown => {
+  if (Array.isArray(data)) return [];
+  if (data && typeof data === 'object' && Array.isArray((data as { items?: unknown }).items)) return { ...data, items: [], total: 0 };
+  return data;
+};
+
+export function withMockFault(adapter: RequestAdapter, fault: () => MockFault): RequestAdapter {
+  return async req => {
+    const f = fault();
+    if (!f.mode && !f.delayMs) return adapter(req);
+    if (req.url.endsWith('/admin/auth/login') || (f.match && !req.url.includes(f.match))) return adapter(req);
+    if (f.delayMs) await new Promise(r => setTimeout(r, f.delayMs));
+    if (f.mode === 'network') throw new TypeError('Failed to fetch');
+    if (f.mode === 'server') return { status: 500, data: null };
+    const res = await adapter(req);
+    return f.mode === 'empty' && req.method === 'GET' && res.status < 400 ? { ...res, data: emptied(res.data) } : res;
+  };
+}
+
 function mockAdapter(): RequestAdapter {
   const db = createMockDb(toDateKey(new Date()), gym.rules);
   db.entryQrLink = gym.entryQrLink;
   const adapter = createMockAdapter(db, { delayMs: 200 });
-  // 本地开发时挂到 window，走查脚本可以模拟「会员扫平板上的码」（POST /check-ins 带 X-Mock-Member），打包后没有
-  if (import.meta.env.DEV) (globalThis as { __climbMock?: unknown }).__climbMock = { db, adapter };
-  return adapter;
+  if (!import.meta.env.DEV) return adapter;
+  // 本地开发时挂到 window，走查脚本可以模拟「会员扫平板上的码」（POST /check-ins 带 X-Mock-Member）、断网和出错，打包后没有
+  const mock: { db: typeof db; adapter: RequestAdapter; fault: MockFault } = { db, adapter, fault: {} };
+  (globalThis as { __climbMock?: unknown }).__climbMock = mock;
+  return withMockFault(adapter, () => mock.fault);
 }
 
 /** 后台和前台平板共用一个 adapter（mock 时是同一份数据） */

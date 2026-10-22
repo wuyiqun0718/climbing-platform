@@ -89,7 +89,7 @@ function onOrdered(r: DeskOrderResult, memberId: string) {
   openMember(memberId);
 }
 
-const emptyText = () => (qFromRoute() ? `没找到「${qFromRoute()}」，换个手机号或名字试试` : '还没有会员');
+const emptyText = () => (qFromRoute() ? `没找到「${qFromRoute()}」，换个手机号或名字试试` : '还没有会员。会员第一次在小程序登录，或者点「新建会员」建档后会出现在这里');
 </script>
 
 <template>
@@ -125,6 +125,7 @@ const emptyText = () => (qFromRoute() ? `没找到「${qFromRoute()}」，换个
       row-key="id"
       :loading="loading"
       :empty="emptyText()"
+      :error="!!error"
       clickable
       @row-click="(r: MemberListRow) => openMember(r.id)"
     >

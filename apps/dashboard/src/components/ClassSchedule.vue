@@ -146,7 +146,7 @@ async function copyLastWeek() {
     </template>
   </div>
   <p v-if="error" class="state error" role="alert">{{ error }}<UiButton size="sm" @click="load">重试</UiButton></p>
-  <p v-else-if="loading && !data" class="state">加载中…</p>
+  <p v-else-if="loading && !data" class="state wait">加载中…</p>
   <section v-if="data" class="week" :class="{ loading }" :aria-busy="loading">
     <div v-for="d in days" :key="d.on" class="col">
       <div class="col-h" :class="{ today: d.on === today }">
@@ -221,6 +221,8 @@ async function copyLastWeek() {
 .form { display: grid; gap: 14px; }
 .off { margin: 0; font-size: 12px; color: var(--ink-muted); }
 .state { margin: 0 0 12px; font-size: 13px; color: var(--ink-muted); }
+/* 第一次加载占住一周课表大概的高度（表头 + 一张课卡），数据回来下面不跳 */
+.state.wait { display: grid; place-items: center; min-height: 174px; margin-bottom: 18px; }
 /* 七列装不下（窄屏）就整周横滑，列宽不再往下压 */
 .week { display: grid; grid-template-columns: repeat(7, minmax(126px, 1fr)); gap: 10px; min-width: 0; margin-bottom: 24px; padding-bottom: 4px; overflow-x: auto; transition: opacity 0.15s; }
 .week.loading { opacity: 0.55; }

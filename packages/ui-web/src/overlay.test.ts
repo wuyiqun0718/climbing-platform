@@ -82,6 +82,13 @@ describe('errorText', () => {
   it('没有 data.message 用 Error.message', () => {
     expect(errorText(new Error('请求失败（500）'))).toBe('请求失败（500）');
   });
+  it('断网、5xx、英文报错不原样给人看', () => {
+    expect(errorText(new TypeError('Failed to fetch'))).toBe('连不上服务器，检查一下网络再重试');
+    expect(errorText(new SyntaxError('Unexpected token <'))).toBe('连不上服务器，检查一下网络再重试');
+    expect(errorText(Object.assign(new Error('请求失败（502）'), { status: 502, data: null }))).toBe('服务器出了点问题，稍后再重试');
+    expect(errorText(Object.assign(new Error('请求失败（503）'), { status: 503, data: { message: '系统维护中' } }))).toBe('系统维护中');
+    expect(errorText(new Error('Cannot read properties of undefined'), '保存失败')).toBe('保存失败');
+  });
   it('兜底', () => {
     expect(errorText(null)).toBe('操作失败，请重试');
     expect(errorText({}, '保存失败')).toBe('保存失败');

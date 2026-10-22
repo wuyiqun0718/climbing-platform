@@ -28,7 +28,9 @@ function fill(r: FreezeRules) {
   unlimited.perYear = r.perYear === null;
 }
 
-onMounted(async () => {
+async function load() {
+  loading.value = true;
+  loadErr.value = '';
   try {
     fill(await api.settings.freezeRules());
   } catch (e) {
@@ -36,7 +38,8 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
-});
+}
+onMounted(load);
 
 // 输入框空着传 null 会被当成「不限」，所以空的传 undefined，让校验报错
 const num = (v: number | '') => (v === '' ? undefined : v);
@@ -74,7 +77,7 @@ async function submit() {
     <h2 class="h2">期限卡冻结</h2>
     <p class="sub">会员在小程序里自己冻结、前台帮会员冻结都按这里的规则。改了只影响以后的冻结。</p>
     <p v-if="loading" class="muted">加载中…</p>
-    <p v-else-if="loadErr" class="err" role="alert">{{ loadErr }}</p>
+    <p v-else-if="loadErr" class="err load-err" role="alert">{{ loadErr }}<UiButton size="sm" @click="load">重试</UiButton></p>
     <form v-else class="form" novalidate @submit.prevent="submit" @input="saved = false">
       <label class="check">
         <input v-model="form.memberSelfService" type="checkbox" />
@@ -120,5 +123,6 @@ async function submit() {
 .form input.short[type='number'] { width: 120px; }
 .check { display: inline-flex; flex: none; align-items: center; gap: 8px; font-size: 13.5px; white-space: nowrap; }
 .err { margin: 0; padding: 9px 12px; font-size: 13px; background: var(--accent-soft); border-radius: var(--radius-sm); }
+.load-err { display: flex; align-items: center; gap: 12px; }
 .actions { display: flex; align-items: center; gap: 12px; }
 </style>

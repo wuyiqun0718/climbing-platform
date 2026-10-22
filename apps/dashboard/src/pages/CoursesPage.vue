@@ -155,7 +155,7 @@ async function saveRules() {
     {{ error }}<UiButton size="sm" @click="load">重试</UiButton>
   </p>
   <section class="panel">
-    <DataTable :columns="columns" :rows="types" row-key="id" :loading="loading" empty="还没有团课课程" :clickable="canEdit" @row-click="(t: ClassType) => canEdit && openForm(t)">
+    <DataTable :columns="columns" :rows="types" row-key="id" :loading="loading" empty="还没有团课课程，点「新建团课课程」加一个，之后才能排课" :error="!!error" :clickable="canEdit" @row-click="(t: ClassType) => canEdit && openForm(t)">
       <template #cell-active="{ row }">
         <span class="status" :class="{ off: !row.active }">{{ row.active ? '启用' : '已停用' }}</span>
         <UiButton variant="link" v-if="canEdit" :disabled="toggling !== null" @click.stop="toggle(row)" @keydown.enter.stop>{{ row.active ? '停用' : '启用' }}</UiButton>

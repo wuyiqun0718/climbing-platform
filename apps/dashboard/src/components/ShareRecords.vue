@@ -72,6 +72,7 @@ const columns = computed<Column<ShareRow>[]>(() => [
       row-key="id"
       :loading="loading"
       empty="还没有分享"
+      :error="!!error"
       max-height="calc(100vh - 260px)"
       clickable
       @row-click="(r: ShareRow) => router.push({ name: 'member', params: { id: r.fromMemberId } })"

@@ -85,7 +85,7 @@ async function toggle(r: StaffRow) {
     {{ error }}<UiButton size="sm" @click="load">重试</UiButton>
   </p>
   <section class="panel">
-    <DataTable :columns="columns" :rows="rows" row-key="id" :loading="loading" empty="还没有员工" clickable @row-click="(r: StaffRow) => openForm(r)">
+    <DataTable :columns="columns" :rows="rows" row-key="id" :loading="loading" empty="还没有员工" :error="!!error" clickable @row-click="(r: StaffRow) => openForm(r)">
       <template #cell-active="{ row }">
         <span class="status" :class="{ off: !row.active }">{{ row.active ? '在用' : '已停用' }}</span>
         <UiButton variant="link" v-if="!isMe(row)" :disabled="toggling !== null" @click.stop="toggle(row)" @keydown.enter.stop>{{ row.active ? '停用' : '启用' }}</UiButton>

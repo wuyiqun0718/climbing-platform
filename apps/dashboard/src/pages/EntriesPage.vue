@@ -96,12 +96,13 @@ function onVoided() {
     <p v-if="error" class="state error" role="alert">
       {{ error }}<UiButton size="sm" @click="load">重试</UiButton>
     </p>
-    <template v-else-if="data">
+    <template v-else>
+      <!-- 第一次加载也先占好位置（数字写 —），数据回来不把下面的表格往下推 -->
       <section class="tiles" :class="{ loading }">
-        <StatTile hero label="入场" :value="live" unit="人次" :note="formatDot(data.date)" />
-        <StatTile label="扫码" :value="byMethod('scan')" unit="人次" note="会员扫前台平板的码" />
-        <StatTile label="前台登记" :value="byMethod('desk')" unit="人次" note="前台手动登记" />
-        <StatTile label="撤销" :value="voidedCount" unit="条" note="不算进入场人次" />
+        <StatTile hero label="入场" :value="data ? live : '—'" unit="人次" :note="formatDot(data?.date ?? date)" />
+        <StatTile label="扫码" :value="data ? byMethod('scan') : '—'" unit="人次" note="会员扫前台平板的码" />
+        <StatTile label="前台登记" :value="data ? byMethod('desk') : '—'" unit="人次" note="前台手动登记" />
+        <StatTile label="撤销" :value="data ? voidedCount : '—'" unit="条" note="不算进入场人次" />
       </section>
       <p v-if="live" class="ins">
         <b>这天入场的 {{ live }} 人次里，{{ insured }} 人次有当日保单</b>
@@ -115,6 +116,7 @@ function onVoided() {
         row-key="id"
         :loading="loading"
         empty="这天没有入场"
+        :error="!!error"
         clickable
         @row-click="(r: CheckInListRow) => router.push({ name: 'member', params: { id: r.memberId } })"
       >

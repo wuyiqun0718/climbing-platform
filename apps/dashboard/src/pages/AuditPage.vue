@@ -73,7 +73,7 @@ const columns = computed<Column<AuditLogRow>[]>(() => [
     {{ error }}<UiButton size="sm" @click="load">重试</UiButton>
   </p>
   <section class="panel">
-    <DataTable :columns="columns" :rows="data?.items ?? []" row-key="id" :loading="loading" empty="还没有操作记录" stack>
+    <DataTable :columns="columns" :rows="data?.items ?? []" row-key="id" :loading="loading" :empty="action ? '这类操作还没有记录' : '还没有操作记录。开卡、入场、退款、改卡种这些操作做了以后会记在这里'" :error="!!error" stack>
       <template #cell-change="{ row }">
         <pre class="change">{{ changeText(row) }}</pre>
       </template>

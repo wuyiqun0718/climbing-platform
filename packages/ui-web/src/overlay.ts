@@ -72,14 +72,22 @@ export function reasonError(reason: string, required = true): string {
   return '';
 }
 
+/** 断网、服务器出错时的说明（errorText 用，页面不用自己判断） */
+export const NETWORK_ERROR_TEXT = '连不上服务器，检查一下网络再重试';
+export const SERVER_ERROR_TEXT = '服务器出了点问题，稍后再重试';
+
 /**
- * 接口报错转成给人看的文字：先用后端返回的 data.message（ApiError 带的），
- * 再用 Error.message，都没有给个兜底。这里不引 @climb/api，按形状判断。
+ * 接口报错转成给人看的文字：先用后端返回的 data.message（ApiError 带的）；
+ * 5xx 没说明的写「服务器出了点问题」；fetch 断网（TypeError）、返回的不是 JSON（SyntaxError，比如网关错误页）写「连不上服务器」；
+ * 再用 Error.message（只用中文的，英文的技术报错不给员工看），都没有给个兜底。这里不引 @climb/api，按形状判断。
  */
 export function errorText(e: unknown, fallback = '操作失败，请重试'): string {
   const data = (e as { data?: { message?: unknown } } | null)?.data;
   if (typeof data?.message === 'string' && data.message) return data.message;
-  if (e instanceof Error && e.message) return e.message;
+  const status = (e as { status?: unknown } | null)?.status;
+  if (typeof status === 'number' && status >= 500) return SERVER_ERROR_TEXT;
+  if (e instanceof TypeError || e instanceof SyntaxError) return NETWORK_ERROR_TEXT;
+  if (e instanceof Error && /[\u4e00-\u9fff]/.test(e.message)) return e.message;
   if (typeof e === 'string' && e) return e;
   return fallback;
 }

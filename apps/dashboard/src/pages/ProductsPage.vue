@@ -92,6 +92,7 @@ async function toggle(p: Product) {
     {{ error }}<UiButton size="sm" @click="load">重试</UiButton>
   </p>
   <p v-else-if="loading && !products.length" class="state">加载中…</p>
+  <p v-else-if="!products.length" class="state empty">还没有卡种。{{ canCreate ? '点右上角「新建卡种」，建好上架后小程序和前台开卡就能选了' : '馆长建好卡种后会出现在这里' }}</p>
   <section v-for="g in groups" :key="g.section" class="panel">
     <h2>{{ SHOP_SECTION_LABELS[g.section] }}</h2>
     <DataTable plain :columns="columns" :rows="g.rows" row-key="id" :clickable="canEdit" @row-click="(p: Product) => canEdit && openForm(p)">
@@ -116,4 +117,5 @@ async function toggle(p: Product) {
 .status { margin-right: 10px; font-size: 13px; }
 .state { margin: 0 0 16px; font-size: 13px; color: var(--ink-muted); }
 .state.error { display: flex; align-items: center; gap: 12px; padding: 10px 14px; color: var(--ink); background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }
+.state.empty { padding: 32px 16px; text-align: center; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
 </style>

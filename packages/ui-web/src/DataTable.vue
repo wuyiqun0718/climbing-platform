@@ -23,8 +23,10 @@ const props = withDefaults(
     maxHeight?: string;
     /** 窄屏（≤ 900px）一行排成一张卡：每格「列名 值」上下排，不用横滑。给有长文字列、横滑看不到重点的表（操作日志、卡流水） */
     stack?: boolean;
+    /** 加载失败了（页面上已经有说明和重试）：没有数据时不显示空状态，免得看成「真的没有」 */
+    error?: boolean;
   }>(),
-  { loading: false, empty: '没有数据', clickable: false, plain: false, maxHeight: undefined, stack: false },
+  { loading: false, empty: '没有数据', clickable: false, plain: false, maxHeight: undefined, stack: false, error: false },
 );
 
 const emit = defineEmits<{ 'row-click': [row: T, index: number] }>();
@@ -82,6 +84,9 @@ function onRow(row: T, index: number) {
       <tbody>
         <tr v-if="loading && rows.length === 0" class="state">
           <td :colspan="columns.length">加载中…</td>
+        </tr>
+        <tr v-else-if="rows.length === 0 && error" class="state">
+          <td :colspan="columns.length">没加载出来，点上面的「重试」</td>
         </tr>
         <tr v-else-if="rows.length === 0" class="state">
           <td :colspan="columns.length"><slot name="empty">{{ empty }}</slot></td>
