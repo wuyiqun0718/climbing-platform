@@ -85,7 +85,8 @@ function logout() {
 nav { display: grid; gap: 4px; }
 .nav-item { padding: 10px 12px; border-radius: var(--radius-sm); color: var(--side-text); text-decoration: none; font-size: 14px; }
 .nav-item:hover { background: var(--side-hover); color: var(--surface); }
-.desk-link { margin-top: 8px; color: var(--side-muted); }
+/* relative：里面的 .sr-only 是绝对定位，不然窄屏横滑的导航里它会把整页撑宽 */
+.desk-link { position: relative; margin-top: 8px; color: var(--side-muted); }
 .nav-item.on { background: var(--brand); color: var(--on-brand); font-weight: 700; }
 .me { margin-top: auto; display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 8px; padding: 12px 8px 0; border-top: 1px solid var(--side-line); }
 .me-name { font-size: 14px; font-weight: 700; }
