@@ -5,7 +5,7 @@ import MemberCard from '@climb/ui-mp/MemberCard.vue';
 import Button from '@climb/ui-mp/Button.vue';
 import Empty from '@climb/ui-mp/Empty.vue';
 import Stepper from '@climb/ui-mp/Stepper.vue';
-import { formatDot, formatMonthDay, toDateKey } from '@climb/utils';
+import { formatDot, formatListDay, formatMonthDay, toDateKey } from '@climb/utils';
 import { onLoad } from '@dcloudio/uni-app';
 import { computed, ref } from 'vue';
 import { api, run } from '../../api';
@@ -103,7 +103,7 @@ const NOTE_REASONS: CardLedgerItem['reason'][] = ['freeze', 'unfreeze', 'adjust'
 
 const rows = computed(() => ledger.value.map(l => ({
   id: l.id,
-  date: l.on === today.value ? '今天' : formatMonthDay(l.on),
+  date: formatListDay(l.on, today.value),
   text: [LEDGER_REASON_LABELS[l.reason], l.storeName ?? (NOTE_REASONS.includes(l.reason) ? l.note : '')].filter(Boolean).join(' · '),
   delta: l.delta ? `${l.delta > 0 ? '+' : ''}${l.delta} 次` : '',
   neg: l.delta < 0,
@@ -178,7 +178,7 @@ const retry = async () => {
 .freeze-h { font-size: 15px; font-weight: 700; }
 .pick { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .pick-l { display: flex; flex-direction: column; gap: 2px; }
-.pick-s { font-size: 12px; line-height: 1.5; color: var(--ink-muted); }
+.pick-s { font-size: 12px; line-height: 1.6; color: var(--ink-muted); }
 .chips { display: flex; gap: 8px; }
 .chip { flex: 1; padding: 10px 0; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); background: var(--surface); text-align: center; font-size: 14px; font-weight: 600; }
 .chip.on { background: var(--brand); color: var(--on-brand); }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, addMonths, isDateKey, daysBetween, endOfMonth, formatDotTime, formatYuan, formatYuanCompact, maskPhone } from './index';
+import { addDays, addMonths, isDateKey, daysBetween, endOfMonth, formatDotTime, formatListDay, formatYuan, formatYuanCompact, maskPhone } from './index';
 
 describe('date', () => {
   it('合法日期：格式对且真实存在', () => {
@@ -17,6 +17,11 @@ describe('date', () => {
     expect(daysBetween('2026-10-12', '2026-10-31')).toBe(19);
     expect(addMonths('2026-10-12', 6)).toBe('2027-04-12');
   });
+  it('列表日期：今天写今天，其他几月几日', () => {
+    expect(formatListDay('2026-10-23', '2026-10-23')).toBe('今天');
+    expect(formatListDay('2026-10-02', '2026-10-23')).toBe('10月2日');
+  });
+
   it('ISO 时间按本地时区显示', () => {
     expect(formatDotTime(new Date(2026, 9, 12, 14, 5).toISOString())).toBe('2026.10.12 14:05');
   });
@@ -28,6 +33,15 @@ describe('money', () => {
     expect(formatYuan(59950)).toBe('¥599.50');
     expect(formatYuan(499900)).toBe('¥4,999');
     expect(formatYuanCompact(12_800_000)).toBe('12.8万');
+  });
+
+  it('千分位自己加，不靠 toLocaleString', () => {
+    expect(formatYuan(0)).toBe('¥0');
+    expect(formatYuan(5)).toBe('¥0.05');
+    expect(formatYuan(9_999_900)).toBe('¥99,999');
+    expect(formatYuan(123_456_789)).toBe('¥1,234,567.89');
+    expect(formatYuan(-1250)).toBe('-¥12.50');
+    expect(formatYuanCompact(999_900)).toBe('9,999');
   });
 });
 

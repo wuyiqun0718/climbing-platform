@@ -54,6 +54,11 @@ export function formatMonthDay(key: DateKey): string {
   return `${d.getMonth() + 1}月${d.getDate()}日`;
 }
 
+/** 列表里的哪一天（流水、保单、订单、邀请记录）：当天写「今天」，其他 10月12日。到期、有效期这类要看年份的用 formatDot */
+export function formatListDay(key: DateKey, today: DateKey): string {
+  return key === today ? '今天' : formatMonthDay(key);
+}
+
 /** 2026.10.12 */
 export function formatDot(key: DateKey): string {
   return key.replace(/-/g, '.');

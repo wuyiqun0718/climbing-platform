@@ -2,7 +2,7 @@
 import type { ClimbCalendar } from '@climb/api';
 import { daysOfMonth, shiftMonth, type MonthKey } from '@climb/core';
 import Empty from '@climb/ui-mp/Empty.vue';
-import { fromDateKey, monthOf, toDateKey } from '@climb/utils';
+import { formatListDay, fromDateKey, monthOf, toDateKey } from '@climb/utils';
 import { computed, ref } from 'vue';
 import { api, run } from '../../api';
 import { errorMessage } from '../../lib/errors';
@@ -78,7 +78,7 @@ const climbed = computed(() => [...byDay.value.values()]);
     </view>
 
     <view v-for="d in climbed" :key="d.on" class="row">
-      <text class="date">{{ Number(d.on.slice(5, 7)) }}月{{ Number(d.on.slice(8)) }}日</text>
+      <text class="date">{{ formatListDay(d.on, today) }}</text>
       <text class="stores">{{ d.stores.map(s => s.name).join('、') }}</text>
     </view>
     <LoadFailed v-if="failedThisMonth" :text="error" @retry="load" />

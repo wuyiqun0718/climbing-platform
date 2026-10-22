@@ -169,7 +169,7 @@ const goHome = () => uni.switchTab({ url: '/pages/index/index' });
 .avatar { flex-shrink: 0; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border: var(--stroke) solid var(--ink); border-radius: 46% 54% 40% 60% / 55% 45% 55% 45%; background: var(--brand); }
 .avatar-t { font-family: var(--font-number); font-size: 14px; font-weight: 700; color: var(--on-brand); }
 .who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.h { font-family: var(--font-display); font-size: 22px; line-height: 1.2; }
+.h { font-family: var(--font-display); font-size: 20px; line-height: 1.2; }
 .sub { font-size: 13px; color: var(--ink-muted); }
 .tag { flex-shrink: 0; padding: 2px 10px; border: var(--stroke) solid var(--ink); border-radius: 999px; background: var(--surface); font-size: 13px; font-weight: 600; }
 .body { padding: 12px 16px 32px; }

@@ -2,7 +2,7 @@
 import { isPayable, ORDER_CHANNEL_LABELS, ORDER_STATUS_LABELS, type Order } from '@climb/core';
 import Button from '@climb/ui-mp/Button.vue';
 import Empty from '@climb/ui-mp/Empty.vue';
-import { formatMonthDay, formatYuan, toDateKey } from '@climb/utils';
+import { formatListDay, formatYuan, toDateKey } from '@climb/utils';
 import { computed, ref } from 'vue';
 import { api, pay, run } from '../../api';
 import LoadFailed from '../../components/LoadFailed.vue';
@@ -43,7 +43,7 @@ const pad = (n: number) => String(n).padStart(2, '0');
 function timeText(iso: string) {
   const d = new Date(iso);
   const day = toDateKey(d);
-  return `${day === toDateKey(now.value) ? '今天' : formatMonthDay(day)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${formatListDay(day, toDateKey(now.value))} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 const rows = computed(() => orders.value.map(o => {

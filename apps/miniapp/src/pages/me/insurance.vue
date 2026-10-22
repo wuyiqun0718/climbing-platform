@@ -2,7 +2,7 @@
 import type { MyInsurance } from '@climb/api';
 import { POLICY_STATUS_TEXT, policyCheckInText, waiverStatusText } from '@climb/core';
 import Empty from '@climb/ui-mp/Empty.vue';
-import { formatDot, formatMonthDay, toDateKey } from '@climb/utils';
+import { formatDot, formatListDay, toDateKey } from '@climb/utils';
 import { computed, ref } from 'vue';
 import { api, run } from '../../api';
 import LoadFailed from '../../components/LoadFailed.vue';
@@ -33,7 +33,7 @@ useRequireLogin(load);
 
 const policies = computed(() => (data.value?.policies ?? []).map(p => ({
   id: p.id,
-  date: formatMonthDay(p.on),
+  date: formatListDay(p.on, toDateKey(new Date())),
   status: POLICY_STATUS_TEXT[p.status],
   off: p.status === 'refund_pending' || p.status === 'refunded' || p.status === 'failed',
   entries: p.checkIns.map(c => ({ id: c.id, text: `${c.storeName} · ${c.cardName}`, how: policyCheckInText(c) })),
@@ -58,7 +58,7 @@ const waiver = computed(() => {
       <view class="panel">
         <view class="row"><text class="k">现在这一版</text><text class="v">{{ waiver.status }}</text></view>
         <view v-for="s in waiver.signed" :key="s.id" class="row top">
-          <text class="k top-k">{{ s.text }}{{ s.current ? '' : '（旧版）' }}</text><text class="top-at">{{ s.at }} 签</text>
+          <text class="k top-k">{{ s.text }}{{ s.current ? '' : '（旧版）' }}</text><text class="top-at">{{ s.at }} 已签</text>
         </view>
         <template v-if="waiver.current">
           <text class="toggle" @tap="expanded = !expanded">{{ expanded ? '收起' : '告知书内容' }}</text>
@@ -85,7 +85,8 @@ const waiver = computed(() => {
 
 <style scoped>
 .page { padding: 12px 16px 32px; }
-.label { display: block; margin: 12px 0 8px; font-size: 13px; font-weight: 600; color: var(--ink-muted); }
+.label { display: block; margin: 18px 0 8px; font-family: var(--font-display); font-size: 20px; }
+.label:first-child { margin-top: 4px; }
 .panel { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; padding: 14px 16px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); background: var(--surface); }
 .row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .name { font-size: 16px; font-weight: 600; }

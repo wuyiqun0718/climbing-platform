@@ -108,6 +108,6 @@ const goShop = () => uni.navigateTo({ url: '/pages/shop/index?seg=count' });
 .p { font-size: 14px; line-height: 1.6; }
 .fine { font-size: 12px; line-height: 1.6; color: var(--ink-muted); }
 .share-title { display: block; font-size: 14px; color: var(--ink); }
-.share-path { display: block; margin-top: 8px; font-size: 12px; line-height: 1.5; color: var(--ink-muted); overflow-wrap: anywhere; }
+.share-path { display: block; margin-top: 8px; font-size: 12px; line-height: 1.6; color: var(--ink-muted); overflow-wrap: anywhere; }
 .center { text-align: center; }
 </style>

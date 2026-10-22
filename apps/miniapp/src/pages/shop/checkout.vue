@@ -147,7 +147,7 @@ async function submit() {
 .kv-row + .kv-row { border-top: 1px solid var(--line); }
 .k { flex-shrink: 0; color: var(--ink-muted); }
 .v-col { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
-.v { text-align: right; font-weight: 600; line-height: 1.5; }
+.v { text-align: right; font-weight: 600; line-height: 1.6; }
 .v-note { font-size: 12px; color: var(--ink-muted); }
 .fine { display: block; font-size: 12px; line-height: 1.6; color: var(--ink-muted); }
 .foot { position: fixed; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: space-between; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); border-top: var(--stroke) solid var(--ink); background: var(--surface); }

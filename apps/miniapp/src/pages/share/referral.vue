@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { MyReferrals, ReferralRecordView } from '@climb/api';
 import { SHARE_STATUS_TEXT } from '@climb/core';
-import { formatDot } from '@climb/utils';
+import { formatDot, formatListDay, toDateKey } from '@climb/utils';
 import gym from '@gym';
 import Button from '@climb/ui-mp/Button.vue';
 import { onShareAppMessage } from '@dcloudio/uni-app';
@@ -57,7 +57,7 @@ onShareAppMessage(() => message.value || { title: '一起来攀岩', path: '/pag
 const copyPath = () => sendToken.value && uni.setClipboardData({ data: claimPath(sendToken.value) });
 
 const recordText = (r: ReferralRecordView) => {
-  if (r.state === 'used') return `${r.claimerName} ${formatDot(r.usedOn!)} 来过了`;
+  if (r.state === 'used') return `${r.claimerName} ${formatListDay(r.usedOn!, toDateKey(new Date()))}来过了`;
   if (r.state === 'claimed') return `${r.claimerName} 领了，${formatDot(r.expiresOn)} 前有效`;
   return SHARE_STATUS_TEXT[r.state];
 };
@@ -99,7 +99,7 @@ const goShop = () => uni.navigateTo({ url: '/pages/shop/index?seg=period' });
       <text class="h2">已发记录</text>
       <text v-if="!data.records.length" class="fine">还没发过</text>
       <view v-for="r in data.records" :key="r.token" class="row">
-        <text class="date">{{ formatDot(r.createdOn) }}</text>
+        <text class="date">{{ formatListDay(r.createdOn, toDateKey(new Date())) }}</text>
         <text class="state" :class="r.state">{{ recordText(r) }}</text>
       </view>
     </view>
@@ -112,12 +112,12 @@ const goShop = () => uni.navigateTo({ url: '/pages/shop/index?seg=period' });
 .box { margin-top: 16px; padding: 14px 12px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); background: var(--surface); display: flex; flex-direction: column; gap: 10px; }
 .board { margin-top: 16px; padding: 16px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); background: var(--accent); box-shadow: 0 4px 0 var(--ink); display: flex; flex-direction: column; gap: 10px; }
 .h { font-family: var(--font-display); font-size: 20px; }
-.h2 { font-size: 16px; font-weight: 600; }
+.h2 { font-size: 15px; font-weight: 700; }
 .p { font-size: 14px; line-height: 1.6; }
 .warn { color: var(--ink-muted); }
 .fine { font-size: 12px; line-height: 1.6; color: var(--ink-muted); }
 .share-title { display: block; font-size: 14px; color: var(--ink); }
-.share-path { display: block; margin-top: 8px; font-size: 12px; line-height: 1.5; color: var(--ink-muted); overflow-wrap: anywhere; }
+.share-path { display: block; margin-top: 8px; font-size: 12px; line-height: 1.6; color: var(--ink-muted); overflow-wrap: anywhere; }
 .quota { display: flex; flex-direction: column; align-items: center; }
 .num { font-family: var(--font-number); font-size: 40px; font-weight: 700; }
 .unit { font-size: 14px; margin-left: 4px; }

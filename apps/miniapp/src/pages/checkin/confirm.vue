@@ -279,6 +279,6 @@ const goShop = () => uni.navigateTo({ url: '/pages/shop/index' });
 .fine.center { margin-top: 8px; text-align: center; }
 .p.note { margin: 0 0 10px; line-height: 1.6; }
 .frozen { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding: 12px 14px; border: var(--stroke) dashed var(--ink); border-radius: var(--radius-md); }
-.frozen-t { flex: 1; font-size: 14px; line-height: 1.5; color: var(--ink); }
+.frozen-t { flex: 1; font-size: 14px; line-height: 1.6; color: var(--ink); }
 .act.block { margin-top: 10px; }
 </style>

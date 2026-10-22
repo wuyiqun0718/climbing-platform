@@ -288,5 +288,5 @@ const history = computed(() => mine.value.filter(b => b.status !== 'booked' && b
 .warn { color: var(--ink); }
 .row.cancelled { flex-direction: column; align-items: stretch; gap: 2px; }
 .c-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px; }
-.reason { font-size: 12px; line-height: 1.5; color: var(--ink-muted); }
+.reason { font-size: 12px; line-height: 1.6; color: var(--ink-muted); }
 </style>

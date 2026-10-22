@@ -81,5 +81,5 @@ function clear() {
 /* × 用两根线画，字符 × 在字体里偏下，圆里不居中 */
 .x::before, .x::after { content: ''; position: absolute; left: 4px; top: 8px; width: 10px; height: 2px; border-radius: 1px; background: var(--surface); transform: rotate(45deg); }
 .x::after { transform: rotate(-45deg); }
-.err { display: block; margin-top: 6px; font-size: 13px; font-weight: 600; line-height: 1.5; color: var(--ink); }
+.err { display: block; margin-top: 6px; font-size: 13px; font-weight: 600; line-height: 1.6; color: var(--ink); }
 </style>

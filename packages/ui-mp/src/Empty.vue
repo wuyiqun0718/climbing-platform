@@ -14,6 +14,6 @@ defineProps<{ title: string; text?: string }>();
 <style scoped>
 .empty { display: flex; flex-direction: column; align-items: center; padding: 48px 24px; text-align: center; }
 .title { font-family: var(--font-display); font-size: 22px; color: var(--ink); }
-.text { margin-top: 8px; font-size: 13px; line-height: 1.5; color: var(--ink-muted); }
+.text { margin-top: 8px; font-size: 13px; line-height: 1.6; color: var(--ink-muted); }
 .acts { margin-top: 16px; }
 </style>
