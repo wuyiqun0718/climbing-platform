@@ -153,4 +153,9 @@ tr.clickable { cursor: pointer; }
 tr.clickable:hover td, tr.clickable:focus-visible td { background: var(--brand-soft); }
 tr.clickable:focus-visible { outline: 3px solid var(--ink); outline-offset: -3px; }
 .state td { padding: 36px 14px; text-align: center; color: var(--ink-muted); }
+/* 触屏（平板前台）：能点的地方至少 44px，桌面鼠标不变 */
+@media (pointer: coarse) {
+  /* 行高 48：整行能点 */
+  td { padding-block: 14px; }
+}
 </style>

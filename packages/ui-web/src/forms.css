@@ -55,3 +55,8 @@ textarea:focus {
 input:is([type='checkbox'], [type='radio']):focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 55%, transparent); }
 input[type='radio']:checked:focus-visible { box-shadow: inset 0 0 0 3px var(--surface), inset 0 0 0 9px var(--brand-strong), 0 0 0 3px color-mix(in srgb, var(--brand) 55%, transparent); }
 :where(input[type='checkbox'], input[type='radio']):disabled { cursor: not-allowed; opacity: 0.45; }
+/* 触屏（平板前台）：输入框 44px；复选框、单选框的点击区是整个 label，至少 44px 高 */
+@media (pointer: coarse) {
+  :where(input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color'], [type='hidden']), input.input-sm) { height: 44px; }
+  label:has(> input[type='checkbox']), label:has(> input[type='radio']) { min-height: 44px; }
+}

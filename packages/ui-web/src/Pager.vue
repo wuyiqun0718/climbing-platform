@@ -64,4 +64,8 @@ function go(p: number) {
 .btn:disabled { cursor: default; opacity: 0.45; }
 .btn.on:disabled { opacity: 1; }
 .gap { padding: 0 4px; color: var(--ink-muted); }
+/* 触屏（平板前台）：能点的地方至少 44px，桌面鼠标不变 */
+@media (pointer: coarse) {
+  .btn { min-width: 44px; height: 44px; }
+}
 </style>

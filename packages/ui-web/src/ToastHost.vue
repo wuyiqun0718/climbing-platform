@@ -74,4 +74,12 @@ const ICON = { success: '✓', error: '!', info: 'i' } as const;
 .text { flex: 1; }
 .x { width: 28px; height: 28px; font-size: 18px; color: var(--ink-muted); background: none; border: 0; border-radius: var(--radius-sm); cursor: pointer; }
 .x:hover { color: var(--ink); }
+/* 窄屏（平板竖屏、手机）上面是顶栏导航，提示放到底部，不挡导航 */
+@media (max-width: 900px) {
+  .host { top: auto; bottom: 16px; }
+}
+/* 触屏（平板前台）：能点的地方至少 44px，桌面鼠标不变 */
+@media (pointer: coarse) {
+  .x { width: 44px; height: 44px; margin: -8px -6px -8px 0; }
+}
 </style>

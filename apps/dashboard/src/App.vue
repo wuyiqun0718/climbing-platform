@@ -137,4 +137,9 @@ nav { display: grid; gap: 4px; }
   nav { order: 1; flex-basis: 100%; }
   .me { margin-left: auto; }
 }
+/* 触屏（平板前台）：能点的地方至少 44px，桌面鼠标不变 */
+@media (pointer: coarse) {
+  .nav-item { min-height: 44px; }
+  .logout { min-height: 44px; padding: 0 14px; }
+}
 </style>

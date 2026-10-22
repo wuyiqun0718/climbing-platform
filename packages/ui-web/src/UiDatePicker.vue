@@ -55,8 +55,8 @@ async function show() {
   today.value = todayKey();
   active.value = clampDate(valid.value ? props.modelValue : today.value, props.min, props.max);
   const r = root.value?.getBoundingClientRect();
-  // 月历约 330px 高：下面放不下、上面更宽就往上开
-  up.value = !!r && window.innerHeight - r.bottom < 340 && r.top > window.innerHeight - r.bottom;
+  // 月历约 330px 高（触屏放大后约 390px）：下面放不下、上面更宽就往上开
+  up.value = !!r && window.innerHeight - r.bottom < 400 && r.top > window.innerHeight - r.bottom;
   alignEnd.value = false;
   open.value = true;
   await nextTick();
@@ -258,4 +258,12 @@ onBeforeUnmount(() => {
 .foot { display: flex; justify-content: flex-end; margin-top: 4px; }
 .today-btn { padding: 4px 8px; font: inherit; font-size: 13px; font-weight: 700; color: var(--ink); text-decoration: underline; background: none; border: 0; cursor: pointer; }
 .today-btn:disabled { color: var(--ink-muted); text-decoration: none; cursor: default; }
+/* 触屏（平板前台）：能点的地方至少 44px，桌面鼠标不变 */
+@media (pointer: coarse) {
+  .ui-date-trigger, .sm .ui-date-trigger { min-height: 44px; }
+  .pop { width: 336px; }
+  .nav { width: 44px; height: 44px; }
+  .grid td { height: 44px; }
+  .today-btn { min-height: 44px; padding: 0 12px; }
+}
 </style>

@@ -156,4 +156,8 @@ onBeforeUnmount(deactivate);
 .body { padding: 16px 20px; }
 .body.busy { pointer-events: none; opacity: 0.7; }
 .foot { display: flex; justify-content: flex-end; gap: 8px; padding: 0 20px 18px; }
+/* 触屏（平板前台）：能点的地方至少 44px，桌面鼠标不变 */
+@media (pointer: coarse) {
+  .x { width: 44px; height: 44px; margin: -6px -10px -6px 0; }
+}
 </style>

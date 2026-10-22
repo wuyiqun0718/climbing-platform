@@ -277,4 +277,8 @@ h2 { margin: 22px 0 10px; font-family: var(--font-display); font-size: 22px; fon
 .name { font-family: var(--font-display); font-size: 20px; font-weight: 400; }
 .value b { font-family: var(--font-number); font-size: 26px; }
 .cards small { font-size: 12px; color: var(--ink-muted); }
+/* 触屏（平板前台）：能点的地方至少 44px，桌面鼠标不变 */
+@media (pointer: coarse) {
+  .back { min-height: 44px; }
+}
 </style>

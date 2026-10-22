@@ -231,4 +231,9 @@ onBeforeUnmount(() => {
 .list li.selected { font-weight: 700; }
 .list li.selected::after { content: '✓'; margin-left: auto; }
 .list li.disabled { color: var(--ink-muted); cursor: default; }
+/* 触屏（平板前台）：能点的地方至少 44px，桌面鼠标不变 */
+@media (pointer: coarse) {
+  .ui-select-trigger, .sm .ui-select-trigger { min-height: 44px; }
+  .list li, .sm .list li { min-height: 44px; }
+}
 </style>

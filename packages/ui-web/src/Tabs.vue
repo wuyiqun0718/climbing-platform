@@ -83,4 +83,9 @@ async function onKeydown(e: KeyboardEvent, i: number) {
 }
 .chips button:hover:not(.on) { background: var(--neutral-soft); }
 .chips button.on { color: var(--surface); background: var(--ink); }
+/* 触屏（平板前台）：能点的地方至少 44px，桌面鼠标不变 */
+@media (pointer: coarse) {
+  .tabs button { min-height: 44px; }
+  .chips button { min-height: 44px; }
+}
 </style>

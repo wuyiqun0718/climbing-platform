@@ -44,4 +44,9 @@ withDefaults(
 .ui-btn.primary.danger { color: var(--surface); background: var(--ink); }
 .ui-btn.link { min-height: 0; padding: 0; font-size: 13px; font-weight: 700; text-decoration: underline; background: none; border: 0; border-radius: 0; }
 .ui-btn:disabled { cursor: default; opacity: 0.5; }
+/* 触屏（平板前台）：能点的地方至少 44px，桌面鼠标不变 */
+@media (pointer: coarse) {
+  .ui-btn, .ui-btn.sm { min-height: 44px; }
+  .ui-btn.link { min-width: 44px; min-height: 44px; padding: 0 6px; }
+}
 </style>
