@@ -12,6 +12,7 @@ export { default as ConfirmButton } from './ConfirmButton.vue';
 export { default as UiButton } from './UiButton.vue';
 export { default as Tabs } from './Tabs.vue';
 export { default as UiSelect } from './UiSelect.vue';
+export { default as UiDatePicker } from './UiDatePicker.vue';
 export type { SelectOption } from './select';
 export { useToast, createToaster, TOAST_DURATION } from './toast';
 export type { Toaster, ToastItem, ToastKind } from './toast';

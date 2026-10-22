@@ -5,7 +5,7 @@
  */
 import { ApiError, type DeskFreezeOptions } from '@climb/api';
 import { FREEZE_OVERRIDE_TEXT, type Card, type FreezeOverridable } from '@climb/core';
-import { Field, Modal, errorText, reasonError, UiButton } from '@climb/ui-web';
+import { Field, Modal, errorText, reasonError, UiButton, UiDatePicker } from '@climb/ui-web';
 import { formatDot } from '@climb/utils';
 import { computed, ref, useId, watch } from 'vue';
 import { api } from '../api';
@@ -123,7 +123,7 @@ function submit() {
           <input v-model="remaining" v-bind="f.attrs" type="number" min="0" step="1" :disabled="busy" />
         </Field>
         <Field label="到期日" hint="期限卡改了到期日，后面续的卡跟着挪" v-slot="f">
-          <input v-model="expiresOn" v-bind="f.attrs" type="date" :disabled="busy" />
+          <UiDatePicker v-model="expiresOn" v-bind="f.attrs" :disabled="busy" />
         </Field>
         <Field label="原因" required :error="reasonErr" v-slot="f">
           <textarea v-model="reason" v-bind="f.attrs" rows="2" :disabled="busy" />

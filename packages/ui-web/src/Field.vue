@@ -54,5 +54,6 @@ defineSlots<{ default(props: { id: string; attrs: typeof attrs.value }): unknown
 /* 输入框的边框、高度、聚焦圈在 forms.css，这里只让它们占满一行 */
 .field :slotted(input),
 .field :slotted(textarea),
-.field :slotted(.ui-select) { display: block; width: 100%; }
+.field :slotted(.ui-select),
+.field :slotted(.ui-date) { display: block; width: 100%; }
 </style>

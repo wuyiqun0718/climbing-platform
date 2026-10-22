@@ -5,7 +5,7 @@
  * 「分享」tab 是分享记录（任务 21，components/ShareRecords.vue）；选的 tab 放在地址的 ?tab=shares 里。
  */
 import { ENTRY_METHOD_TEXT, type CheckInList, type CheckInListRow, type VoidCheckInResult } from '@climb/api';
-import { ConfirmButton, DataTable, StatTile, errorText, useToast, type Column, Tabs, UiButton } from '@climb/ui-web';
+import { ConfirmButton, DataTable, StatTile, errorText, useToast, type Column, Tabs, UiButton, UiDatePicker } from '@climb/ui-web';
 import { formatDot, isDateKey, toDateKey } from '@climb/utils';
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
@@ -86,7 +86,7 @@ function onVoided() {
       <p>{{ tab === 'entries' ? '扫码和前台登记的都在这里；点一行看会员' : '次卡转赠和老带新邀请，按发起人的归属门店；点一行看发起人' }}</p>
     </div>
     <div v-if="tab === 'entries'" class="tools">
-      <label class="date">日期 <input v-model="date" class="input-sm" type="date" :max="toDateKey(new Date())" /></label>
+      <span class="date"><span aria-hidden="true">日期</span><UiDatePicker v-model="date" size="sm" aria-label="日期" :max="toDateKey(new Date())" /></span>
       <ExportButton kind="check-ins" :filters="{ date, ...(session.state.storeId ? { store: session.state.storeId } : {}) }" :disabled="!isDateKey(date)" />
     </div>
   </header>

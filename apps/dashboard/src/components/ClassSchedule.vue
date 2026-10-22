@@ -5,7 +5,7 @@
  */
 import type { AdminClassRow, ClassWeek } from '@climb/api';
 import { weekStartOf, type ClassType } from '@climb/core';
-import { ConfirmButton, Field, Modal, errorText, useToast, UiButton, UiSelect } from '@climb/ui-web';
+import { ConfirmButton, Field, Modal, errorText, useToast, UiButton, UiSelect, UiDatePicker } from '@climb/ui-web';
 import { addDays, formatDot, toDateKey, weekdayOf } from '@climb/utils';
 import { computed, reactive, ref, useId, watch } from 'vue';
 import { api } from '../api';
@@ -194,7 +194,7 @@ async function copyLastWeek() {
           <UiSelect v-model="form.storeId" v-bind="f.attrs" :disabled="busy" :options="session.state.stores.map(st => ({ value: st.id, label: st.name }))" />
         </Field>
       </template>
-      <Field label="日期" required v-slot="f"><input v-model="form.on" v-bind="f.attrs" type="date" :disabled="busy" /></Field>
+      <Field label="日期" required v-slot="f"><UiDatePicker v-model="form.on" v-bind="f.attrs" :disabled="busy" /></Field>
       <Field label="开始时间" required v-slot="f"><input v-model="form.startTime" v-bind="f.attrs" type="time" :disabled="busy" /></Field>
       <Field label="人数上限" :hint="editing ? '不能少于已约的人数；调大了候补自动补上' : '不填用课程的默认'" v-slot="f">
         <input v-model="form.capacity" v-bind="f.attrs" type="number" min="1" step="1" :disabled="busy" />
