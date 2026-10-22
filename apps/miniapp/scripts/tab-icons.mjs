@@ -1,11 +1,12 @@
 // 底部 tab 图标：按岩馆主题色画成 png（小程序 tabBar 只认图片，用不了 CSS 变量）。
-// 未选中是正文色描边；选中落在品牌色圆底上，描边用品牌底上的文字色。由 prepare-gym 调用，写进 src/static/gym/。
+// 未选中是正文色描边；选中落在品牌色胶囊底上（照原型），描边用品牌底上的文字色。由 prepare-gym 调用，写进 src/static/gym/。
+// tabBar 的图标位是正方形，胶囊画在正方形里：横向占满、上下留白，线稿缩小一点放在中间，选中前后大小不变。
 import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { deflateSync } from 'node:zlib';
 
 const SIZE = 48;
-const STROKE = 2.6;
+const STROKE = 3;
 /** 每个像素 4×4 采样算覆盖率，边缘不发毛 */
 const SS = 4;
 
@@ -25,6 +26,17 @@ const arc = (cx, cy, r, from, to, n = 24) => Array.from({ length: n }, (_, i) =>
   const a = from + ((to - from) * i) / n, b = from + ((to - from) * (i + 1)) / n;
   return seg(cx + r * Math.cos(a), cy + r * Math.sin(a), cx + r * Math.cos(b), cy + r * Math.sin(b));
 });
+
+/** 线稿缩放：以画布中心为原点缩到 k 倍，描边粗细不变 */
+const ICON_SCALE = 0.84;
+const scaled = d => (x, y) => d(24 + (x - 24) / ICON_SCALE, 24 + (y - 24) / ICON_SCALE) * ICON_SCALE;
+/** 胶囊底：左右顶到边，高 34 */
+const PILL = { x0: 0, x1: 48, y0: 7, y1: 41 };
+const inPill = (x, y) => {
+  const r = (PILL.y1 - PILL.y0) / 2, cy = (PILL.y0 + PILL.y1) / 2;
+  const cx = Math.min(Math.max(x, PILL.x0 + r), PILL.x1 - r);
+  return Math.hypot(x - cx, y - cy) <= r;
+};
 
 const ICONS = {
   home: [seg(12, 24, 24, 13), seg(24, 13, 36, 24), seg(15, 22, 15, 35), seg(15, 35, 33, 35), seg(33, 35, 33, 22), seg(21, 35, 21, 28), seg(21, 28, 27, 28), seg(27, 28, 27, 35)],
@@ -50,8 +62,8 @@ function coverage(test) {
 }
 
 function draw(shapes, fg, bg) {
-  const line = coverage((x, y) => shapes.some(d => d(x, y) <= STROKE / 2));
-  const disc = bg ? coverage((x, y) => Math.hypot(x - 24, y - 24) <= 22) : null;
+  const line = coverage((x, y) => shapes.some(d => scaled(d)(x, y) <= STROKE / 2));
+  const disc = bg ? coverage(inPill) : null;
   const px = Buffer.alloc(SIZE * SIZE * 4);
   for (let i = 0; i < SIZE * SIZE; i++) {
     const a1 = line[i], a0 = disc ? disc[i] : 0;

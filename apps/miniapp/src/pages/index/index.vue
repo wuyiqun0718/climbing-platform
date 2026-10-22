@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ClassSessionView } from '@climb/api';
-import { sessionStartsAt, summarizeCards } from '@climb/core';
+import { sessionStartsAt, summarizeCards, type ReferralStatus } from '@climb/core';
 import Button from '@climb/ui-mp/Button.vue';
 import { formatMonthDay, monthOf, toDateKey } from '@climb/utils';
 import { onLoad, onShow } from '@dcloudio/uni-app';
@@ -54,12 +54,29 @@ const quick = computed(() =>
   ].filter(q => q.show),
 );
 
+/**
+ * 老带新横条的一句话：用 /me/referrals 的当月名额（和卡包、老带新页同一个接口），写短一点，375 宽也是一行。
+ * 还没拉到或拉不到就写每月几位
+ */
+const referral = ref<ReferralStatus | null>(null);
+async function loadReferral() {
+  if (!gym.features.referral || !member.state.me) return void (referral.value = null);
+  referral.value = await api.me.referrals().then(r => r.status, () => null);
+}
+const referralText = computed(() => {
+  const r = referral.value;
+  if (r?.blockedBy === 'referral-card-frozen') return '期限卡冻结中，暂时不能带';
+  if (r?.blockedBy === 'referral-quota-used') return '这个月的名额用完了';
+  if (r && !r.blockedBy) return `本月还能免费带 ${r.left} 位朋友`;
+  return `每月能免费带 ${gym.rules.referralsPerMonth} 位朋友来爬`;
+});
+
 /** 底下的大块：期限卡会员看老带新，拿着体验券的看券，没卡的引导买卡 */
 const board = computed(() => {
   if (!me.value) return null;
   const s = summary.value;
   if (s.period && gym.features.referral) {
-    return { kind: 'referral' as const, title: '老带新', text: `期限卡会员每个月可以带 ${gym.rules.referralsPerMonth} 位新朋友免费来爬一次`, btn: '去邀请' };
+    return { kind: 'referral' as const, title: '老带新', text: referralText.value, btn: '去邀请' };
   }
   if (s.voucher) {
     const text = gym.rules.referralRequiresInviterSameDay ? '邀请你的朋友当天到馆扫码后，你就能免费入场' : '到馆扫码就能免费入场一次';
@@ -123,6 +140,7 @@ onShow(() => {
   member.ensureLoaded().catch(() => {});
   loadTodayClasses();
   loadEnteredToday();
+  member.ensureLoaded().then(loadReferral, () => {});
 });
 </script>
 

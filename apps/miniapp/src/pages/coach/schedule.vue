@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { CoachSchedule, CoachSlotView } from '@climb/api';
-import { addDays, toDateKey, weekdayOf } from '@climb/utils';
+import { addDays, formatMonthDay, toDateKey, weekdayOf } from '@climb/utils';
 import { computed, ref } from 'vue';
 import { api, run } from '../../api';
 import AskSheet from '../../components/AskSheet.vue';
@@ -37,6 +37,16 @@ useRequireLogin(async () => {
 
 const days = computed(() => Array.from({ length: 7 }, (_, i) => addDays(today.value, i)));
 const slots = computed(() => data.value?.days.find(d => d.on === day.value)?.slots ?? []);
+/** 某天有几节会员约的私教（待确认的也算） */
+const bookedOn = (on: string) => (data.value?.days.find(d => d.on === on)?.slots ?? []).filter(s => s.status === 'member' && s.booking).length;
+const dayBooked = computed(() => bookedOn(day.value));
+/** 信息条副标题：今天几节，下一节几点、谁 */
+const todayText = computed(() => {
+  const list = (data.value?.days.find(d => d.on === today.value)?.slots ?? []).filter(s => s.status === 'member' && s.booking);
+  if (!list.length) return '今天没有私教';
+  const next = list.find(s => !s.past);
+  return `今天 ${list.length} 节私教${next ? `，下一节 ${hh(next.hour)} ${next.booking!.memberName}` : '，都上完了'}`;
+});
 const dayLabel = (d: string) => (d === today.value ? '今天' : d === addDays(today.value, 1) ? '明天' : weekdayOf(d));
 const hh = (h: number) => `${String(h).padStart(2, '0')}:00`;
 
@@ -103,21 +113,34 @@ async function tap(s: CoachSlotView) {
   <view class="page">
     <view v-if="denied" class="empty">这一页只有教练能看</view>
     <template v-else-if="data">
-      <view class="head">
-        <text class="h">{{ data.coach.name }} 的排班</text>
-        <text v-if="data.needConfirm && data.pendingCount" class="fine">有 {{ data.pendingCount }} 节等你确认</text>
-        <text class="fine">点空闲的时段占上（线下约的、有事），会员那边马上约不了。</text>
-      </view>
-      <view class="days">
-        <view v-for="d in days" :key="d" class="day" :class="{ on: d === day }" role="button" :aria-pressed="d === day" :aria-label="`${dayLabel(d)} ${Number(d.slice(8))} 号`" @tap="day = d">
-          <text class="dl">{{ dayLabel(d) }}</text>
-          <text class="dn">{{ Number(d.slice(8)) }}</text>
+      <!-- 顶部教练信息条，照原型：头像、名字、今天几节和下一节 -->
+      <view class="coach">
+        <view class="avatar"><text class="avatar-t">{{ data.coach.name.slice(0, 3) }}</text></view>
+        <view class="who">
+          <text class="h">{{ data.coach.name }} 教练</text>
+          <text class="sub">{{ todayText }}</text>
         </view>
+        <text class="tag">教练</text>
       </view>
-      <view v-for="s in slots" :key="s.hour" class="row" :class="[s.status, { past: s.past }]" :role="s.past ? undefined : 'button'" @tap="tap(s)">
-        <text class="time">{{ hh(s.hour) }}</text>
-        <text class="what">{{ slotText(s) }}</text>
-        <text v-if="slotHint(s)" class="act-hint">{{ slotHint(s) }}</text>
+      <view class="body">
+        <text v-if="data.needConfirm && data.pendingCount" class="pending">有 {{ data.pendingCount }} 节等你确认</text>
+        <view class="days">
+          <view v-for="d in days" :key="d" class="day" :class="{ on: d === day }" role="button" :aria-pressed="d === day" :aria-label="`${dayLabel(d)} ${Number(d.slice(8))} 号`" @tap="day = d">
+            <text class="dl">{{ dayLabel(d) }}</text>
+            <text class="dn">{{ Number(d.slice(8)) }}</text>
+          </view>
+        </view>
+        <view class="day-h">
+          <text class="day-t">{{ dayLabel(day) }}（{{ formatMonthDay(day) }}）</text>
+          <text class="day-n">{{ dayBooked ? `${dayBooked} 节` : '没有私教' }}</text>
+        </view>
+        <view v-for="s in slots" :key="s.hour" class="slot" :class="{ past: s.past }" :role="s.past ? undefined : 'button'" @tap="tap(s)">
+          <text class="time">{{ hh(s.hour) }}</text>
+          <view class="box" :class="s.status">
+            <text class="what">{{ slotText(s) }}</text>
+            <text v-if="slotHint(s)" class="act-hint">{{ slotHint(s) }}</text>
+          </view>
+        </view>
       </view>
     </template>
     <AskSheet />
@@ -125,24 +148,33 @@ async function tap(s: CoachSlotView) {
 </template>
 
 <style scoped>
-.page { padding: 12px 16px 32px; }
-.head { display: flex; flex-direction: column; gap: 4px; }
-.h { font-family: var(--font-display); font-size: 22px; }
-.fine { font-size: 12px; color: var(--ink-muted); }
-.days { display: flex; gap: 6px; margin: 12px 0; }
+.coach { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: var(--stroke) solid var(--ink); background: var(--accent-soft); }
+.avatar { flex-shrink: 0; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border: var(--stroke) solid var(--ink); border-radius: 46% 54% 40% 60% / 55% 45% 55% 45%; background: var(--brand); }
+.avatar-t { font-family: var(--font-number); font-size: 14px; font-weight: 700; color: var(--on-brand); }
+.who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.h { font-family: var(--font-display); font-size: 22px; line-height: 1.2; }
+.sub { font-size: 13px; color: var(--ink-muted); }
+.tag { flex-shrink: 0; padding: 2px 10px; border: var(--stroke) solid var(--ink); border-radius: 999px; background: var(--surface); font-size: 13px; font-weight: 600; }
+.body { padding: 12px 16px 32px; }
+.pending { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 600; }
+.days { display: flex; gap: 6px; }
 .day { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 6px 0; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); background: var(--surface); }
 .day.on { background: var(--brand); color: var(--on-brand); }
 .dl { font-size: 11px; }
 .dn { font-family: var(--font-number); font-size: 16px; font-weight: 700; }
-.row { display: flex; align-items: center; gap: 12px; margin-top: 6px; padding: 10px 12px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); background: var(--surface); font-size: 14px; }
-.row.free { border-style: dashed; }
-.row.member { background: var(--brand-soft); }
-.row.offline { background: var(--accent-soft); }
-.row.off { background: var(--neutral); }
-.row.past { opacity: 0.5; }
-.time { font-family: var(--font-number); font-weight: 700; width: 52px; }
-.what { flex: 1; }
+.day-h { display: flex; align-items: baseline; justify-content: space-between; margin: 18px 0 6px; }
+.day-t { font-family: var(--font-display); font-size: 20px; }
+.day-n { font-size: 13px; color: var(--ink-muted); }
+.slot { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.slot.past { opacity: 0.5; }
+.time { flex-shrink: 0; width: 48px; font-family: var(--font-number); font-size: 14px; font-weight: 700; }
+.box { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; min-height: 44px; box-sizing: border-box; padding: 8px 12px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); background: var(--surface); font-size: 14px; }
+.box.free { border-style: dashed; }
+.box.free .what { font-weight: 600; }
+.box.member { background: var(--brand-soft); }
+.box.offline { background: var(--accent-soft); }
+.box.off { background: var(--neutral); }
+.what { flex: 1; min-width: 0; }
 .act-hint { flex-shrink: 0; font-size: 12px; color: var(--ink-muted); }
-.row.free .what { font-weight: 600; }
 .empty { padding: 80px 0; text-align: center; color: var(--ink-muted); }
 </style>

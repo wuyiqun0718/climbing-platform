@@ -16,6 +16,7 @@ export const ICONS = {
   users: svg("<circle cx='9' cy='8' r='3.5'/><path d='M2.5 20c0-3.5 2.9-5.5 6.5-5.5s6.5 2 6.5 5.5'/><path d='M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.8c2.1.7 3.5 2.5 3.5 5.2'/>"),
   dumbbell: svg("<path d='M7 7v10M17 7v10M4 9.5v5M20 9.5v5M7 12h10'/>"),
   chevron: svg("<path d='M9 5l7 7-7 7'/>"),
+  check: svg("<path d='M5 12.5l4.5 4.5L19 7.5'/>"),
   flag: svg("<path d='M5 21V3M5 4h12l-2.5 4L17 12H5'/>"),
 };
 

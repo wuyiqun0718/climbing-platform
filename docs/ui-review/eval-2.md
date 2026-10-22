@@ -73,11 +73,19 @@
 | 3-P2-2 | 扫码入场大按钮右边的箭头是「›」文字，比标题还粗，和左边图标不在一条线上 | `pages/index/index.vue` | 已修 0fe1426（eval3-polish）：换成 24px 线稿 chevron，跟扫码图标同一套 |
 | 3-P2-3 | 入场确认选中的卡，单选圆圈整个涂黑，像个黑点；原型是圆圈里一个实心点 | `pages/checkin/confirm.vue` `.radio` | 已修 0fe1426（eval3-polish） |
 | 3-P2-4 | 入场确认的保险一行没有图标，原型有盾牌 | `pages/checkin/confirm.vue` | 已修 0fe1426（eval3-polish）：用「我的」菜单里同一个 shield 图标 |
-| 3-P2-5 | 首页老带新横条副标题在 375 下折成两行（原型一行「这个月还能免费带 1 位新朋友来爬」） | `pages/index/index.vue` | 没改：要接 `/me/referrals` 拿名额，下一轮做 |
-| 3-P2-6 | 已签过告知书的会员，确认页看不到「已签过」那一行（原型有） | `pages/checkin/confirm.vue` | 没改：preview 接口签过时不返回版本信息，要接口带上才能写日期 |
-| 3-P2-7 | 教练排班没有原型的日期标题「明天（10月23日）· 2 节」和顶部教练信息条 | `pages/coach/schedule.vue` | 没改 |
-| 3-P2-8 | tab 栏选中态是图标外一个圆，原型是胶囊；tab 数量 3 个（原型 4 个含「约课」，之前已定不加） | `pages.base.json`、`scripts/tab-icons.mjs` | 没改 |
+| 3-P2-5 | 首页老带新横条副标题在 375 下折成两行（原型一行「这个月还能免费带 1 位新朋友来爬」） | `pages/index/index.vue` | 已修（eval3-coach-tabs）：用现有的 `api.me.referrals()`（卡包、老带新页同一个接口）拿当月名额，写「本月还能免费带 N 位朋友」，冻结中、名额用完各一句，拉不到时写「每月能免费带 N 位朋友来爬」；375 下一行 |
+| 3-P2-6 | 已签过告知书的会员，确认页看不到「已签过」那一行（原型有） | `pages/checkin/confirm.vue` | 已修（eval3-coach-tabs），见下面「已签过告知书」 |
+| 3-P2-7 | 教练排班没有原型的日期标题「明天（10月23日）· 2 节」和顶部教练信息条 | `pages/coach/schedule.vue` | 已修（eval3-coach-tabs）：顶部信息条（头像、「Max 教练」、「今天 N 节私教，下一节 HH:00 某某」、教练标签），日期标题「明天（10月24日）」右边写「N 节 / 没有私教」，时间挪到格子左边一列；原来那句「点空闲的时段占上…」去掉（每格右边已经写了） |
+| 3-P2-8 | tab 栏选中态是图标外一个圆，原型是胶囊；tab 数量 3 个（原型 4 个含「约课」，之前已定不加） | `pages.base.json`、`scripts/tab-icons.mjs` | 部分修（eval3-coach-tabs）：选中态从圆底改成品牌色胶囊，图标线条加粗；见下面「tab 栏」 |
 | 3-P2-9 | 还有 22 处 `uni.showToast`（「已冻结」「约好了」这类短提示） | 各页 | 不换：微信里是系统黑底 toast，短提示用它没问题；自己做要每页放组件，收益小。picker、checkbox、radio、switch 已经没有了 |
+
+### 第三轮第二批补充
+
+**已签过告知书**：核实过，`POST /check-ins/preview` 在已签当前版本时 `waiver` 是 `null`（`packages/api` `CheckInPreview.waiver`、`mock/routes/checkins.ts`），不带签的是哪一版、哪天签的。没改接口：确认页在 `waiver` 为 null 时另调现有的 `GET /me/insurance`，取 `waiver.signed` 里 `current` 的那条，显示「✓《攀岩运动风险告知书》2026.08.22 已签过」；拉不到就不显示。代价是签过的人每次扫码多一个请求。要省掉这个请求，preview 签过时可以带 `waiverSigned: { title, version, signedAt }`，这要改 `packages/api` 和后台，记在待拍板 8。
+
+**tab 栏**：tabBar 是原生的，图标位是固定的正方形（H5 下 24px），只能把胶囊画进图标 PNG（`scripts/tab-icons.mjs`），所以胶囊比原型的小（约 24×17，原型约 44×22），线稿也跟着缩到 0.84 倍，描边从 2.6 加到 3，免得变细。要做到原型那么大，只能换成自定义 tabBar（小程序 `custom-tab-bar` + H5 各写一份），工作量不小，记在待拍板 9。390、375 截图：`after/eval3-coach-tabs/*-tabbar.png`。
+
+这一批没改 `packages/core`、`api`、`utils`。
 
 ### 375×667 小屏
 
@@ -94,3 +102,5 @@
 5. **前台撤销入场后，会员再打开那次的入场成功页**。接口 `GET /check-ins/:id` 不带撤销状态，页面照样显示「入场成功」。要不要接口加字段、页面显示「已被前台撤销」？
 6. **单次票入场时保险标签写「卡里含」**。单次票不是卡，写「票里含」更准；标签文案在 `@climb/core` entrySheet，后台也用。
 7. **确认订单的退款说明**：现在写「期限卡生效后不支持退款；次卡和课时包未使用部分可以在 7 天内申请退款。（占位，等馆方确认）」，括号里的占位会员能看到。要 BENCHMARK 给正式的退款规则，或者先把括号去掉？
+8. **入场预览带上签署信息**：preview 签过时 `waiver` 为 null，确认页「已签过」那行现在多调一次 `/me/insurance`。要不要让 preview 直接带 `waiverSigned: { title, version, signedAt }`（改 `packages/api` 和后台）？
+9. **tab 栏要不要换成自定义组件**：原生 tabBar 只能用正方形图片，胶囊只能画得比原型小。换自定义 tabBar 能完全照原型，但小程序和 H5 要各写一份，切 tab 时也要自己处理选中态。

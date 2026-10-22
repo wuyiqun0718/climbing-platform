@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ApiError, type CreateOrderResult, type EntryQrBody } from '@climb/api';
 import { entryBlockedText, entrySheet, pickEntryCard, type EntryOption, type EntrySheet, type WaiverVersion } from '@climb/core';
-import { formatDot, formatYuan } from '@climb/utils';
+import { formatDot, formatYuan, toDateKey } from '@climb/utils';
 import Button from '@climb/ui-mp/Button.vue';
 import { onLoad } from '@dcloudio/uni-app';
 import gym from '@gym';
@@ -64,14 +64,27 @@ async function loadPreview() {
     if (preview.waiver?.id !== waiver.value?.id) agreed.value = false;
     waiver.value = preview.waiver;
     status.value = 'ready';
+    loadSigned();
   } catch (e) {
     // 码过期、用过、不是本馆的：后端的原因翻成中文，让会员重新扫
     bad(errorMessage(e));
   }
 }
 
+/**
+ * 签过当前版本时 preview 的 waiver 是 null，不带签的是哪版、哪天签的；
+ * 「已签过」这行从 GET /me/insurance 的告知书记录里拿（保险与告知书页同一个接口），拿不到就不显示
+ */
+const signedLine = ref('');
+async function loadSigned() {
+  if (waiver.value) return void (signedLine.value = '');
+  const s = await api.me.insurance().then(r => r.waiver.signed.find(x => x.current), () => undefined);
+  signedLine.value = s ? `《${s.version.title.replace(/（.*）$/, '')}》${formatDot(toDateKey(new Date(s.signedAt)))} 已签过` : '';
+}
+
 const rescan = () => startScan('redirectTo');
 const shieldIcon = iconStyle('shield');
+const checkIcon = iconStyle('check');
 const pick = (cardId: string) => { if (sheet.value) selected.value = pickEntryCard({ options: sheet.value.options, selected: selected.value }, cardId); };
 
 function optionSub(o: EntryOption): string {
@@ -209,6 +222,10 @@ const goShop = () => uni.navigateTo({ url: '/pages/shop/index' });
       </view>
       <text class="fine">{{ sheet.insurance.note }}</text>
 
+      <view v-if="!waiver && signedLine" class="signed">
+        <view class="signed-ic" :style="checkIcon" />
+        <text class="signed-t">{{ signedLine }}</text>
+      </view>
       <template v-if="waiver">
         <text class="label">风险告知书</text>
         <WaiverAgree v-model="agreed" :waiver="waiver" />
@@ -244,6 +261,9 @@ const goShop = () => uni.navigateTo({ url: '/pages/shop/index' });
 .ins { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; }
 .ins-ic { flex-shrink: 0; width: 22px; height: 22px; background: var(--ink); mask-size: 100% 100%; -webkit-mask-size: 100% 100%; mask-repeat: no-repeat; -webkit-mask-repeat: no-repeat; }
 .ins-b { flex: 1; }
+.signed { display: flex; align-items: center; gap: 8px; margin: -6px 0 16px; }
+.signed-ic { flex-shrink: 0; width: 16px; height: 16px; background: var(--brand-strong); mask-size: 100% 100%; -webkit-mask-size: 100% 100%; mask-repeat: no-repeat; -webkit-mask-repeat: no-repeat; }
+.signed-t { font-size: 13px; color: var(--ink-muted); }
 .tag { padding: 2px 8px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; }
 .fine { display: block; margin-bottom: 16px; font-size: 12px; line-height: 1.6; color: var(--ink-muted); }
 .act { margin-top: 14px; }
