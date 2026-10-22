@@ -340,11 +340,15 @@
 
 ### 32. 日期、时间还是原生输入框
 
-> **已修** `f8aab78`（日期）。`ui-web/UiDatePicker.vue`：外观同 UiSelect（md 42px / sm 34px），自己画的月历（周一开头、今天加圈、选中黑底、min/max 外灰掉、「今天」快捷），键盘：方向键按天 / 周、PageUp / PageDown 换月、Home / End 到周一 / 周日、Enter 选、Esc 收起（弹窗里只收月历）。日期计算在 `datepicker.ts`，10 条单测；仓库没有 @vue/test-utils，组件本身的键盘和弹窗里 Esc 用 Playwright 走了一遍。替换了入场、财务（从 / 到）、加一节课、调整卡。**时间还是原生**：加一节课的「开始时间」`type="time"` 没换，下次做时间选择（可能就是 UiSelect 按 15 分钟一档）。截图 `before|after/eval4-datepicker/`（1280、390 各四张）。
+> **已修** `f8aab78`（日期）。`ui-web/UiDatePicker.vue`：外观同 UiSelect（md 42px / sm 34px），自己画的月历（周一开头、今天加圈、选中黑底、min/max 外灰掉、「今天」快捷），键盘：方向键按天 / 周、PageUp / PageDown 换月、Home / End 到周一 / 周日、Enter 选、Esc 收起（弹窗里只收月历）。日期计算在 `datepicker.ts`，10 条单测；仓库没有 @vue/test-utils，组件本身的键盘和弹窗里 Esc 用 Playwright 走了一遍。替换了入场、财务（从 / 到）、加一节课、调整卡。开始时间后来在 `acb1131` 换成了 UiSelect（营业时间内 15 分钟一档，BENCHMARK 是 10:00–22:45；已有课不在档上的时间也放进列表；默认值还是 19:00），档位在 `components/timeSlots.ts`，有单测。后台已经没有原生 date / time / select。截图 `before|after/eval4-datepicker/`（1280、390 各四张）。
 
 - 页面：入场、财务、加一节课、调整卡。
 - 问题：边框和高度已经统一（第 0 条），但点开是浏览器自己的日历，样式和 UiSelect 的列表不一样。
 - 建议：要写一个日期选择组件（键盘、读屏、最小最大日期），这轮不做，记下。
+
+### 390 宽弹窗里的弹层复查
+
+`acb1131`。390×844 把用到 UiSelect / UiDatePicker 的弹窗都打开，逐个点开下拉和月历，量弹层四边、看有没有被带滚动的祖先裁掉：新建会员（来源、建档门店）、收款开卡（卡种、收款方式、收款门店）、加一节课（课程、门店、日期、开始时间、教练）、新建团课课程（默认教练）、新建卡种（品类）、新增员工（角色）、登记入场（入场门店）、调整卡（到期日），共 8 个弹窗 15 个弹层，都在屏幕内、没有被裁，不用改。截图 `before|after/eval4-time/class-form-time-1280.png`、`class-form-time-390.png`。
 
 ### 33. 侧栏没有图标
 
