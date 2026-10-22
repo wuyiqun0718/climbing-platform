@@ -129,7 +129,7 @@ const emptyText = () => (qFromRoute() ? `没找到「${qFromRoute()}」，换个
       @row-click="(r: MemberListRow) => openMember(r.id)"
     >
       <template #cell-name="{ row }">
-        <span class="who"><span class="avatar" aria-hidden="true">{{ initial(row.name) }}</span>{{ row.name || '（没填）' }}</span>
+        <span class="who"><span class="avatar" aria-hidden="true">{{ initial(row.name) }}</span><span class="name" :title="row.name">{{ row.name || '（没填）' }}</span></span>
       </template>
       <template #cell-validCards="{ row }">
         <span :class="{ muted: !row.validCards }">{{ row.validCards ? `${row.validCards} 张` : '没有' }}</span>
@@ -168,6 +168,8 @@ const emptyText = () => (qFromRoute() ? `没找到「${qFromRoute()}」，换个
 .panel { min-width: 0; padding: 16px 18px; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
 .pager { margin-top: 12px; }
 .who { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; }
+/* 名字最长 20 字：超过 10 字截断，鼠标悬停看全名（详情页标题是全名），别把后面几列挤出去 */
+.who .name { max-width: 10em; overflow: hidden; text-overflow: ellipsis; }
 .avatar { display: grid; flex: none; width: 30px; height: 30px; place-items: center; font-size: 13px; font-weight: 700; background: var(--brand-soft); border: var(--stroke) solid var(--ink); border-radius: 50%; }
 .muted { color: var(--ink-muted); }
 .chip { display: inline-block; margin-left: 6px; padding: 1px 8px; font-size: 12px; font-weight: 600; border-radius: 999px; }

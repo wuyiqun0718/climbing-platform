@@ -150,7 +150,11 @@ tbody tr:last-child td { border-bottom: 0; }
 td.num { font-family: var(--font-number); font-variant-numeric: tabular-nums; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 tr.clickable { cursor: pointer; }
-tr.clickable:hover td, tr.clickable:focus-visible td { background: var(--brand-soft); }
+/* 悬停底色只给有鼠标的设备：触屏点一下以后 :hover 会一直挂着 */
+@media (hover: hover) {
+  tr.clickable:hover td { background: var(--brand-soft); }
+}
+tr.clickable:focus-visible td { background: var(--brand-soft); }
 tr.clickable:focus-visible { outline: 3px solid var(--ink); outline-offset: -3px; }
 .state td { padding: 36px 14px; text-align: center; color: var(--ink-muted); }
 /* 触屏（平板前台）：能点的地方至少 44px，桌面鼠标不变 */
