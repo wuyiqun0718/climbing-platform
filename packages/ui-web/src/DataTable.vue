@@ -112,6 +112,19 @@ function onRow(row: T, index: number) {
   border-radius: var(--radius-lg);
 }
 .wrap.plain { background: transparent; border: 0; border-radius: 0; }
+/*
+ * 横滑提示：两边各一条阴影（scroll，钉在容器边上），上面再盖一条和底色一样的渐变（local，跟着内容走）。
+ * 没滑到头时阴影露出来，滑到头被盖住；表格不需要横滑时两边都盖着，看不出来。
+ * plain 放在白底卡片里，盖的颜色也是 surface。
+ */
+.wrap, .wrap.plain {
+  background:
+    linear-gradient(90deg, var(--surface) 40%, transparent) left / 32px 100% no-repeat local,
+    linear-gradient(270deg, var(--surface) 40%, transparent) right / 32px 100% no-repeat local,
+    linear-gradient(90deg, color-mix(in srgb, var(--ink) 18%, transparent), transparent) left / 12px 100% no-repeat scroll,
+    linear-gradient(270deg, color-mix(in srgb, var(--ink) 18%, transparent), transparent) right / 12px 100% no-repeat scroll,
+    var(--surface);
+}
 .wrap.scroll { overflow: auto; }
 .tbl { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13.5px; transition: opacity 0.15s; }
 .tbl.dim { opacity: 0.5; }

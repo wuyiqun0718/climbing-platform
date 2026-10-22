@@ -128,10 +128,13 @@ const show = (v: number | null | undefined, fmt: (n: number) => string | number 
     <h2>{{ gym.rules.expiryReminderDays }} 天内到期</h2>
     <p class="sub">期限卡会员，{{ data.expiring.length }} 人，可以提醒续费</p>
     <ul v-if="data.expiring.length" class="expiring">
+      <!-- 整行是一个链接，右边的到期天数也能点 -->
       <li v-for="x in data.expiring" :key="x.cardId">
-        <RouterLink :to="{ name: 'member', params: { id: x.memberId } }">{{ x.memberName }}</RouterLink>
-        <small>{{ x.cardName }}{{ allStores ? `，${storeNameOf(x.storeId)}` : '' }}</small>
-        <span class="when">{{ expiryText(today, x.expiresOn) }}</span>
+        <RouterLink :to="{ name: 'member', params: { id: x.memberId } }" class="row">
+          <span class="name">{{ x.memberName }}</span>
+          <small>{{ x.cardName }}{{ allStores ? `，${storeNameOf(x.storeId)}` : '' }}</small>
+          <span class="when">{{ expiryText(today, x.expiresOn) }}</span>
+        </RouterLink>
       </li>
     </ul>
     <p v-else class="sub">{{ allStores ? '' : '这家店' }} {{ gym.rules.expiryReminderDays }} 天内没有到期的期限卡</p>
@@ -161,8 +164,10 @@ const show = (v: number | null | undefined, fmt: (n: number) => string | number 
 .cmp-bar { flex: none; width: 120px; height: 12px; overflow: hidden; background: var(--neutral-soft); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
 .cmp-bar i { display: block; height: 100%; background: var(--brand); }
 .expiring { margin: 0; padding: 0; list-style: none; }
-.expiring li { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
-.expiring a { font-size: 14px; font-weight: 700; color: var(--ink); }
+.expiring li { border-top: 1px solid var(--line); }
+.expiring .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; margin: 0 -8px; padding: 10px 8px; color: var(--ink); text-decoration: none; border-radius: var(--radius-sm); }
+.expiring .row:hover { background: var(--brand-soft); }
+.expiring .name { font-size: 14px; font-weight: 700; text-decoration: underline; }
 .expiring small { grid-row: 2; font-size: 12px; color: var(--ink-muted); }
 .expiring .when { grid-row: 1 / span 2; grid-column: 2; align-self: center; font-size: 12px; font-weight: 600; }
 @media (max-width: 1100px) { .grid, .grid.three { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

@@ -10,10 +10,10 @@ import { session, storeLabel } from '../session';
 import { createLatest, pct } from './dashboard';
 import { RANGE_PRESETS, presetRange, type RangePreset } from './finance';
 
-// 默认本月；「今天」先用本机日期，后端返回的区间以请求的为准
-const today = toDateKey(new Date());
-const from = ref(presetRange('month', today).from);
-const to = ref(today);
+// 默认本月；「今天」用本机日期，每次用的时候现取，页面开过零点也不会停在昨天；后端返回的区间以请求的为准
+const todayKey = () => toDateKey(new Date());
+const from = ref(presetRange('month', todayKey()).from);
+const to = ref(todayKey());
 
 const data = ref<FinanceSummary | null>(null);
 const loading = ref(false);
@@ -46,10 +46,10 @@ async function load() {
 watch(() => [session.state.staff?.id, session.state.storeId, from.value, to.value], () => session.state.staff && load(), { immediate: true });
 
 function usePreset(p: RangePreset) {
-  ({ from: from.value, to: to.value } = presetRange(p, today));
+  ({ from: from.value, to: to.value } = presetRange(p, todayKey()));
 }
 const activePreset = computed(() => RANGE_PRESETS.find(p => {
-  const r = presetRange(p.key, today);
+  const r = presetRange(p.key, todayKey());
   return r.from === from.value && r.to === to.value;
 })?.key);
 

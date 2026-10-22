@@ -87,6 +87,9 @@ const rules = reactive({ cancelBeforeMinutes: '', waitlist: true, waitlistUnlimi
 const rulesErrs = ref<ClassRulesErrors>({});
 const rulesErr = ref('');
 const rulesBusy = ref(false);
+// 规则拉回来之前表单是空的，不让改也不让存，免得一点保存全是「必填」
+const rulesLoaded = ref(false);
+const rulesLoadFailed = ref(false);
 function fillRules(r: ClassRules) {
   Object.assign(rules, {
     cancelBeforeMinutes: String(r.cancelBeforeMinutes),
@@ -97,10 +100,14 @@ function fillRules(r: ClassRules) {
   });
 }
 async function loadRules() {
+  rulesErr.value = '';
+  rulesLoadFailed.value = false;
   try {
     fillRules(await api.settings.classRules());
+    rulesLoaded.value = true;
   } catch (e) {
     rulesErr.value = errorText(e, '团课规则加载失败');
+    rulesLoadFailed.value = true;
   }
 }
 const int = (v: string) => (v.trim() === '' ? undefined : Number(v));
@@ -166,7 +173,7 @@ async function saveRules() {
     <h2>团课规则</h2>
     <p class="sub">取消截止、候补、迟到的规则等馆方定，下面是先填的占位值。{{ canRules ? '' : '只有老板能改。' }}</p>
     <form class="rules" novalidate @submit.prevent="saveRules">
-      <fieldset :disabled="!canRules || rulesBusy">
+      <fieldset :disabled="!canRules || rulesBusy || !rulesLoaded" :aria-busy="!rulesLoaded && !rulesLoadFailed">
         <Field label="开课前多少分钟截止自助取消" :error="rulesErrs.cancelBeforeMinutes" v-slot="f">
           <input v-model="rules.cancelBeforeMinutes" v-bind="f.attrs" type="number" min="0" step="1" />
         </Field>
@@ -180,7 +187,9 @@ async function saveRules() {
         </Field>
         <UiButton variant="primary" v-if="canRules" type="submit" class="save">{{ rulesBusy ? '保存中…' : '保存规则' }}</UiButton>
       </fieldset>
-      <p v-if="rulesErr" class="state error" role="alert">{{ rulesErr }}</p>
+      <p v-if="rulesErr" class="state error" role="alert">
+        {{ rulesErr }}<UiButton v-if="rulesLoadFailed" size="sm" @click="loadRules">重试</UiButton>
+      </p>
     </form>
   </section>
 </template>
