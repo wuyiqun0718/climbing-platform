@@ -21,8 +21,10 @@ const props = withDefaults(
     plain?: boolean;
     /** 长列表限高，表格内部滚动，表头吸顶，比如 'calc(100vh - 240px)' */
     maxHeight?: string;
+    /** 窄屏（≤ 900px）一行排成一张卡：每格「列名 值」上下排，不用横滑。给有长文字列、横滑看不到重点的表（操作日志、卡流水） */
+    stack?: boolean;
   }>(),
-  { loading: false, empty: '没有数据', clickable: false, plain: false, maxHeight: undefined },
+  { loading: false, empty: '没有数据', clickable: false, plain: false, maxHeight: undefined, stack: false },
 );
 
 const emit = defineEmits<{ 'row-click': [row: T, index: number] }>();
@@ -61,7 +63,7 @@ function onRow(row: T, index: number) {
 </script>
 
 <template>
-  <div class="wrap" :class="{ plain, scroll: !!maxHeight }" :style="maxHeight ? { maxHeight } : undefined" :aria-busy="loading">
+  <div class="wrap" :class="{ plain, scroll: !!maxHeight, stack }" :style="maxHeight ? { maxHeight } : undefined" :aria-busy="loading">
     <table class="tbl" :class="{ dim: loading && rows.length > 0 }">
       <thead>
         <tr>
@@ -98,6 +100,7 @@ function onRow(row: T, index: number) {
               :key="col.key"
               :class="{ num: col.num, 'wrap-text': col.wrap }"
               :style="{ textAlign: alignOf(col) }"
+              :data-label="col.label"
             >
               <slot :name="`cell-${col.key}`" :row="row" :value="field(row, col.key)" :index="i">{{ display(col, row) }}</slot>
             </td>
@@ -159,6 +162,16 @@ tr.clickable { cursor: pointer; }
 tr.clickable:focus-visible td { background: var(--brand-soft); }
 tr.clickable:focus-visible { outline: 3px solid var(--focus-ring, var(--ink)); outline-offset: -3px; }
 .state td { padding: 36px 14px; text-align: center; color: var(--ink-muted); }
+/* stack：窄屏一行一张卡，表头只留给读屏，列名放到每格前面 */
+@media (max-width: 900px) {
+  .stack .tbl, .stack tbody, .stack tr, .stack td { display: block; }
+  .stack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .stack tbody tr:not(.state) { padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .stack tbody tr:last-child { border-bottom: 0; }
+  .stack tbody tr:not(.state) td { display: grid; grid-template-columns: 5.5em minmax(0, 1fr); gap: 12px; padding: 4px 0; text-align: left !important; white-space: normal; overflow-wrap: anywhere; border: 0; }
+  .stack td.wrap-text { min-width: 0; }
+  .stack tbody tr:not(.state) td::before { content: attr(data-label); font-size: 12.5px; color: var(--ink-muted); }
+}
 /* 触屏（平板前台）：能点的地方至少 44px，桌面鼠标不变 */
 @media (pointer: coarse) {
   /* 行高 48：整行能点 */

@@ -54,7 +54,7 @@ const columns: Column<Row>[] = [
     <p v-if="error" class="state error" role="alert">
       {{ error }}<UiButton size="sm" @click="load">重试</UiButton>
     </p>
-    <DataTable v-else :columns="columns" :rows="rows" row-key="id" :loading="loading" empty="这张卡还没有流水" />
+    <DataTable v-else :columns="columns" :rows="rows" row-key="id" :loading="loading" empty="这张卡还没有流水" stack />
   </Modal>
 </template>
 

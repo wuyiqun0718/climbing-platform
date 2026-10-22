@@ -129,7 +129,8 @@ nav { display: grid; gap: 4px; }
   .shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   .side { position: static; height: auto; min-width: 0; flex-direction: row; align-items: center; gap: 12px; }
   .brand { flex: none; border: 0; padding: 0; }
-  nav { display: flex; flex: 1 1 auto; min-width: 0; overflow-x: auto; }
+  /* 横滑容器会把焦点框（3px + 偏移 2px）裁掉，四周留 5px；上下用负边距收回，左右不收（贴着标志会露出滑过去的半个字） */
+  nav { display: flex; flex: 1 1 auto; min-width: 0; overflow-x: auto; padding: 5px; margin: -5px 0; scroll-padding-inline: 5px; }
   .nav-item { white-space: nowrap; }
   .me { flex: none; margin: 0 0 0 8px; padding: 0; border: 0; white-space: nowrap; }
   .main { padding: 18px 16px 48px; }
@@ -137,7 +138,8 @@ nav { display: grid; gap: 4px; }
 /* 手机宽度：标志和退出一行，导航单独一行横滑 */
 @media (max-width: 600px) {
   .side { flex-wrap: wrap; row-gap: 10px; padding-bottom: 10px; }
-  nav { order: 1; flex-basis: 100%; }
+  /* 单独一行时左右也收回，和标志对齐 */
+  nav { order: 1; flex-basis: calc(100% + 10px); margin-inline: -5px; }
   .me { margin-left: auto; }
 }
 /* 触屏（平板前台）：能点的地方至少 44px，桌面鼠标不变 */

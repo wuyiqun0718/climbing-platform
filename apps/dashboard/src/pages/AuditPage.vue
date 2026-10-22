@@ -73,7 +73,7 @@ const columns = computed<Column<AuditLogRow>[]>(() => [
     {{ error }}<UiButton size="sm" @click="load">重试</UiButton>
   </p>
   <section class="panel">
-    <DataTable :columns="columns" :rows="data?.items ?? []" row-key="id" :loading="loading" empty="还没有操作记录">
+    <DataTable :columns="columns" :rows="data?.items ?? []" row-key="id" :loading="loading" empty="还没有操作记录" stack>
       <template #cell-change="{ row }">
         <pre class="change">{{ changeText(row) }}</pre>
       </template>
