@@ -53,6 +53,13 @@
 
 （25–27 来自 mvp/dashboard eval-2.md 第五轮平板前台流程，2026-10-23。）
 
+28. 小程序「加载中」要不要做自定义样式（骨架屏或自己的加载组件）？现在是系统 showLoading 灰底转圈，换的话每页一份，工作量中等。（mvp/miniapp eval-2.md 待拍板 10）
+29. **锁文件**：pnpm-lock.yaml 缺 mvp/dashboard 在 packages/theme 加的两个字体包，`pnpm install --frozen-lockfile`（CI 默认）会失败；本机全局 pnpm 是 8.9.2，仓库锁的是 9.0.1。要不要在 main 上用 pnpm@9.0.1 单独提交一次只含这两个包的锁文件？（这大概就是 main 和各 worktree 里 pnpm-lock.yaml 一直显示已修改的原因，我一直没提交它。）
+30. 试合并 mvp/dashboard ← mvp/miniapp（本地分支 merge/dashboard-miniapp，未推送）里，两边都有 docs/ui-review/eval-2.md 且内容不同，改名成 eval-2-dashboard.md / eval-2-miniapp.md，行不行？还是保留某一边的原名。
+31. 小程序的卡片文字要不要也用 @climb/core 的 cardText（后台会员详情在用）？现在小程序卡包在 lib/card-view.ts 自己拼。
+
+（28–31 来自 mvp/miniapp 第四轮和试合并 docs/merge-dashboard-miniapp.md，2026-10-23。）
+
 ## 要跟岩馆沟通
 
 ### 规则
