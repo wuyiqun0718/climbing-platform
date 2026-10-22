@@ -137,11 +137,9 @@ async function submit() {
 
 <style scoped>
 .form { display: grid; gap: 14px; }
-.form input { font: inherit; }
 .stores { display: grid; gap: 6px; margin: 0; padding: 0; border: 0; font-size: 13.5px; }
 .stores legend { margin-bottom: 6px; font-weight: 600; }
 .check { display: flex; align-items: center; gap: 8px; }
 .sub { margin: 0; font-size: 12.5px; color: var(--ink-muted); }
-.form textarea { font: inherit; }
 .err { margin: 0; padding: 9px 12px; font-size: 13px; background: var(--accent-soft); border-radius: var(--radius-sm); }
 </style>

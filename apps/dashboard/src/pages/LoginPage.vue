@@ -67,8 +67,7 @@ async function submit() {
 .brand h1 { margin: 0; font-family: var(--font-display); font-size: 24px; font-weight: 400; }
 .brand p { margin: 2px 0 0; font-size: 13px; color: var(--ink-muted); }
 .field { display: grid; gap: 6px; font-size: 13px; font-weight: 700; }
-.field input { padding: 11px 12px; font: inherit; font-weight: 400; font-size: 15px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); }
-.field input:focus { border-color: var(--ink); outline: none; }
+.field input { font-size: 15px; }
 .error { margin: 0; padding: 9px 12px; font-size: 13px; background: var(--accent-soft); border-radius: var(--radius-sm); }
 button { padding: 12px; font: inherit; font-weight: 700; color: var(--on-brand); background: var(--brand); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); cursor: pointer; }
 button:disabled { opacity: 0.6; cursor: default; }

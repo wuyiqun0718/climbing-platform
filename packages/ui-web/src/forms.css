@@ -1,0 +1,28 @@
+/*
+ * 原生文本输入框、多行输入框、日期时间输入的统一样式，按原型 .form：
+ * 2px 黑框、42px 高，聚焦时和 UiSelect 一样的品牌色圈。app 入口引入一次。
+ * 尺寸用 :where() 写成 0 优先级，页面里一个类就能改；工具栏里的小号加 .input-sm（34px，和按钮一样高）。
+ */
+:where(input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color'], [type='hidden']), textarea) {
+  box-sizing: border-box;
+  height: 42px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--ink);
+  background: var(--surface);
+  border: var(--stroke) solid var(--ink);
+  border-radius: var(--radius-sm);
+}
+:where(textarea) { height: auto; min-height: 72px; padding: 10px 12px; line-height: 1.5; resize: vertical; }
+:where(input[type='search']) { appearance: none; }
+:where(input, textarea)::placeholder { color: var(--ink-muted); opacity: 1; }
+:where(input.input-sm) { height: 34px; padding: 0 10px; font-size: 13px; }
+/* 聚焦圈写成普通优先级，压过全局 :focus-visible 的黑描边 */
+input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color']):focus,
+textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 55%, transparent);
+}
+:where(input, textarea):disabled { color: var(--ink-muted); background: var(--neutral-soft); cursor: not-allowed; }

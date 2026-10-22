@@ -5,7 +5,8 @@
   "type": "module",
   "description": "管理后台组件（Vue 3 网页），颜色全部走主题 CSS 变量",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./forms.css": "./src/forms.css"
   },
   "scripts": {
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",

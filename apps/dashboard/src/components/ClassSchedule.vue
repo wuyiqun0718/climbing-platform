@@ -215,7 +215,6 @@ async function copyLastWeek() {
 .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-bottom: 12px; font-size: 13.5px; }
 .grow { flex: 1; }
 .form { display: grid; gap: 14px; }
-.form input { font: inherit; }
 .off { margin: 0; font-size: 12px; color: var(--ink-muted); }
 .state { margin: 0 0 12px; font-size: 13px; color: var(--ink-muted); }
 /* 七列装不下（窄屏）就整周横滑，列宽不再往下压 */

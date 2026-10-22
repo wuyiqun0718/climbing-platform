@@ -164,7 +164,6 @@ function label(s: AdminPtSlot): string {
 .cell.clickable:hover { outline: 2px solid var(--ink); }
 .pick { display: grid; gap: 12px; }
 .pick p { margin: 0; }
-.pick input { font: inherit; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; }
 .legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0 0; font-size: 12px; color: var(--ink-muted); }
 .legend .cell { padding: 2px 8px; }

@@ -198,7 +198,6 @@ async function saveRules() {
 .save { justify-self: start; }
 .sub { margin: 0 0 12px; font-size: 13px; color: var(--ink-muted); }
 .rules fieldset { display: grid; gap: 12px; max-width: 360px; margin: 0; padding: 0; border: 0; }
-.rules input { font: inherit; }
 .check { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
 .status { margin-right: 10px; font-size: 13px; }
 .off { color: var(--ink-muted); }

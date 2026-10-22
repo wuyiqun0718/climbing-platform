@@ -99,7 +99,6 @@ async function submit() {
 
 <style scoped>
 .form { display: grid; gap: 14px; }
-.form input { font: inherit; }
 .note { margin: 0; font-size: 13px; color: var(--ink-muted); }
 .err { margin: 0; padding: 9px 12px; font-size: 13px; background: var(--accent-soft); border-radius: var(--radius-sm); }
 </style>

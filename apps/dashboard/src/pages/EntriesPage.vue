@@ -84,7 +84,7 @@ function onVoided() {
       <p>{{ tab === 'entries' ? '扫码和前台登记的都在这里；点一行看会员' : '次卡转赠和老带新邀请，按发起人的归属门店；点一行看发起人' }}</p>
     </div>
     <div v-if="tab === 'entries'" class="tools">
-      <label class="date">日期 <input v-model="date" type="date" :max="toDateKey(new Date())" /></label>
+      <label class="date">日期 <input v-model="date" class="input-sm" type="date" :max="toDateKey(new Date())" /></label>
       <ExportButton kind="check-ins" :filters="{ date, ...(session.state.storeId ? { store: session.state.storeId } : {}) }" :disabled="!isDateKey(date)" />
     </div>
   </header>
@@ -141,7 +141,6 @@ function onVoided() {
 .page-h p { margin: 4px 0 16px; font-size: 13px; color: var(--ink-muted); }
 .tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 16px; }
 .date { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-.date input { padding: 5px 8px; font: inherit; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); }
 .state { margin: 0 0 16px; font-size: 13px; color: var(--ink-muted); }
 .state.error { display: flex; align-items: center; gap: 12px; padding: 10px 14px; color: var(--ink); background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }
 .tabs { margin-bottom: 16px; }

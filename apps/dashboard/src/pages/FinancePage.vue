@@ -89,8 +89,8 @@ const show = (v: number | undefined) => (v === undefined ? '—' : formatYuan(v)
   </header>
   <div class="filters">
     <Tabs variant="chips" label="日期区间" :options="RANGE_PRESETS" :model-value="activePreset" @update:model-value="usePreset" />
-    <label>从 <input v-model="from" type="date" :max="to" required /></label>
-    <label>到 <input v-model="to" type="date" :min="from" required /></label>
+    <label>从 <input v-model="from" class="input-sm" type="date" :max="to" required /></label>
+    <label>到 <input v-model="to" class="input-sm" type="date" :min="from" required /></label>
     <span v-if="rangeError" class="bad" role="alert">{{ rangeError }}</span>
     <ExportButton kind="orders" :filters="{ from, to, ...(session.state.storeId ? { store: session.state.storeId } : {}) }" label="导出订单" :disabled="!!rangeError" />
   </div>
@@ -126,7 +126,6 @@ const show = (v: number | undefined) => (v === undefined ? '—' : formatYuan(v)
 .page-h h1 { margin: 0; font-family: var(--font-display); font-size: 34px; font-weight: 400; }
 .page-h p { margin: 4px 0 16px; font-size: 13px; color: var(--ink-muted); }
 .filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 16px; font-size: 13px; }
-.filters input { padding: 4px 8px; font: inherit; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); }
 .bad { color: var(--ink); font-weight: 600; }
 .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; transition: opacity 0.15s; }
 .grid.loading, .panel.loading { opacity: 0.55; }

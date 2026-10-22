@@ -1,5 +1,6 @@
 import { toCssVars } from '@climb/theme';
 import '@climb/theme/fonts.css';
+import '@climb/ui-web/forms.css';
 import gym from '@gym';
 import { createApp } from 'vue';
 import App from './App.vue';

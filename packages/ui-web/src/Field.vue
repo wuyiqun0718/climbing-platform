@@ -51,26 +51,8 @@ defineSlots<{ default(props: { id: string; attrs: typeof attrs.value }): unknown
 .req { margin-left: 2px; color: var(--brand); }
 .hint { margin: 0; font-size: 12px; color: var(--ink-muted); }
 .error { margin: 0; padding: 6px 10px; font-size: 12.5px; background: var(--accent-soft); border-radius: var(--radius-sm); }
-/* 插槽里的原生输入框给一套默认样式 */
+/* 输入框的边框、高度、聚焦圈在 forms.css，这里只让它们占满一行 */
 .field :slotted(input),
-.field :slotted(select),
-.field :slotted(textarea) {
-  width: 100%;
-  padding: 9px 12px;
-  font: inherit;
-  font-size: 14px;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-}
-/* UiSelect 自带样式，这里只让它占满一行 */
+.field :slotted(textarea),
 .field :slotted(.ui-select) { display: block; width: 100%; }
-.field :slotted(textarea) { resize: vertical; min-height: 72px; }
-.field :slotted(input:focus),
-.field :slotted(select:focus),
-.field :slotted(textarea:focus) { border-color: var(--ink); outline: none; }
-.field.invalid :slotted(input),
-.field.invalid :slotted(select),
-.field.invalid :slotted(textarea) { border-color: var(--ink); border-width: var(--stroke); }
 </style>

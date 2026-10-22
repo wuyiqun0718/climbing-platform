@@ -108,7 +108,7 @@ const emptyText = () => (qFromRoute() ? `没找到「${qFromRoute()}」，换个
   <DeskOrderModal v-model:open="orderOpen" @created="onOrdered" />
   <MemberForm v-model:open="formOpen" :phone="prefillPhone()" @created="onCreated" @open-existing="openMember" />
   <form class="search" role="search" @submit.prevent="search()">
-    <input v-model="input" type="search" placeholder="手机号（后四位也行）或名字" aria-label="搜索会员" maxlength="30" />
+    <input v-model="input" class="input-sm" type="search" placeholder="手机号（后四位也行）或名字" aria-label="搜索会员" maxlength="30" />
     <UiButton type="submit">搜索</UiButton>
   </form>
   <p v-if="error" class="state error" role="alert">
@@ -157,7 +157,7 @@ const emptyText = () => (qFromRoute() ? `没找到「${qFromRoute()}」，换个
 .page-h h1 { margin: 0; font-family: var(--font-display); font-size: 34px; font-weight: 400; }
 .page-h p { margin: 4px 0 16px; font-size: 13px; color: var(--ink-muted); }
 .search { display: flex; gap: 8px; max-width: 420px; margin-bottom: 16px; }
-.search input { flex: 1; min-width: 0; padding: 6px 10px; font: inherit; color: var(--ink); background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); }
+.search input { flex: 1; min-width: 0; }
 .state { margin: 0 0 16px; font-size: 13px; color: var(--ink-muted); }
 .state.error { display: flex; align-items: center; gap: 12px; padding: 10px 14px; color: var(--ink); background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }
 .panel { min-width: 0; padding: 16px 18px; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
