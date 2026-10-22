@@ -8,7 +8,7 @@
  */
 import { ApiError } from '@climb/api';
 import { errorText, UiButton, UiSelect } from '@climb/ui-web';
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { api, deskApi, deskDevice } from '../api';
 import { canDo, canSeeStore } from '../permissions';
@@ -56,6 +56,8 @@ const router = useRouter();
 const canBind = computed(() => !!session.state.staff && canDo(session.state.staff.role, 'desk.bind'));
 const stores = computed(() => session.state.stores.filter(st => session.state.staff && canSeeStore(session.state.staff, st.id)));
 const storeId = ref('');
+// 只管一家店的店长不用再点开下拉选
+watch(stores, list => { if (!storeId.value && list.length === 1) storeId.value = list[0].id; }, { immediate: true });
 const bindErr = ref('');
 const binding = ref(false);
 async function bind() {
@@ -98,10 +100,13 @@ const unbound = computed(() => display.value.kind === 'unbound' || (state.value.
           <UiButton variant="primary" @click="switchAccount">换个账号登录</UiButton>
         </div>
       </template>
-      <form v-else class="row" @submit.prevent="bind">
-        <UiSelect v-model="storeId" aria-label="门店" placeholder="选门店" :options="stores.map(st => ({ value: st.id, label: st.name }))" />
-        <UiButton variant="primary" type="submit" :disabled="binding || !storeId">{{ binding ? '绑定中…' : '绑定这家店' }}</UiButton>
-      </form>
+      <template v-else>
+        <p>选这台平板放在哪家店。绑好后平板一直显示这家店的入场码，员工可以退出登录。</p>
+        <form class="row" @submit.prevent="bind">
+          <UiSelect v-model="storeId" aria-label="门店" placeholder="选门店" :options="stores.map(st => ({ value: st.id, label: st.name }))" />
+          <UiButton variant="primary" type="submit" :disabled="binding || !storeId">{{ binding ? '绑定中…' : '绑定这家店' }}</UiButton>
+        </form>
+      </template>
       <p v-if="bindErr" class="warn" role="alert">{{ bindErr }}</p>
       <UiButton variant="link" v-if="unbound" @click="forget">清掉这台平板上的绑定</UiButton>
     </section>
@@ -154,6 +159,8 @@ const unbound = computed(() => display.value.kind === 'unbound' || (state.value.
 .avatar { display: grid; flex: none; width: 36px; height: 36px; place-items: center; object-fit: cover; font-weight: 700; background: var(--brand-soft); border-radius: 50%; }
 .who { display: grid; flex: 1; min-width: 0; text-align: left; }
 .who small { color: var(--ink-muted); }
+/* 首次入场是米色底，灰字对比度不够，前台隔一米看平板 */
+.feed li.first .who small { color: var(--ink); }
 .tag { flex: none; padding: 2px 8px; font-size: 12px; font-weight: 700; background: var(--accent); border-radius: var(--radius-sm); }
 @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
 .bind, .show { display: grid; gap: 16px; justify-items: center; text-align: center; }

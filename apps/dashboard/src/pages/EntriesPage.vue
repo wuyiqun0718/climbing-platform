@@ -99,7 +99,7 @@ function onVoided() {
     <template v-else-if="data">
       <section class="tiles" :class="{ loading }">
         <StatTile hero label="入场" :value="live" unit="人次" :note="formatDot(data.date)" />
-        <StatTile label="扫码" :value="byMethod('scan')" unit="人次" note="会员在小程序出码" />
+        <StatTile label="扫码" :value="byMethod('scan')" unit="人次" note="会员扫前台平板的码" />
         <StatTile label="前台登记" :value="byMethod('desk')" unit="人次" note="前台手动登记" />
         <StatTile label="撤销" :value="voidedCount" unit="条" note="不算进入场人次" />
       </section>
