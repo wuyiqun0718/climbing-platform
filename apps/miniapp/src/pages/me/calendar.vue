@@ -6,6 +6,7 @@ import { fromDateKey, monthOf, toDateKey } from '@climb/utils';
 import { computed, ref } from 'vue';
 import { api, run } from '../../api';
 import { errorMessage } from '../../lib/errors';
+import { iconStyle } from '../../lib/icons';
 import LoadFailed from '../../components/LoadFailed.vue';
 import { useRequireLogin } from '../../lib/use-login';
 
@@ -27,6 +28,8 @@ async function load() {
   // 翻得快时只认最后一次
   if (res && res.month === month.value) data.value = res;
 }
+/** 翻月箭头用图标，不用 ‹ › 字符：字符在字体里偏下 2px，跟标题对不齐 */
+const chevron = iconStyle('chevron');
 const failedThisMonth = computed(() => !!error.value && data.value?.month !== month.value);
 
 useRequireLogin(() => {
@@ -58,9 +61,9 @@ const climbed = computed(() => [...byDay.value.values()]);
 <template>
   <view class="page">
     <view class="nav">
-      <text class="arrow" @tap="go(-1)">‹</text>
+      <view class="arrow" role="button" aria-label="上个月" @tap="go(-1)"><view class="chev prev" :style="chevron" /></view>
       <text class="title">{{ title }}</text>
-      <text class="arrow" :class="{ off: month >= thisMonth }" @tap="go(1)">›</text>
+      <view class="arrow" :class="{ off: month >= thisMonth }" role="button" aria-label="下个月" @tap="go(1)"><view class="chev" :style="chevron" /></view>
     </view>
     <text v-if="!failedThisMonth" class="sum">这个月来了 {{ climbed.length }} 天</text>
 
@@ -87,8 +90,10 @@ const climbed = computed(() => [...byDay.value.values()]);
 .page { padding: 12px 16px 32px; }
 .nav { display: flex; align-items: center; justify-content: space-between; }
 /* 点击区 44px 高，上下负边距让标题行还是原来的高度 */
-.arrow { margin: -4px 0; padding: 0 16px; min-width: 44px; box-sizing: border-box; text-align: center; line-height: 44px; font-size: 24px; }
-.arrow.off { color: var(--ink-muted); opacity: 0.4; }
+.arrow { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; margin: -4px 0; }
+.chev { width: 20px; height: 20px; background: var(--ink); mask-size: 100% 100%; -webkit-mask-size: 100% 100%; mask-repeat: no-repeat; -webkit-mask-repeat: no-repeat; }
+.chev.prev { transform: rotate(180deg); }
+.arrow.off .chev { background: var(--ink-muted); opacity: 0.4; }
 .title { font-family: var(--font-display); font-size: 20px; }
 .sum { display: block; margin: 4px 0 10px; text-align: center; font-size: 13px; color: var(--ink-muted); }
 .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 10px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); background: var(--surface); }

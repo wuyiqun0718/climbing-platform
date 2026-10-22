@@ -74,6 +74,8 @@ const menu = computed(() => {
   return rows.map(r => ({ ...r, style: iconStyle(r.icon) }));
 });
 
+/** 行尾箭头用图标，› 字符在字体里偏下，跟左边图标、文字对不齐 */
+const chevron = iconStyle('chevron');
 const go = (url: string) => uni.navigateTo({ url });
 const retry = () => { member.load().catch(() => {}); loadCalendar(); };
 </script>
@@ -117,7 +119,7 @@ const retry = () => { member.load().catch(() => {}); loadCalendar(); };
         <view v-for="r in menu" :key="r.url" class="item" hover-class="item-down" @tap="go(r.url)">
           <view class="item-ic" :style="r.style" />
           <text class="item-t">{{ r.label }}</text>
-          <text class="item-arrow">›</text>
+          <view class="item-arrow" :style="chevron" />
         </view>
       </view>
     </template>
@@ -159,5 +161,5 @@ const retry = () => { member.load().catch(() => {}); loadCalendar(); };
 .item-down { background: var(--page); }
 .item-ic { flex: none; width: 20px; height: 20px; margin-right: 12px; background: var(--ink); mask-size: 100% 100%; -webkit-mask-size: 100% 100%; mask-repeat: no-repeat; -webkit-mask-repeat: no-repeat; }
 .item-t { flex: 1; font-size: 16px; }
-.item-arrow { font-size: 22px; color: var(--ink-muted); }
+.item-arrow { flex: none; width: 16px; height: 16px; background: var(--ink-muted); mask-size: 100% 100%; -webkit-mask-size: 100% 100%; mask-repeat: no-repeat; -webkit-mask-repeat: no-repeat; }
 </style>

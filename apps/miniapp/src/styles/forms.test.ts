@@ -19,9 +19,24 @@ describe('输入框', () => {
     expect(fieldSrc).toMatch(/v-if="modelValue" class="clear"/);
   });
 
+  it('点 × 换一个新 input（H5 改 value 有防抖，会留着旧字），刚清空时晚到的 input / blur 不认', () => {
+    expect(fieldSrc).toMatch(/:key="inputKey"/);
+    expect(fieldSrc).toMatch(/function clear\(\) \{[^}]*inputKey\.value\+\+/);
+    expect(fieldSrc).toMatch(/const onBlur = [^\n]*if \(!late\(\)\)/);
+    expect(fieldSrc).toMatch(/const onInput = [^\n]*if \(!late\(\)\)/);
+  });
+
   it('登录手机号：数字键盘、最多 11 位，填错写在框下面不弹 toast', () => {
     const login = files['../pages/login/index.vue'];
     expect(login).toMatch(/<Field v-model="phone" type="number" :maxlength="11"[^>]*:error="phoneError"/);
     expect(login).not.toMatch(/showToast\(\{ title: '手机号/);
+  });
+});
+
+describe('图标对齐', () => {
+  // ‹ › × 这些字符在字体里偏下 1–2px，跟旁边的图标、文字对不齐；用图标或 CSS 画
+  it('箭头和清除按钮不用字符', () => {
+    for (const page of ['../pages/me/index.vue', '../pages/me/calendar.vue']) expect(files[page], page).not.toMatch(/>[‹›]</);
+    expect(fieldSrc).not.toMatch(/>×</);
   });
 });
