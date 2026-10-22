@@ -40,11 +40,15 @@
 
 ### 1. 会员详情页侧栏「会员」不亮
 
+> **已修** `363ffd8`。`App.vue` 侧栏按 `route.meta.page` 加 `.on` 和 `aria-current="page"`。截图 `before|after/eval2-p1a/member-detail-nav.png`。
+
 - 页面：`/members/:id`（所有角色）。
 - 问题：侧栏用的是 `router-link-exact-active`，进了详情页侧栏一项都不亮，`aria-current` 也没有，不知道自己在哪个模块下。
 - 建议：侧栏按路由的 `meta.page` 判断当前项，详情页算「会员」。
 
 ### 2. 财务：日期区间填错时，标题和数字对不上
+
+> **已修** `363ffd8`。标题用已加载数据的 `from/to`；区间不对时数字区和加载中一样变淡，错误文案是浅色提示块。截图 `before|after/eval2-p1a/finance-range.png`。
 
 - 页面：`/finance`。截图 `before/eval2-p1a/finance-range.png`。
 - 问题：「从」改成晚于「到」，标题马上变成「2026.10.30 到 2026.10.23」，下面的数字还是上一次的区间；错误文案是普通黑字，夹在工具栏里不显眼。
@@ -52,11 +56,15 @@
 
 ### 3. 前台看板「本月营收」显示一条大横线
 
+> **已修** `363ffd8`。按 `canSeePage(role, 'finance')` 决定显不显示，剩下三张一行三列（窄屏 2 列 / 1 列）。截图 `before|after/eval2-p1a/desk-dashboard.png`、`desk-dashboard-390.png`。
+
 - 页面：`/`（前台）。截图 `before/eval2-p1a/desk-dashboard.png`。
 - 问题：接口不给前台营收，hero 卡片显示一个 64px 的「—」和「本月 1 日到今天」，像是数据坏了。
 - 建议：没有营收字段时不显示这张卡，剩下三张铺满。
 
 ### 4. 「活动」占位页对员工讲开发的话
+
+> **已修** `363ffd8`。`TodoPage.vue` 文案改成「活动的报名、签到还在做，做好之前请先线下登记。」。截图 `before|after/eval2-p1a/events.png`。
 
 - 页面：`/events`（所有角色），`TodoPage.vue`。
 - 问题：「设计稿在 prototype/ 原型的『管理后台』里」——员工不知道 prototype/ 是什么。
@@ -64,11 +72,15 @@
 
 ### 5. 前台平板页：前台账号进来是死路，后台也没有入口
 
-- 页面：`/desk`。截图见第一轮 sweep（没进仓库）。
+> **已修** `7f8db73`。前台账号打开时给「回后台」「换个账号登录」（退出后带 redirect=/desk 回来）；侧栏导航最后加「前台平板 ↗」，只给有 `desk.bind` 权限的，新开一页。截图 `before|after/eval2-p1b/desk-as-front-desk.png`、`manager-sidebar.png`、`manager-sidebar-390.png`。
+
+- 页面：`/desk`。
 - 问题：前台账号打开只有一句「只有店长以上能绑定前台平板。」，没有回后台、换账号的按钮；后台各页也没有链接到 `/desk`，店长只能手输地址。
 - 建议：前台账号时给「回后台」和「换个账号登录」；侧栏底部给店长以上加「前台平板」链接。
 
 ### 6. 表格行的键盘焦点几乎看不出来
+
+> **已修** `7f8db73`。`DataTable.vue` `tr.clickable:focus-visible` 3px ink 内描边。截图 `before|after/eval2-p1b/members-row-focus.png`。
 
 - 页面：所有可点的表格（会员、员工、入场、卡种……），`ui-web/DataTable.vue`。
 - 问题：Tab 到行上只有浅绿底（和鼠标悬停一样），`outline: none`；连续 Tab 时分不清焦点在哪一行。
@@ -76,11 +88,15 @@
 
 ### 7. 浅色底上的灰字对比度不够
 
+> **已修** `7f8db73`。入场页保险条第二行、会员「N 天没来」chip、私教时间轴「不接课」格子和图例改用 ink。表格悬停行只是悬停时的临时底色，没改。截图 `before|after/eval2-p1b/entries-ins.png`、`courses-legend.png`。
+
 - 页面：入场页保险条、会员页「N 天没来」、错误提示块、表格悬停行。
 - 问题：`--ink-muted #6e6e66` 在 `--brand-soft`、`--accent-soft`、`--neutral-soft` 上只有 4.32–4.33:1，12–13px 小字低于 4.5:1。
 - 建议：这些浅色底容器里的说明文字改用 `--ink`（或 85% ink），不动全局主题色（主题和小程序共用）。
 
 ### 8. 会员不存在 / 加载失败只有一行灰字
+
+> **已修** `7f8db73`。不存在时用和其它页一样的提示块，带「回会员列表」；接口出错本来就有「重试」。截图 `before|after/eval2-p1b/member-404.png`。
 
 - 页面：`/members/<不存在的 id>`。
 - 问题：标题「会员详情」下面一行 13px 灰字，没有下一步；加载失败时也没有重试。
@@ -124,6 +140,8 @@
 - 建议：数字输入统一 120px。
 
 ### 15. 「← 返回」太小太淡
+
+> **已修** `7f8db73`（和 P1 第二批一起）。14px ink、600 字重，点击区 32px 高，悬停下划线。截图 `after/eval2-p1b/member-404.png`。
 
 - 页面：会员详情。13px 灰字，点击区 16px 高。
 - 建议：14px ink、上下留出 32px 点击高度。
