@@ -3,7 +3,7 @@ import {
   freezeBlockedBy, freezePeriodCard, freezeQuotaLeft, settleFreeze, unfreezePeriodCard,
   type Card, type GymRules, type LedgerEntry, type PeriodCard,
 } from '@climb/core';
-import { addDays, type DateKey } from '@climb/utils';
+import { addDays, formatDot, type DateKey } from '@climb/utils';
 import type { MockDb } from '../db';
 import type { MockContext, MockRoutes } from '../router';
 
@@ -91,7 +91,7 @@ export function createCardRoutes(
       const { days } = ctx.body as { days: number };
       const r = freezePeriodCard({ card, cards: myCards(me), days, history: freezeHistory(db, me), today: helpers.today(), rules: helpers.rules.freezeRules });
       helpers.replaceCard(r.card);
-      helpers.record(r.card, 0, 'freeze', undefined, { note: `冻结 ${days} 天，到 ${r.card.frozenUntil}` });
+      helpers.record(r.card, 0, 'freeze', undefined, { note: `冻结 ${days} 天，到 ${formatDot(r.card.frozenUntil!)}` });
       saveFollowers(r.followers, helpers, '前一张期限卡冻结，开始日往后挪');
       return r.card;
     },

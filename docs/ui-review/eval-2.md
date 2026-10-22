@@ -27,19 +27,19 @@
 | P1-7 | 年卡冻结中去扫码，确认页直接不列年卡，只给次卡或买票，会员不知道年卡去哪了 | `pages/checkin/confirm.vue` | 已修 91a0d24（eval2-cards）：提示「年卡冻结中，先提前解冻才能用」，带「去解冻」 |
 | P1-8 | 冻结中的期限卡在卡包里写「本月还能带 0 位朋友免费来爬」，像是名额用完了 | `pages/cards/index.vue` `referralLine` | 已修 91a0d24（eval2-cards）：被拦时写原因（冻结中 / 名额用完） |
 | P1-9 | 入场确认页没勾告知书时按钮变灰，但没说为什么 | `pages/checkin/confirm.vue` | 已修 91a0d24（eval2-cards）：按钮下写「勾选同意告知书后才能入场」 |
-| P1-10 | 卡包、我的：拉会员信息失败（断网、接口 500）时页面空白，没有提示也没有重试 | `pages/cards/index.vue`、`pages/me/index.vue`、`stores/member.ts` || 已修（eval2-states）：会员 store 记 `failed`，两页显示「没加载出来 + 重试」；开发面板加「模拟断网」 |
-| P1-11 | 团课课表快速切日期 / 门店时，先发的慢请求后回来会盖掉后面的结果，显示的是上一天的课 | `pages/classes/index.vue` `loadSchedule` || 已修（eval2-states）：按请求序号丢掉过期结果（mock 下复现不出，靠代码保证，没截图） |
+| P1-10 | 卡包、我的：拉会员信息失败（断网、接口 500）时页面空白，没有提示也没有重试 | `pages/cards/index.vue`、`pages/me/index.vue`、`stores/member.ts` || 已修 7a51d10（eval2-states）：会员 store 记 `failed`，两页显示「没加载出来 + 重试」；开发面板加「模拟断网」 |
+| P1-11 | 团课课表快速切日期 / 门店时，先发的慢请求后回来会盖掉后面的结果，显示的是上一天的课 | `pages/classes/index.vue` `loadSchedule` || 已修 7a51d10（eval2-states）：按请求序号丢掉过期结果（mock 下复现不出，靠代码保证，没截图） |
 
 ## P2：小问题
 
 | # | 问题 | 位置 | 状态 |
 | --- | --- | --- | --- |
-| P2-1 | 老带新页被拦（没有期限卡、冻结中）时仍大字显示「0/1 本月还能发」，跟下面的原因矛盾 | `pages/share/referral.vue` || 已修（eval2-states）：没期限卡、冻结中时不显示名额，只写原因 |
-| P2-2 | 入场成功页门店名出现两次（绿条和明细表） | `pages/checkin/done.vue` || 已修（eval2-states）：绿条只留标题和日期 |
+| P2-1 | 老带新页被拦（没有期限卡、冻结中）时仍大字显示「0/1 本月还能发」，跟下面的原因矛盾 | `pages/share/referral.vue` || 已修 7a51d10（eval2-states）：没期限卡、冻结中时不显示名额，只写原因 |
+| P2-2 | 入场成功页门店名出现两次（绿条和明细表） | `pages/checkin/done.vue` || 已修 7a51d10（eval2-states）：绿条只留标题和日期 |
 | P2-3 | 入场确认页「还没有能用的入场卡」提示做成和选项一样的白框，像能点 | `pages/checkin/confirm.vue` | 已修 91a0d24（eval2-cards）：改成普通说明文字 |
-| P2-4 | 冻结流水备注里日期是 `2026-10-29`，页面其它地方是 `2026.10.29` | `mock/routes/cards.ts` 冻结备注（后端照此实现时注意） | |
-| P2-5 | 无障碍：团课的课表/我的预约分段、门店、日期，教练排班的日期都是 `text`/`view` 加 `@tap`，读屏不知道能点、哪个选中了 | `classes/index.vue`、`coach/schedule.vue` || 已修（eval2-states）：分段 `role=tab` + `aria-selected`，门店 / 日期 `role=button` + `aria-pressed` + 读屏文字，排班格子 `role=button`；ui-mp Sheet 加 `role=dialog` |
-| P2-6 | 开发面板浮钮压在 tab「我的」上（只在 H5 mock 出现） | `mock/dev-panel.vue` || 已修（eval2-states）：浮钮挪到 tab 上方 |
+| P2-4 | 冻结流水备注里日期是 `2026-10-29`，页面其它地方是 `2026.10.29` | `mock/routes/cards.ts` 冻结备注（后端照此实现时注意） || 已修 HASH（eval2-ledger）：mock 备注用 `formatDot`；后台分支写冻结流水时也用这个格式 |
+| P2-5 | 无障碍：团课的课表/我的预约分段、门店、日期，教练排班的日期都是 `text`/`view` 加 `@tap`，读屏不知道能点、哪个选中了 | `classes/index.vue`、`coach/schedule.vue` || 已修 7a51d10（eval2-states）：分段 `role=tab` + `aria-selected`，门店 / 日期 `role=button` + `aria-pressed` + 读屏文字，排班格子 `role=button`；ui-mp Sheet 加 `role=dialog` |
+| P2-6 | 开发面板浮钮压在 tab「我的」上（只在 H5 mock 出现） | `mock/dev-panel.vue` || 已修 7a51d10（eval2-states）：浮钮挪到 tab 上方 |
 | P2-7 | 送次数页的步进器和冻结步进器各写一套 | `share/count.vue` | 已修 9599a60：共用 `ui-mp/Stepper.vue` |
 
 ## 看过、没问题的
