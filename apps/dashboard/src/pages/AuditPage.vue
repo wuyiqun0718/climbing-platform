@@ -4,7 +4,7 @@
  * 动作名和文字在 @climb/core 的 audit.ts，改前改后的文字在 auditText.ts；能看哪些在 permissions.ts（audit 页、canSeeAllAuditLogs，等馆方）。
  */
 import { type AuditLogRow, type PageOf } from '@climb/api';
-import { AUDIT_ACTIONS, AUDIT_ACTION_TEXT, auditChangeLines, type AuditAction } from '@climb/core';
+import { AUDIT_ACTIONS, AUDIT_ACTION_TEXT, auditChangeLines, auditTargetText, type AuditAction } from '@climb/core';
 import { DataTable, Pager, errorText, type Column, UiButton, UiSelect } from '@climb/ui-web';
 import { formatDotTime } from '@climb/utils';
 import { computed, ref, watch } from 'vue';
@@ -35,16 +35,25 @@ async function load() {
 watch(() => [session.state.staff?.id, session.state.storeId, action.value], () => (page.value = 1));
 watch(() => [session.state.staff?.id, session.state.storeId, action.value, page.value], () => session.state.staff && load(), { immediate: true });
 
+/** 员工 id → 名字（团课、私教的教练）：员工名单只有馆长能拿，拿不到用教练列表，都拿不到显示 id */
+const staffNames = ref(new Map<string, string>());
+async function loadStaffNames() {
+  const rows = await api.staff.list().catch(() => api.coaches()).catch(() => []);
+  staffNames.value = new Map(rows.map(s => [s.id, s.name]));
+}
+watch(() => session.state.staff?.id, id => id && loadStaffNames(), { immediate: true });
+
 const storeNameOf = (id: string | null) => (id ? storeLabel(id) : '全馆');
+const textCtx = computed(() => ({ storeName: storeLabel, staffName: (id: string) => staffNames.value.get(id) ?? id }));
 /** 改前改后：一个字段一行，「字段：前 → 后」；新建的只列改后 */
-const changeText = (r: AuditLogRow) => auditChangeLines(r, { storeName: storeLabel }).join('\n') || '—';
+const changeText = (r: AuditLogRow) => auditChangeLines(r, textCtx.value).join('\n') || '—';
 
 const columns = computed<Column<AuditLogRow>[]>(() => [
   { key: 'at', label: '时间', format: r => formatDotTime(r.at) },
   { key: 'staffName', label: '操作人' },
   ...(session.state.storeId === null ? [{ key: 'storeId', label: '门店', format: (r: AuditLogRow) => storeNameOf(r.storeId) }] : []),
   { key: 'action', label: '操作', format: r => AUDIT_ACTION_TEXT[r.action] },
-  { key: 'targetId', label: '对象', format: r => `${r.targetType} ${r.targetId}` },
+  { key: 'targetId', label: '对象', wrap: true, format: r => auditTargetText(r, textCtx.value) },
   { key: 'reason', label: '原因', wrap: true, format: r => r.reason || '—' },
   { key: 'change', label: '改前 → 改后', wrap: true },
 ]);

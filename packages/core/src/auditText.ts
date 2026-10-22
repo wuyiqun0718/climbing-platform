@@ -1,5 +1,5 @@
 import { formatDot, formatYuan } from '@climb/utils';
-import type { AuditAction, AuditLogEntry } from './audit';
+import type { AuditAction, AuditLogEntry, AuditTarget, AuditTargetType } from './audit';
 import { CARD_STATE_TEXT } from './cardText';
 import type { ClassBookingStatus, ClassSessionStatus } from './classes';
 import { POLICY_STATUS_TEXT } from './insurance';
@@ -268,4 +268,71 @@ function lines(fields: Record<string, Field>, before: Record<string, unknown> | 
 export function auditChangeLines(entry: Pick<AuditLogEntry, 'action' | 'before' | 'after'>, ctx: AuditTextContext = {}): string[] {
   const fields = { ...SHARED, ...FIELDS_BY_ACTION[entry.action] };
   return lines(fields, entry.before, entry.after, ctx, '');
+}
+
+const TARGET_TYPE_TEXT: Record<AuditTargetType, string> = {
+  order: '订单',
+  check_in: '入场',
+  card: '卡',
+  product: '卡种',
+  staff: '员工',
+  settings: '规则',
+  export: '导出',
+  class_type: '团课课程',
+  class_session: '团课',
+  class_booking: '团课预约',
+  pt_slot: '私教时段',
+  pt_booking: '私教预约',
+  desk_device: '前台平板',
+};
+const SETTINGS_TEXT: Record<string, string> = { 'freeze-rules': '冻结规则', 'class-rules': '团课规则', 'pt-rules': '私教规则' };
+
+/** 2026-10-23 → 10/23 */
+const monthDay = (on: string | undefined) => (on && /^\d{4}-\d{2}-\d{2}$/.test(on) ? `${Number(on.slice(5, 7))}/${Number(on.slice(8, 10))}` : '');
+const str = (v: unknown) => (typeof v === 'string' && v ? v : undefined);
+
+/** 列表接口没带上的，从改前改后里找（新建、删掉的私教时段标记这些快照里有课名、日期、教练） */
+function fromSnapshot(entry: Pick<AuditLogEntry, 'before' | 'after'>): AuditTarget {
+  const o = { ...entry.before, ...entry.after };
+  return {
+    name: str(o.name) ?? str(o.productName),
+    on: str(o.on),
+    startTime: str(o.startTime),
+    hour: typeof o.hour === 'number' ? o.hour : undefined,
+    coachId: str(o.coachId),
+  };
+}
+
+/**
+ * 操作日志「对象」列：中文类型 + 人能认的名字，比如「团课 · 抱石入门 · 10/23 19:00」「卡 · 张三 · 10 次卡」。
+ * 名字先用列表接口带的 target，没有再从改前改后里找；什么都没有才显示 id。教练按 ctx.staffName 换名字，拿不到显示 id。
+ */
+export function auditTargetText(entry: Pick<AuditLogEntry, 'action' | 'targetType' | 'targetId' | 'before' | 'after'> & { target?: AuditTarget }, ctx: AuditTextContext = {}): string {
+  const label = TARGET_TYPE_TEXT[entry.targetType] ?? entry.targetType;
+  if (entry.targetType === 'settings') return `${label} · ${SETTINGS_TEXT[entry.targetId] ?? entry.targetId}`;
+  if (entry.targetType === 'export') return `${label} · ${EXPORT_KIND_TEXT[entry.targetId] ?? entry.targetId}`;
+  if (entry.action === 'class.copy_week') return `团课课表 · ${monthDay(entry.targetId) || entry.targetId} 起那周`;
+  const snap = fromSnapshot(entry);
+  const t: AuditTarget = { ...snap, ...Object.fromEntries(Object.entries(entry.target ?? {}).filter(([, v]) => v !== undefined && v !== '')) };
+  const coach = t.coachId ? (ctx.staffName?.(t.coachId) ?? t.coachId) : '';
+  const day = monthDay(t.on);
+  const classTime = [day, t.startTime].filter(Boolean).join(' ');
+  const ptTime = day && t.hour !== undefined ? `${day} ${hourSlot(t.hour, ctx)}` : day;
+  const parts: (string | undefined)[] = {
+    order: [t.memberName, t.name],
+    check_in: [t.memberName, day],
+    card: [t.memberName, t.name],
+    product: [t.name],
+    staff: [t.name],
+    settings: [],
+    export: [],
+    class_type: [t.name],
+    class_session: [t.name, classTime, coach],
+    class_booking: [t.memberName, t.name, classTime],
+    pt_slot: [coach, ptTime],
+    pt_booking: [t.memberName, coach, ptTime],
+    desk_device: [t.name],
+  }[entry.targetType] ?? [];
+  const shown = parts.filter(Boolean);
+  return shown.length ? [label, ...shown].join(' · ') : `${label} ${entry.targetId}`;
 }

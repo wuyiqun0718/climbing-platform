@@ -166,6 +166,7 @@ import {
   cardState,
   AUDIT_ACTIONS,
   auditSnapshot,
+  type AuditTarget,
   STAFF_BLOCKED_TEXT,
   STAFF_ROLES,
   newStaffErrors,
@@ -632,6 +633,55 @@ function createExport(db: MockDb, staff: Staff, kind: string, body: Record<strin
   return ok(res);
 }
 
+/** 日志「对象」的名字（AuditLogRow.target）：按类型查当前数据，查不到的字段不给 */
+function auditTargetOf(db: MockDb, l: MockAuditLog): AuditTarget {
+  const memberName = (id: string | undefined) => db.members.find(m => m.id === id)?.name;
+  const session = (id: string | undefined) => db.classSessions.find(s => s.id === id);
+  const t = (o: AuditTarget): AuditTarget => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as AuditTarget;
+  const id = l.targetId;
+  switch (l.targetType) {
+    case 'order': {
+      const o = db.orders.find(x => x.id === id);
+      return t({ memberName: memberName(o?.memberId), name: o?.productName });
+    }
+    case 'check_in': {
+      const c = db.checkIns.find(x => x.id === id);
+      return t({ memberName: memberName(c?.memberId), on: c?.on });
+    }
+    case 'card': {
+      const c = db.cards.find(x => x.id === id);
+      return t({ memberName: memberName(c?.memberId), name: c?.name });
+    }
+    case 'product':
+      return t({ name: db.products.find(x => x.id === id)?.name });
+    case 'staff':
+      return t({ name: db.staff.find(x => x.id === id)?.name });
+    case 'class_type':
+      return t({ name: db.classTypes.find(x => x.id === id)?.name });
+    case 'class_session': {
+      const s = session(id);
+      return t({ name: s?.name, on: s?.on, startTime: s?.startTime, coachId: s?.coachId });
+    }
+    case 'class_booking': {
+      const b = db.classBookings.find(x => x.id === id);
+      const s = session(b?.sessionId);
+      return t({ memberName: memberName(b?.memberId), name: s?.name, on: s?.on, startTime: s?.startTime });
+    }
+    case 'pt_slot': {
+      const m = db.ptSlotMarks.find(x => x.id === id);
+      return t({ coachId: m?.coachId, on: m?.on, hour: m?.hour });
+    }
+    case 'pt_booking': {
+      const b = db.ptBookings.find(x => x.id === id);
+      return t({ memberName: memberName(b?.memberId), coachId: b?.coachId, on: b?.on, hour: b?.hour });
+    }
+    case 'desk_device':
+      return t({ name: db.deskDevices.find(x => x.id === id)?.name });
+    default:
+      return {};
+  }
+}
+
 /** 操作日志：口径见 @climb/api 的 AuditLogRow，只读 */
 function auditLogList(db: MockDb, staff: Staff, storeId: string | null, action: string | null, page: number): ApiResponse {
   if (!canSeePage(staff.role, 'audit')) return fail(403, 'forbidden', '没有看操作日志的权限');
@@ -647,7 +697,7 @@ function auditLogList(db: MockDb, staff: Staff, storeId: string | null, action: 
   const pageSize = AUDIT_PAGE_SIZE;
   const last = Math.max(1, Math.ceil(matched.length / pageSize));
   const cur = Math.min(page, last);
-  const items = matched.slice((cur - 1) * pageSize, cur * pageSize).map(({ l }): AuditLogRow => ({ ...l, staffName: names.get(l.staffId) ?? '' }));
+  const items = matched.slice((cur - 1) * pageSize, cur * pageSize).map(({ l }): AuditLogRow => ({ ...l, staffName: names.get(l.staffId) ?? '', target: auditTargetOf(db, l) }));
   const res: PageOf<AuditLogRow> = { items, total: matched.length, page: cur, pageSize };
   return ok(res);
 }

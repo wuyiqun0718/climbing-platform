@@ -121,6 +121,23 @@ export interface AuditLogEntry {
   at: string;
 }
 
+/**
+ * 「对象」列给人看的信息：列表接口按 targetType + targetId 查好带上（会员名、卡名、课名、日期时间、教练）。
+ * 查不到的（删掉了的私教时段标记、导入的老数据）不给，页面再从改前改后里找，见 auditText.ts 的 auditTargetText。
+ */
+export interface AuditTarget {
+  /** 卡名、卡种名、员工名、课名、平板名 */
+  name?: string;
+  memberName?: string;
+  /** 入场日、上课日、私教日 YYYY-MM-DD */
+  on?: string;
+  /** 团课开始时间 HH:mm */
+  startTime?: string;
+  /** 私教那一格的小时 */
+  hour?: number;
+  coachId?: string;
+}
+
 /** 不进日志的字段（任何一层出现都去掉） */
 export const AUDIT_SENSITIVE_KEYS: readonly string[] = ['password', 'passwordHash', 'token', 'tokenVersion'];
 

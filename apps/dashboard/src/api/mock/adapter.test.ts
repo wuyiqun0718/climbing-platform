@@ -1,5 +1,5 @@
 import { ApiError, createAdminApi, createApi, createDeskApi, type AdminClassRow, type CreateClassBody, type CreateStaffBody, type MarkPtSlotBody, type PtTimelineView } from '@climb/api';
-import { auditChangeLines, defaultFreezeRules, freezeBlockedBy, ledgerMismatch, remainingOf, mergeDeskFeed, parseEntryQrLink, parseEntryQrParams } from '@climb/core';
+import { auditChangeLines, auditTargetText, defaultFreezeRules, freezeBlockedBy, ledgerMismatch, remainingOf, mergeDeskFeed, parseEntryQrLink, parseEntryQrParams } from '@climb/core';
 import { addDays, endOfMonth } from '@climb/utils';
 import { describe, expect, it } from 'vitest';
 import { createMockAdapter } from './adapter';
@@ -1338,6 +1338,19 @@ describe('后台 mock：操作日志', () => {
     expect(lines.length).toBeGreaterThan(20);
     expect(lines.filter(t => /^[A-Za-z]/.test(t) || /Id：|Cents/.test(t))).toEqual([]);
     expect(lines).toContain('实收：¥1,200');
+  });
+
+  it('「对象」列（core 的 auditTargetText）：列表带上会员名、卡名、卡种名，没有英文类型和 id', async () => {
+    const { api, login, order, ci } = await deskOps();
+    await api.checkIns.void(ci.checkIn.id, { reason: '扫错了卡' });
+    await login('13800000001');
+    await api.cards.adjust(order.card.id, { remaining: 12, reason: '补偿闭馆' });
+    await api.products.update('p-30', { priceCents: 49_900 });
+    const { items } = await api.auditLogs();
+    const texts = items.map(r => auditTargetText(r));
+    expect(texts.filter(t => /[a-z_]{3,}|-\d/.test(t))).toEqual([]);
+    expect(texts.every(t => t.includes(' · '))).toBe(true);
+    expect(items.find(r => r.action === 'order.create')?.target).toMatchObject({ memberName: expect.any(String), name: expect.any(String) });
   });
 
   it('查询：最新的在前，带员工名；按门店、操作类型筛', async () => {

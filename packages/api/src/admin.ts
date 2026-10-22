@@ -1,4 +1,4 @@
-import { MEMBER_SOURCES, type Card, type CardAdjustInput, type FreezeOverridable, type PeriodCard, type RuleErrorCode, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type OrderStatus, type RefundBasis, type RefundMethod, type RefundStatus, type LedgerEntry, type MemberSource, type PayChannel, type Product, type ProductInput, type ProductPatch, type RevenueBucket, type RevenueCategory, type RevenueChannel, type Share, type ShareDisplayStatus, type StaffInput, type StaffPatch, type StaffRole, type AuditAction, type AuditLogEntry, type ClassRules, type ClassType, type ClassTypeInput, type ClassTypePatch, type ClassSession, type SessionPatch, type ClassBooking, type CoachProfile, type CoachView, type PtBooking, type PtSlot, type PtSlotMark, type PtCancelKind, type PtRules } from '@climb/core';
+import { MEMBER_SOURCES, type Card, type CardAdjustInput, type FreezeOverridable, type PeriodCard, type RuleErrorCode, type EntryCard, type EntryOption, type FreezeRules, type PolicyStatus, type DeskPayChannel, type OrderStatus, type RefundBasis, type RefundMethod, type RefundStatus, type LedgerEntry, type MemberSource, type PayChannel, type Product, type ProductInput, type ProductPatch, type RevenueBucket, type RevenueCategory, type RevenueChannel, type Share, type ShareDisplayStatus, type StaffInput, type StaffPatch, type StaffRole, type AuditAction, type AuditLogEntry, type AuditTarget, type ClassRules, type ClassType, type ClassTypeInput, type ClassTypePatch, type ClassSession, type SessionPatch, type ClassBooking, type CoachProfile, type CoachView, type PtBooking, type PtSlot, type PtSlotMark, type PtCancelKind, type PtRules } from '@climb/core';
 import type { Cents, DateKey } from '@climb/utils';
 import { createHttp, type ClientOptions } from './client';
 
@@ -198,6 +198,8 @@ export const AUDIT_PAGE_SIZE = 50;
 export interface AuditLogRow extends AuditLogEntry {
   /** 操作员工的名字（停用了的也照常显示） */
   staffName: string;
+  /** 对象的会员名、卡名、课名、日期时间、教练（按 targetType + targetId 查当前的数据）；查不到的字段不给 */
+  target: AuditTarget;
 }
 
 /**
