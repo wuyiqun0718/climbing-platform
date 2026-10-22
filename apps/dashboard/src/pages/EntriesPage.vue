@@ -13,7 +13,7 @@ import { api } from '../api';
 import ExportButton from '../components/ExportButton.vue';
 import ShareRecords from '../components/ShareRecords.vue';
 import { entryInsuranceText, voidMessage, voidResultText, voidText } from '../components/checkInVoid';
-import { canDo } from '../permissions';
+import { canDo, canSeeStore } from '../permissions';
 import { session, storeLabel } from '../session';
 import { createLatest } from './dashboard';
 
@@ -66,6 +66,8 @@ const columns = computed<Column<CheckInListRow>[]>(() => [
 ]);
 
 const canVoid = computed(() => !!session.state.staff && canDo(session.state.staff.role, 'checkIn.void'));
+// 别的店的入场接口会 403，不给按钮
+const canVoidRow = (r: CheckInListRow) => canVoid.value && !!session.state.staff && canSeeStore(session.state.staff, r.storeId);
 let lastVoid: VoidCheckInResult | null = null;
 const voidAction = (r: CheckInListRow) => async (reason: string) => {
   lastVoid = await api.checkIns.void(r.id, { reason });
@@ -118,13 +120,13 @@ function onVoided() {
       >
         <template #cell-voided="{ row }">
           <span v-if="row.voided" class="voided">{{ voidText(row) }}</span>
-          <span v-else-if="canVoid" @click.stop @keydown.enter.stop>
+          <span v-else-if="canVoidRow(row)" @click.stop @keydown.enter.stop>
             <ConfirmButton
               label="撤销"
               title="撤销这次入场"
               variant="link"
               danger
-              :message="voidMessage(row)"
+              :message="voidMessage(row, { memberName: row.memberName, storeName: storeNameOf(row.storeId) })"
               :action="voidAction(row)"
               @done="onVoided"
             />

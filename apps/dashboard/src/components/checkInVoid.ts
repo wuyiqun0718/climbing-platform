@@ -1,5 +1,6 @@
-import type { MemberEntryRow, VoidCheckInResult } from '@climb/api';
+import { ENTRY_METHOD_TEXT, type MemberEntryRow, type VoidCheckInResult } from '@climb/api';
 import { POLICY_STATUS_TEXT } from '@climb/core';
+import { formatDot } from '@climb/utils';
 
 /**
  * 撤销入场（任务 16）在页面上的文字，会员详情「最近入场」和入场记录页共用。
@@ -10,8 +11,11 @@ import { POLICY_STATUS_TEXT } from '@climb/core';
 export const voidText = (r: Pick<MemberEntryRow, 'voided' | 'voidInfo'>) =>
   r.voidInfo ? `已撤销（${r.voidInfo.byName}：${r.voidInfo.reason}）` : r.voided ? '已撤销' : '';
 
-/** 撤销确认框里的说明 */
-export const voidMessage = (r: Pick<MemberEntryRow, 'deducted' | 'cardId' | 'cardName'>) =>
+/** 撤销确认框里的说明：先说撤的是哪一次（列表里一排「撤销」，点错行要看得出来），再说退不退次数 */
+export const voidMessage = (r: Pick<MemberEntryRow, 'deducted' | 'cardId' | 'cardName' | 'on' | 'method'>, who: { memberName: string; storeName: string }) =>
+  `撤销${who.memberName || '会员'} ${formatDot(r.on)} 在${who.storeName}的入场（${ENTRY_METHOD_TEXT[r.method]}）。` + voidEffect(r);
+
+const voidEffect = (r: Pick<MemberEntryRow, 'deducted' | 'cardId' | 'cardName'>) =>
   r.deducted
     ? `${r.cardName}会退回 ${r.deducted} 次；同一天还有免扣次的入场的话，扣次转到那次，不退。`
     : r.cardId

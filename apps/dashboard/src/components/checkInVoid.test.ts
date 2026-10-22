@@ -9,9 +9,13 @@ describe('撤销入场的文字', () => {
     expect(voidText({ voided: false, voidInfo: null })).toBe('');
   });
 
-  it('确认说明按这次扣没扣次', () => {
-    expect(voidMessage({ deducted: 1, cardId: 'c', cardName: '10 次卡' })).toContain('10 次卡会退回 1 次');
-    expect(voidMessage({ deducted: 0, cardId: 'c', cardName: '月卡' })).toBe('这次没扣次，撤销不退次数。');
+  it('确认说明先说是哪一次，再按这次扣没扣次', () => {
+    const who = { memberName: '许婷', storeName: '滨港店' };
+    expect(voidMessage({ deducted: 1, cardId: 'c', cardName: '10 次卡', on: '2026-10-23', method: 'desk' }, who)).toBe(
+      '撤销许婷 2026.10.23 在滨港店的入场（前台登记）。10 次卡会退回 1 次；同一天还有免扣次的入场的话，扣次转到那次，不退。',
+    );
+    expect(voidMessage({ deducted: 0, cardId: 'c', cardName: '月卡', on: '2026-10-23', method: 'scan' }, who)).toBe('撤销许婷 2026.10.23 在滨港店的入场（扫码）。这次没扣次，撤销不退次数。');
+    expect(voidMessage({ deducted: 0, cardId: null, cardName: '', on: '2026-10-23', method: 'desk' }, { memberName: '', storeName: '滨港店' })).toContain('撤销会员 ');
   });
 
   it('撤销结果：退次、转扣次、保单待退保都说出来', () => {

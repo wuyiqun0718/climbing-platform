@@ -12,7 +12,7 @@ import CardLedgerDrawer from '../components/CardLedgerDrawer.vue';
 import DeskCheckInModal from '../components/DeskCheckInModal.vue';
 import DeskOrderModal from '../components/DeskOrderModal.vue';
 import RefundModal from '../components/RefundModal.vue';
-import { canDo } from '../permissions';
+import { canDo, canSeeStore } from '../permissions';
 import { session, storeLabel } from '../session';
 import { createLatest } from './dashboard';
 
@@ -96,6 +96,8 @@ function onCheckedIn(r: DeskCheckInResult) {
 
 // 撤销入场：退几次、体验券、保险都按接口返回的说，撤完重新拉详情
 const canVoid = computed(() => !!session.state.staff && canDo(session.state.staff.role, 'checkIn.void'));
+// 别的店的入场接口会 403，不给按钮
+const canVoidRow = (r: MemberEntryRow) => canVoid.value && !!session.state.staff && canSeeStore(session.state.staff, r.storeId);
 let lastVoid: VoidCheckInResult | null = null;
 const voidAction = (r: MemberEntryRow) => async (reason: string) => {
   lastVoid = await api.checkIns.void(r.id, { reason });
@@ -225,12 +227,12 @@ const back = () => (window.history.state?.back ? router.back() : router.push({ n
         <template #cell-voided="{ row }">
           <span v-if="row.voided" class="voided">{{ voidText(row) }}</span>
           <ConfirmButton
-            v-else-if="canVoid"
+            v-else-if="canVoidRow(row)"
             label="撤销"
             title="撤销这次入场"
             variant="link"
             danger
-            :message="voidMessage(row)"
+            :message="voidMessage(row, { memberName: data.name, storeName: storeName(row.storeId) })"
             :action="voidAction(row)"
             @done="onVoided"
           />

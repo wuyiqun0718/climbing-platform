@@ -70,7 +70,11 @@ function onRow(row: T, index: number) {
             :key="col.key"
             :style="{ width: col.width, textAlign: alignOf(col) }"
             scope="col"
-          >{{ col.label }}</th>
+          >
+            <template v-if="col.label">{{ col.label }}</template>
+            <!-- 操作列（撤销、停用……）看着不用表头，读屏要有列名 -->
+            <span v-else class="sr-only">操作</span>
+          </th>
         </tr>
       </thead>
       <tbody>
@@ -144,6 +148,7 @@ th {
 td { padding: 11px 14px; white-space: nowrap; vertical-align: middle; border-bottom: 1px solid var(--line); }
 tbody tr:last-child td { border-bottom: 0; }
 td.num { font-family: var(--font-number); font-variant-numeric: tabular-nums; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 tr.clickable { cursor: pointer; }
 tr.clickable:hover td, tr.clickable:focus-visible td { background: var(--brand-soft); }
 tr.clickable:focus-visible { outline: 3px solid var(--ink); outline-offset: -3px; }
