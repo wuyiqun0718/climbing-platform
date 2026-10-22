@@ -17,7 +17,7 @@ import {
   type ProductPatch,
 } from '@climb/core';
 import { Field, Modal, errorText, UiButton, UiSelect } from '@climb/ui-web';
-import { formatYuan } from '@climb/utils';
+import { formatYuan, numberInput } from '@climb/utils';
 import { computed, reactive, ref, useId, watch } from 'vue';
 import { api } from '../api';
 import { canDo } from '../permissions';
@@ -68,7 +68,8 @@ watch(
 );
 
 // 空的输入框传 undefined：选填的就是不填，必填的让校验报错
-const int = (v: string) => (v.trim() === '' ? undefined : Number(v));
+// type="number" 的 v-model 可能是数字也可能是字符串，见 numberInput
+const int = numberInput;
 const perks = () => form.perks.split('\n');
 
 function body(): ProductInput | ProductPatch {

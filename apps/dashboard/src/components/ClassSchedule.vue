@@ -7,10 +7,10 @@ import type { AdminClassRow, ClassWeek } from '@climb/api';
 import { weekStartOf, type ClassType } from '@climb/core';
 import gym from '@gym';
 import { ConfirmButton, Field, Modal, errorText, useToast, UiButton, UiSelect, UiDatePicker } from '@climb/ui-web';
-import { addDays, formatDot, toDateKey, weekdayOf } from '@climb/utils';
+import { addDays, formatDot, numberInput, toDateKey, weekdayOf } from '@climb/utils';
 import { computed, reactive, ref, useId, watch } from 'vue';
 import { api } from '../api';
-import { timeSlots } from './timeSlots';
+import { defaultClassOn, timeSlots } from './timeSlots';
 import ClassRoster from './ClassRoster.vue';
 import { createLatest } from '../pages/dashboard';
 import { canDo } from '../permissions';
@@ -74,7 +74,7 @@ function openForm(s: AdminClassRow | null) {
   Object.assign(form, {
     classTypeId: s?.classTypeId ?? activeTypes.value[0]?.id ?? '',
     storeId: s?.storeId ?? storeId.value ?? session.state.stores[0]?.id ?? '',
-    on: s?.on ?? week.value,
+    on: s?.on ?? defaultClassOn(week.value, today),
     startTime: s?.startTime ?? '19:00',
     capacity: s ? String(s.capacity) : '',
     coachId: s?.coachId ?? '',
@@ -86,7 +86,7 @@ async function submit() {
   if (busy.value) return;
   busy.value = true;
   formErr.value = '';
-  const capacity = form.capacity.trim() ? Number(form.capacity) : undefined;
+  const capacity = numberInput(form.capacity);
   try {
     if (editing.value) {
       await api.classes.update(editing.value.id, { on: form.on, startTime: form.startTime, ...(capacity !== undefined ? { capacity } : {}), coachId: form.coachId || null });

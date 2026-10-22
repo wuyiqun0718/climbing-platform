@@ -45,7 +45,7 @@ const columns: Column<Row>[] = [
   { key: 'deltaText', label: '变化', num: true },
   { key: 'afterText', label: '变化后' },
   { key: 'operatorName', label: '操作人', format: r => r.operatorName || '—' },
-  { key: 'note', label: '备注', format: r => r.note || '—' },
+  { key: 'note', label: '备注', wrap: true, format: r => r.note || '—' },
 ];
 </script>
 

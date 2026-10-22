@@ -5,6 +5,7 @@
  */
 import { classRulesErrors, type ClassRules, type ClassRulesErrors, type ClassType } from '@climb/core';
 import { DataTable, Field, errorText, useToast, type Column, UiButton } from '@climb/ui-web';
+import { numberInput } from '@climb/utils';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { api } from '../api';
 import ClassSchedule from '../components/ClassSchedule.vue';
@@ -110,7 +111,8 @@ async function loadRules() {
     rulesLoadFailed.value = true;
   }
 }
-const int = (v: string) => (v.trim() === '' ? undefined : Number(v));
+// type="number" 的 v-model 可能是数字也可能是字符串，见 numberInput
+const int = numberInput;
 async function saveRules() {
   if (rulesBusy.value) return;
   rulesErr.value = '';

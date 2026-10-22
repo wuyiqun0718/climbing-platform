@@ -1,5 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, addMonths, isDateKey, daysBetween, endOfMonth, formatDotTime, formatYuan, formatYuanCompact, maskPhone } from './index';
+import { addDays, addMonths, isDateKey, daysBetween, endOfMonth, formatDotTime, formatYuan, formatYuanCompact, maskPhone, numberInput } from './index';
+
+describe('numberInput', () => {
+  it('Vue 给 type="number" 的是数字，原样返回', () => {
+    expect(numberInput(365)).toBe(365);
+    expect(numberInput(0)).toBe(0);
+  });
+  it('字符串去空格转数字，空的返回 undefined', () => {
+    expect(numberInput(' 12 ')).toBe(12);
+    expect(numberInput('')).toBeUndefined();
+    expect(numberInput('  ')).toBeUndefined();
+    expect(numberInput(null)).toBeUndefined();
+  });
+  it('不是数字的交给校验（NaN）', () => {
+    expect(numberInput('abc')).toBeNaN();
+  });
+});
 
 describe('date', () => {
   it('合法日期：格式对且真实存在', () => {

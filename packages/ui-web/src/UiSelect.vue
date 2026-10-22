@@ -190,8 +190,8 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 .sm .ui-select-trigger { gap: 10px; min-height: 34px; padding: 0 12px; font-size: 13px; }
-.ui-select-trigger:focus-visible,
-.open .ui-select-trigger { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 55%, transparent); }
+/* 焦点描边和按钮、输入框一样；弹层离按钮 8px，键盘打开时不压住描边 */
+.ui-select-trigger:focus-visible { outline: 3px solid var(--focus-ring, var(--ink)); outline-offset: 2px; }
 .ui-select-trigger:disabled { cursor: default; opacity: 0.5; }
 .value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .value.placeholder { color: var(--ink-muted); }
@@ -199,7 +199,7 @@ onBeforeUnmount(() => {
 .open .arrow { transform: rotate(180deg); }
 .list {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 8px);
   left: 0;
   z-index: 50;
   min-width: 100%;
@@ -213,7 +213,7 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-sm);
   box-shadow: 0 6px 18px color-mix(in srgb, var(--ink) 18%, transparent);
 }
-.list.up { top: auto; bottom: calc(100% + 4px); }
+.list.up { top: auto; bottom: calc(100% + 8px); }
 .list.end { right: 0; left: auto; }
 .list li {
   display: flex;

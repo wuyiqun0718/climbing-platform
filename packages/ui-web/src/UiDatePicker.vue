@@ -3,7 +3,8 @@
  * 日期选择，替代原生 <input type="date">：外观和 UiSelect 一样（2px 黑框，md 42px / sm 34px），
  * 点开是自己画的月历（周一开头，今天加圈，选中黑底，min / max 外的灰掉不能点）。
  * v-model 是 YYYY-MM-DD，空字符串表示没选。
- * 键盘（焦点一直在按钮上，月历用 aria-activedescendant 指当前格）：
+ * 读屏按 APG 的日期组合框：按钮是 combobox、弹出 grid；焦点一直在按钮上，月历用 aria-activedescendant 指当前格。
+ * 键盘：
  *   Enter / 空格 / ↓ 打开；方向键左右一天、上下一周；PageUp / PageDown 换月；Home / End 到周一 / 周日；
  *   Enter 选中；Esc 收起（在弹窗里只收月历，不关弹窗）；Tab 收起。
  * id、aria-* 落在按钮上，能直接放进 Field；class / style 落在外层。日期计算在 datepicker.ts。
@@ -133,7 +134,8 @@ onBeforeUnmount(() => {
     <button
       type="button"
       class="ui-date-trigger"
-      aria-haspopup="dialog"
+      role="combobox"
+      aria-haspopup="grid"
       :aria-expanded="open"
       :aria-controls="gridId"
       :aria-activedescendant="open && active ? cellId(active) : undefined"
@@ -200,15 +202,15 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 .sm .ui-date-trigger { gap: 10px; min-height: 34px; padding: 0 12px; font-size: 13px; }
-.ui-date-trigger:focus-visible,
-.open .ui-date-trigger { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 55%, transparent); }
+/* 焦点描边和按钮、输入框一样；弹层离按钮 8px，键盘打开时不压住描边 */
+.ui-date-trigger:focus-visible { outline: 3px solid var(--focus-ring, var(--ink)); outline-offset: 2px; }
 .ui-date-trigger:disabled { cursor: default; opacity: 0.5; }
 .value { flex: 1; min-width: 0; white-space: nowrap; }
 .value.placeholder { color: var(--ink-muted); }
 .icon { flex: none; width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }
 .pop {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 8px);
   left: 0;
   z-index: 50;
   width: 272px;
@@ -218,7 +220,7 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-md);
   box-shadow: 0 6px 18px color-mix(in srgb, var(--ink) 18%, transparent);
 }
-.pop.up { top: auto; bottom: calc(100% + 4px); }
+.pop.up { top: auto; bottom: calc(100% + 8px); }
 .pop.end { right: 0; left: auto; }
 .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .title { font-size: 14px; font-weight: 700; }

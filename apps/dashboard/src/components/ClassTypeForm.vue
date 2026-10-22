@@ -6,6 +6,7 @@
  */
 import { classTypePatchErrors, newClassTypeErrors, type ClassType, type ClassTypeErrors, type ClassTypeInput, type ClassTypePatch } from '@climb/core';
 import { Field, Modal, errorText, UiButton, UiSelect } from '@climb/ui-web';
+import { numberInput } from '@climb/utils';
 import { computed, reactive, ref, useId, watch } from 'vue';
 import { api } from '../api';
 import { badField } from './memberForm';
@@ -43,7 +44,8 @@ watch(
   { immediate: true },
 );
 
-const int = (v: string) => (v.trim() === '' ? undefined : Number(v));
+// type="number" 的 v-model 可能是数字也可能是字符串，见 numberInput
+const int = numberInput;
 
 async function submit() {
   if (busy.value) return;

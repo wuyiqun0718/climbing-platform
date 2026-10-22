@@ -8,6 +8,8 @@ export interface Column<T> {
   num?: boolean;
   /** CSS 宽度，比如 '120px' */
   width?: string;
+  /** 长文字列（备注、原因、卖点）：换行显示，不把表格撑宽；其他列默认不换行 */
+  wrap?: boolean;
   /** 没有插槽时用它算显示文字；不给就直接显示 row[key] */
   format?: (row: T) => string | number;
 }

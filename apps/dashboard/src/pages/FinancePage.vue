@@ -79,7 +79,7 @@ const refundColumns = computed<Column<FinanceRefundRow>[]>(() => [
   { key: 'orderAmountCents', label: '原实付', num: true, format: r => formatYuan(r.orderAmountCents) },
   { key: 'amountCents', label: '退款', num: true, format: r => formatYuan(r.amountCents) },
   { key: 'method', label: '怎么退', format: r => REFUND_METHOD_TEXT[r.method] },
-  { key: 'reason', label: '原因' },
+  { key: 'reason', label: '原因', wrap: true },
 ]);
 
 const show = (v: number | undefined) => (v === undefined ? '—' : formatYuan(v));

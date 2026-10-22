@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { timeSlots } from './timeSlots';
+import { defaultClassOn, timeSlots } from './timeSlots';
+
+describe('defaultClassOn', () => {
+  it('这一周默认今天', () => {
+    expect(defaultClassOn('2026-10-19', '2026-10-23')).toBe('2026-10-23');
+    expect(defaultClassOn('2026-10-19', '2026-10-19')).toBe('2026-10-19');
+    expect(defaultClassOn('2026-10-19', '2026-10-25')).toBe('2026-10-25');
+  });
+  it('别的周默认周一', () => {
+    expect(defaultClassOn('2026-10-26', '2026-10-23')).toBe('2026-10-26');
+    expect(defaultClassOn('2026-10-12', '2026-10-23')).toBe('2026-10-12');
+  });
+});
 
 describe('timeSlots', () => {
   it('营业时间内 15 分钟一档，不含关门那一刻', () => {

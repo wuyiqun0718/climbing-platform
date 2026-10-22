@@ -35,6 +35,30 @@ export function nextFocusIndex(current: number, count: number, shift: boolean): 
   return shift ? (current - 1 + count) % count : (current + 1) % count;
 }
 
+/** 弹窗里能聚焦的元素的分类，给 initialFocusIndex 用 */
+export interface FocusCandidate {
+  autofocus?: boolean;
+  /** 输入框、多行输入、下拉、日期这类要填的 */
+  field?: boolean;
+  /** 右上角 × */
+  close?: boolean;
+}
+
+/**
+ * 弹窗打开时先聚焦哪一个：写了 autofocus 的 → 第一个要填的 → 右上角 × → -1（聚焦面板本身）。
+ * 不挑普通按钮：课程名单第一个是「缺席」，打开就聚焦它，回车会误点。
+ */
+export function initialFocusIndex(list: readonly FocusCandidate[]): number {
+  const auto = list.findIndex(c => c.autofocus);
+  if (auto >= 0) return auto;
+  const field = list.findIndex(c => c.field && !c.close);
+  if (field >= 0) return field;
+  return list.findIndex(c => c.close);
+}
+
+/** 算「要填的」：原生输入控件，加上 UiSelect（combobox）和 UiDatePicker 的按钮 */
+export const FIELD = 'input, textarea, select, [role="combobox"]';
+
 export const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 

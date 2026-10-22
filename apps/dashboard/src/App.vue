@@ -98,6 +98,8 @@ function logout() {
   --side-border: color-mix(in srgb, var(--surface) 24%, transparent);
   --side-line: color-mix(in srgb, var(--surface) 16%, transparent);
   --side-hover: color-mix(in srgb, var(--surface) 8%, transparent);
+  /* 黑底上黑描边看不见，侧栏里的焦点框用白色 */
+  --focus-ring: var(--surface);
 }
 .shell { display: grid; grid-template-columns: 216px minmax(0, 1fr); min-height: 100vh; }
 .side { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 18px; padding: 18px 12px; background: var(--ink); color: var(--surface); }

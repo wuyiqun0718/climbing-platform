@@ -1,5 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { REASON_MAX_LENGTH, createModalStack, errorText, nextFocusIndex, reasonError } from './overlay';
+import { REASON_MAX_LENGTH, createModalStack, errorText, initialFocusIndex, nextFocusIndex, reasonError } from './overlay';
+
+describe('initialFocusIndex', () => {
+  const x = { close: true };
+  it('有 autofocus 先聚焦它', () => {
+    expect(initialFocusIndex([x, { field: true }, { autofocus: true, field: true }])).toBe(2);
+  });
+  it('表单弹窗跳过 ×，聚焦第一个要填的', () => {
+    expect(initialFocusIndex([x, {}, { field: true }, { field: true }])).toBe(2);
+  });
+  it('没有要填的就聚焦 ×，不聚焦普通按钮（名单的「缺席」）', () => {
+    expect(initialFocusIndex([x, {}, {}])).toBe(0);
+  });
+  it('什么都没有返回 -1，聚焦面板', () => {
+    expect(initialFocusIndex([])).toBe(-1);
+    expect(initialFocusIndex([{}])).toBe(-1);
+  });
+});
 
 describe('modalStack', () => {
   it('只有最上面的弹窗响应 Esc', () => {

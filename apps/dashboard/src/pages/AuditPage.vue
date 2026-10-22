@@ -51,8 +51,8 @@ const columns = computed<Column<AuditLogRow>[]>(() => [
   ...(session.state.storeId === null ? [{ key: 'storeId', label: '门店', format: (r: AuditLogRow) => storeNameOf(r.storeId) }] : []),
   { key: 'action', label: '操作', format: r => AUDIT_ACTION_TEXT[r.action] },
   { key: 'targetId', label: '对象', format: r => `${r.targetType} ${r.targetId}` },
-  { key: 'reason', label: '原因', format: r => r.reason || '—' },
-  { key: 'change', label: '改前 → 改后' },
+  { key: 'reason', label: '原因', wrap: true, format: r => r.reason || '—' },
+  { key: 'change', label: '改前 → 改后', wrap: true },
 ]);
 </script>
 

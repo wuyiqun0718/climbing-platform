@@ -96,7 +96,7 @@ function onRow(row: T, index: number) {
             <td
               v-for="col in columns"
               :key="col.key"
-              :class="{ num: col.num }"
+              :class="{ num: col.num, 'wrap-text': col.wrap }"
               :style="{ textAlign: alignOf(col) }"
             >
               <slot :name="`cell-${col.key}`" :row="row" :value="field(row, col.key)" :index="i">{{ display(col, row) }}</slot>
@@ -147,6 +147,8 @@ th {
 }
 td { padding: 11px 14px; white-space: nowrap; vertical-align: middle; border-bottom: 1px solid var(--line); }
 tbody tr:last-child td { border-bottom: 0; }
+/* 长文字列：至少 14 个字宽，再长就换行；连续的英文、单号也能断开 */
+td.wrap-text { min-width: 14em; white-space: normal; overflow-wrap: anywhere; }
 td.num { font-family: var(--font-number); font-variant-numeric: tabular-nums; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 tr.clickable { cursor: pointer; }
@@ -155,7 +157,7 @@ tr.clickable { cursor: pointer; }
   tr.clickable:hover td { background: var(--brand-soft); }
 }
 tr.clickable:focus-visible td { background: var(--brand-soft); }
-tr.clickable:focus-visible { outline: 3px solid var(--ink); outline-offset: -3px; }
+tr.clickable:focus-visible { outline: 3px solid var(--focus-ring, var(--ink)); outline-offset: -3px; }
 .state td { padding: 36px 14px; text-align: center; color: var(--ink-muted); }
 /* 触屏（平板前台）：能点的地方至少 44px，桌面鼠标不变 */
 @media (pointer: coarse) {

@@ -1,12 +1,12 @@
 <script setup lang="ts">
 /**
  * 弹窗，用 v-model:open。Esc、点遮罩、右上角 × 都会关；busy（提交中）时都不让关。
- * 打开时焦点进弹窗（有 autofocus 的元素优先），Tab 在弹窗里循环，关掉后焦点回到打开前的元素。
+ * 打开时焦点进弹窗：autofocus 的元素 → 第一个要填的 → 右上角 ×（见 initialFocusIndex），Tab 在弹窗里循环，关掉后焦点回到打开前的元素。
  * 弹窗里套弹窗时 Esc 只关最上面那个。
  * 底部按钮放 #footer 插槽；表单弹窗可以把 <form> 放默认插槽，提交按钮用 form 属性关联。
  */
 import { nextTick, onBeforeUnmount, ref, useId, watch } from 'vue';
-import { FOCUSABLE, modalStack, nextFocusIndex } from './overlay';
+import { FIELD, FOCUSABLE, initialFocusIndex, modalStack, nextFocusIndex } from './overlay';
 
 const props = withDefaults(
   defineProps<{
@@ -68,8 +68,9 @@ async function activate() {
   restoreFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   document.addEventListener('keydown', onKeydown, true);
   await nextTick();
-  const auto = panel.value?.querySelector<HTMLElement>('[autofocus]');
-  (auto ?? focusables()[0] ?? panel.value)?.focus();
+  const list = focusables();
+  const i = initialFocusIndex(list.map(el => ({ autofocus: el.hasAttribute('autofocus'), field: el.matches(FIELD), close: el.classList.contains('x') })));
+  (list[i] ?? panel.value)?.focus();
 }
 
 function deactivate() {

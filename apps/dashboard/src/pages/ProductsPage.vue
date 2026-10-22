@@ -44,7 +44,7 @@ const columns: Column<Product>[] = [
   { key: 'name', label: '名称' },
   { key: 'spec', label: '规格', format: spec },
   { key: 'priceCents', label: '标价', num: true, format: p => formatYuan(p.priceCents) },
-  { key: 'perks', label: '卖点', format: p => p.perks.join('；') || '—' },
+  { key: 'perks', label: '卖点', wrap: true, format: p => p.perks.join('；') || '—' },
   { key: 'sort', label: '排序', num: true, width: '64px', format: p => p.sort ?? 0 },
   { key: 'onSale', label: '状态', width: '140px' },
 ];
