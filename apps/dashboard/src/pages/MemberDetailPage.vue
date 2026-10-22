@@ -152,7 +152,15 @@ const back = () => (window.history.state?.back ? router.back() : router.push({ n
       </span>
     </div>
   </header>
-  <DeskCheckInModal v-if="data" v-model:open="checkInOpen" :member="{ id: data.id, name: data.name }" @created="onCheckedIn" />
+  <DeskCheckInModal
+    v-if="data"
+    v-model:open="checkInOpen"
+    :member="{ id: data.id, name: data.name }"
+    :cards="cards.map(c => ({ id: c.card.id, name: c.card.name, state: c.stateText, meta: c.text.meta }))"
+    :can-sell="canOrder"
+    @created="onCheckedIn"
+    @sell="checkInOpen = false; orderOpen = true"
+  />
   <DeskOrderModal v-if="data" v-model:open="orderOpen" :member="{ id: data.id, name: data.name }" @created="onOrdered" />
 
   <p v-if="notFound" class="state error" role="alert">

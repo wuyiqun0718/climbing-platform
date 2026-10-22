@@ -83,7 +83,8 @@ function logout() {
           <UiSelect v-model="storeValue" size="sm" :disabled="stores.length < 2" :options="stores.map(s => ({ value: s.id ?? '', label: s.name }))" />
         </label>
       </div>
-      <RouterView />
+      <!-- 按 path 重建页面：换会员（浏览器后退、改地址）时上一个会员的弹窗一起关掉；只改 query（搜索、页签）不重建 -->
+      <RouterView :key="route.path" />
     </main>
   </div>
   <ToastHost />

@@ -12,8 +12,15 @@ import { api } from '../api';
 import { storeOptions } from '../permissions';
 import { session } from '../session';
 
-const props = defineProps<{ open: boolean; member: { id: string; name: string } }>();
-const emit = defineEmits<{ 'update:open': [open: boolean]; created: [result: DeskCheckInResult] }>();
+const props = defineProps<{
+  open: boolean;
+  member: { id: string; name: string };
+  /** 会员现有的卡和状态（会员详情页给），没有能用的卡时列出来，前台一眼看到为什么（过期、冻结、用完） */
+  cards?: { id: string; name: string; state: string; meta: string }[];
+  /** 能不能在这里直接去收款开卡 */
+  canSell?: boolean;
+}>();
+const emit = defineEmits<{ 'update:open': [open: boolean]; created: [result: DeskCheckInResult]; sell: [] }>();
 
 const formId = useId();
 const storeId = ref('');
@@ -108,7 +115,13 @@ async function submit() {
         <legend>用哪张卡</legend>
         <p v-if="loading && !preview" class="hint">加载中…</p>
         <p v-else-if="loadErr" class="err" role="alert">{{ loadErr }}<UiButton size="sm" @click="load">重试</UiButton></p>
-        <p v-else-if="preview && !preview.options.length" class="hint">没有能用的卡。先收款开卡（比如单次票），再来登记。</p>
+        <div v-else-if="preview && !preview.options.length" class="none">
+          <p class="hint">没有能用的卡，先收款开卡（比如单次票）再登记。</p>
+          <ul v-if="cards?.length" class="why">
+            <li v-for="c in cards" :key="c.id"><span>{{ c.name }}</span><b>{{ c.state }}</b><small>{{ c.meta }}</small></li>
+          </ul>
+          <UiButton v-if="canSell" variant="primary" @click="emit('sell')">收款开卡</UiButton>
+        </div>
         <label v-for="o in preview?.options ?? []" :key="o.card.id" class="opt" :class="{ off: !o.usable }">
           <input v-model="cardId" type="radio" name="card" :value="o.card.id" :disabled="!o.usable" />
           <span class="name">{{ o.card.name }}</span>
@@ -136,6 +149,11 @@ async function submit() {
 .opt.off { cursor: default; opacity: 0.55; }
 /* 选中的那张卡整卡描黑框（1px 线加 1px 阴影，不跳动） */
 .opt:has(input:checked) { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+.none { display: grid; justify-items: start; gap: 10px; }
+.why { display: grid; gap: 6px; width: 100%; margin: 0; padding: 0; list-style: none; }
+.why li { display: grid; grid-template-columns: 1fr auto; column-gap: 10px; padding: 8px 12px; font-size: 13px; background: var(--neutral-soft); border-radius: var(--radius-sm); }
+.why b { font-weight: 700; }
+.why small { grid-column: 1 / -1; font-size: 12px; color: var(--ink); }
 .hint, .note { margin: 0; font-size: 13px; color: var(--ink-muted); }
 .warn, .err { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; padding: 9px 12px; font-size: 13px; background: var(--accent-soft); border-radius: var(--radius-sm); }
 </style>
