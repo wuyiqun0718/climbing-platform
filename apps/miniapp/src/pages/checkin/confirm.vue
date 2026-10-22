@@ -160,6 +160,10 @@ async function submit() {
   }
 }
 
+/** 冻结中的期限卡不在可选列表里（入场规则拦了），单独提示一句，免得会员以为卡没了 */
+const frozenCard = computed(() => member.state.cards.find(c => c.kind === 'period' && c.status === 'frozen'));
+const goUnfreeze = () => frozenCard.value && uni.navigateTo({ url: `/pages/cards/detail?id=${encodeURIComponent(frozenCard.value.id)}` });
+
 const waitInviter = () => uni.redirectTo({ url: '/pages/checkin/done?wait=1' });
 const goShop = () => uni.navigateTo({ url: '/pages/shop/index' });
 </script>
@@ -177,8 +181,10 @@ const goShop = () => uni.navigateTo({ url: '/pages/shop/index' });
       <text v-if="reentry" class="p">今天已经入过场了，这次不扣次</text>
 
       <text class="label">用哪张卡</text>
-      <view v-if="sheet.mustBuy" class="panel">
-        <text class="p first">{{ sheet.waitingInviter ? '老带新体验券要在邀请人到馆的当天用。可以等 TA 入场后再扫，或者先买单次票进。' : '还没有能用的入场卡，买一张单次票就能进。' }}</text>
+      <text v-if="sheet.mustBuy" class="p note">{{ sheet.waitingInviter ? '老带新体验券要在邀请人到馆的当天用。可以等 TA 入场后再扫，或者先买单次票进。' : '还没有能用的入场卡，买一张单次票就能进。' }}</text>
+      <view v-if="frozenCard" class="frozen">
+        <text class="frozen-t">{{ frozenCard.name }}冻结中，提前解冻后才能用</text>
+        <Button mini @tap="goUnfreeze">去解冻</Button>
       </view>
       <view v-for="o in sheet.options" :key="o.card.id" class="opt" :class="{ on: o.card.id === selected, off: !o.usable }" @tap="pick(o.card.id)">
         <view class="radio" />
@@ -207,6 +213,7 @@ const goShop = () => uni.navigateTo({ url: '/pages/shop/index' });
       </template>
 
       <view class="act block"><Button variant="primary" block :disabled="!canSubmit || submitting" @tap="submit">{{ confirmText }}</Button></view>
+      <text v-if="waiver && !agreed" class="fine center">勾选同意告知书后才能入场</text>
       <view v-if="sheet.mustBuy && sheet.waitingInviter" class="act block"><Button block @tap="waitInviter">我等等再扫</Button></view>
     </template>
     <AskSheet />
@@ -234,5 +241,9 @@ const goShop = () => uni.navigateTo({ url: '/pages/shop/index' });
 .tag { padding: 2px 8px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; }
 .fine { display: block; margin-bottom: 16px; font-size: 12px; line-height: 1.6; color: var(--ink-muted); }
 .act { margin-top: 14px; }
+.fine.center { margin-top: 8px; text-align: center; }
+.p.note { margin: 0 0 10px; line-height: 1.6; }
+.frozen { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding: 12px 14px; border: var(--stroke) dashed var(--ink); border-radius: var(--radius-md); }
+.frozen-t { flex: 1; font-size: 14px; line-height: 1.5; color: var(--ink); }
 .act.block { margin-top: 10px; }
 </style>

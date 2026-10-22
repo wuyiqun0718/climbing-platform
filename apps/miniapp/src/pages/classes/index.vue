@@ -243,7 +243,7 @@ const history = computed(() => mine.value.filter(b => b.status !== 'booked' && b
 .segs { display: flex; gap: 8px; padding: 10px 16px; background: var(--surface); border-bottom: var(--stroke) solid var(--ink); }
 .seg { padding: 6px 12px; border-radius: var(--radius-sm); font-size: 14px; color: var(--ink-muted); }
 .seg.on { background: var(--brand); color: var(--on-brand); font-weight: 600; }
-.stores { white-space: nowrap; padding: 10px 16px 0; }
+.stores { box-sizing: border-box; width: 100%; white-space: nowrap; padding: 10px 16px 0; }
 .chip { display: inline-block; margin-right: 8px; padding: 4px 12px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); font-size: 13px; background: var(--surface); }
 .chip.on { background: var(--ink); color: var(--surface); }
 .days { display: flex; gap: 6px; padding: 10px 16px; }

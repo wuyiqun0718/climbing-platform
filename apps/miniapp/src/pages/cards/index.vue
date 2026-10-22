@@ -13,6 +13,7 @@ import { useRequireLogin } from '../../lib/use-login';
 import { member } from '../../stores';
 import { startScan } from '../checkin/start-scan';
 import AskSheet from '../../components/AskSheet.vue';
+import { codeMessage } from '../../lib/errors';
 
 // 要登录：没登录先去登录页，登录完回到这里
 useRequireLogin(() => {
@@ -28,7 +29,9 @@ async function loadReferral() {
 }
 const referralLine = computed(() => {
   const r = referral.value;
-  return r && r.blockedBy !== 'no-period-card' ? `本月还能带 ${r.left} 位朋友免费来爬` : '';
+  if (!r || r.blockedBy === 'no-period-card') return '';
+  // 冻结中、名额用完写原因，不写「还能带 0 位」
+  return r.blockedBy ? codeMessage(r.blockedBy) : `本月还能带 ${r.left} 位朋友免费来爬`;
 });
 
 // 跨天后回到卡包要按新的一天算

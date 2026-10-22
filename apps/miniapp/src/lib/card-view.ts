@@ -31,12 +31,15 @@ export function cardView(card: Card, today: DateKey, done: boolean): CardView {
       unit: '天，冻结中',
       meta: `冻结到 ${formatDot(b.frozenUntil)}，解冻后到期日顺延`,
       tone: 'neutral',
-      acts,
+      // 提前解冻在卡详情里
+      acts: [{ key: 'ledger', label: '去解冻', dark: true }],
       progress: ratio(b.left, b.total),
     };
   }
   if (card.kind === 'period' && b.type === 'days') {
     const future = !!b.startsOn;
+    // 冻结和使用记录都在卡详情里
+    acts.push({ key: 'ledger', label: !done && !future && gym.rules.freezeRules.memberSelfService ? '冻结 / 记录' : '记录' });
     if (!done && !future) acts.push({ key: 'scan', label: '入场', dark: true });
     return {
       kind: future ? `期限卡 · ${formatMonthDay(b.startsOn!)}生效` : '期限卡',
