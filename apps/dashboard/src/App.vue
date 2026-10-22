@@ -4,6 +4,7 @@ import { ToastHost, UiSelect } from '@climb/ui-web';
 import gym from '@gym';
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { NAV_ICONS } from './navIcons';
 import { canDo, storeOptions } from './permissions';
 import { navFor } from './router';
 import { session } from './session';
@@ -45,9 +46,12 @@ function logout() {
           class="nav-item"
           :class="{ on: route.meta.page === n.name }"
           :aria-current="route.meta.page === n.name ? 'page' : undefined"
-        >{{ n.label }}</RouterLink>
+        >
+          <svg class="nav-ic" viewBox="0 0 24 24" aria-hidden="true" v-html="NAV_ICONS[n.name]" />
+          <span>{{ n.label }}</span>
+        </RouterLink>
         <!-- 前台平板页没有侧栏，新开一页，绑完这边后台还在 -->
-        <a v-if="canBindDesk" class="nav-item desk-link" :href="router.resolve({ name: 'desk' }).href" target="_blank" rel="noopener">前台平板<span aria-hidden="true"> ↗</span><span class="sr-only">（新窗口）</span></a>
+        <a v-if="canBindDesk" class="nav-item desk-link" :href="router.resolve({ name: 'desk' }).href" target="_blank" rel="noopener"><svg class="nav-ic" viewBox="0 0 24 24" aria-hidden="true" v-html="NAV_ICONS.desk" /><span>前台平板<span aria-hidden="true"> ↗</span></span><span class="sr-only">（新窗口）</span></a>
       </nav>
       <div v-if="session.state.staff" class="me">
         <div class="me-name">{{ session.state.staff.name }}</div>
@@ -83,7 +87,9 @@ function logout() {
 .brand span { font-family: var(--font-display); font-size: 20px; font-weight: 400; letter-spacing: 0.04em; }
 .brand img { width: 36px; height: 36px; border-radius: var(--radius-sm); }
 nav { display: grid; gap: 4px; }
-.nav-item { padding: 10px 12px; border-radius: var(--radius-sm); color: var(--side-text); text-decoration: none; font-size: 14px; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm); color: var(--side-text); text-decoration: none; font-size: 14px; }
+/* 图标 18px、和文字间距 10px、垂直居中（照原型 .side nav button） */
+.nav-ic { flex: none; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .nav-item:hover { background: var(--side-hover); color: var(--surface); }
 /* relative：里面的 .sr-only 是绝对定位，不然窄屏横滑的导航里它会把整页撑宽 */
 .desk-link { position: relative; margin-top: 8px; color: var(--side-muted); }
