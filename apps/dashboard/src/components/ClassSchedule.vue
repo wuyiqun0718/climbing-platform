@@ -5,10 +5,12 @@
  */
 import type { AdminClassRow, ClassWeek } from '@climb/api';
 import { weekStartOf, type ClassType } from '@climb/core';
+import gym from '@gym';
 import { ConfirmButton, Field, Modal, errorText, useToast, UiButton, UiSelect, UiDatePicker } from '@climb/ui-web';
 import { addDays, formatDot, toDateKey, weekdayOf } from '@climb/utils';
 import { computed, reactive, ref, useId, watch } from 'vue';
 import { api } from '../api';
+import { timeSlots } from './timeSlots';
 import ClassRoster from './ClassRoster.vue';
 import { createLatest } from '../pages/dashboard';
 import { canDo } from '../permissions';
@@ -56,6 +58,8 @@ const formId = useId();
 const formOpen = ref(false);
 const editing = ref<AdminClassRow | null>(null);
 const form = reactive({ classTypeId: '', storeId: '', on: '', startTime: '19:00', capacity: '', coachId: '' });
+// 开始时间：营业时间内 15 分钟一档；改一节已有的课时它原来的时间也在里面
+const timeOptions = computed(() => timeSlots(gym.openHours.open, gym.openHours.close, form.startTime).map(t => ({ value: t, label: t })));
 const formErr = ref('');
 const busy = ref(false);
 const activeTypes = computed(() => props.types.filter(t => t.active));
@@ -195,7 +199,7 @@ async function copyLastWeek() {
         </Field>
       </template>
       <Field label="日期" required v-slot="f"><UiDatePicker v-model="form.on" v-bind="f.attrs" :disabled="busy" /></Field>
-      <Field label="开始时间" required v-slot="f"><input v-model="form.startTime" v-bind="f.attrs" type="time" :disabled="busy" /></Field>
+      <Field label="开始时间" required v-slot="f"><UiSelect v-model="form.startTime" v-bind="f.attrs" :disabled="busy" :options="timeOptions" /></Field>
       <Field label="人数上限" :hint="editing ? '不能少于已约的人数；调大了候补自动补上' : '不填用课程的默认'" v-slot="f">
         <input v-model="form.capacity" v-bind="f.attrs" type="number" min="1" step="1" :disabled="busy" />
       </Field>
