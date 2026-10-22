@@ -116,6 +116,9 @@ function byStatus(status: number) {
   return '没办成，稍后再试';
 }
 
+/** 网络问题或服务器 5xx：重试可能就好了；4xx 是请求本身的问题，重试没用 */
+export const isRetryable = (e: unknown) => !(e instanceof ApiError) || e.status >= 500;
+
 export const errorCode = (e: unknown): string | null => {
   if (!(e instanceof ApiError)) return null;
   const code = (e.data as { code?: unknown } | null)?.code;

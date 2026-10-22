@@ -10,7 +10,7 @@ import { api, pay, run } from '../../api';
 import AskSheet from '../../components/AskSheet.vue';
 import { ask } from '../../lib/ask';
 import { iconStyle } from '../../lib/icons';
-import { errorCode, errorMessage } from '../../lib/errors';
+import { errorCode, errorMessage, isRetryable } from '../../lib/errors';
 import { requireLogin } from '../../lib/use-login';
 import { member } from '../../stores';
 import { CHECKIN_PAGE, fromPageQuery, NOT_OURS_MESSAGE } from './scan';
@@ -38,6 +38,13 @@ const idempotencyKey = `ci-${Date.now().toString(36)}-${Math.random().toString(3
 /** 买单次票时取消没付的订单，再点接着付 */
 let pendingOrder: CreateOrderResult | null = null;
 
+/** 没法入场是因为网络、服务器：码多半还能用，给「重试」 */
+const retryable = ref(false);
+const retry = () => {
+  status.value = 'loading';
+  retryable.value = false;
+  loadPreview();
+};
 const bad = (text: string) => {
   status.value = 'bad';
   message.value = text;
@@ -66,8 +73,9 @@ async function loadPreview() {
     status.value = 'ready';
     loadSigned();
   } catch (e) {
-    // 码过期、用过、不是本馆的：后端的原因翻成中文，让会员重新扫
+    // 码过期、用过、不是本馆的：后端的原因翻成中文，让会员重新扫；断网、5xx 可以原地重试
     bad(errorMessage(e));
+    retryable.value = isRetryable(e);
   }
 }
 
@@ -188,7 +196,8 @@ const goShop = () => uni.navigateTo({ url: '/pages/shop/index' });
     <view v-if="status === 'bad'" class="panel">
       <text class="h">没法入场</text>
       <text class="p">{{ message }}</text>
-      <view class="act"><Button variant="primary" block @tap="rescan">重新扫码</Button></view>
+      <view v-if="retryable" class="act"><Button variant="primary" block @tap="retry">重试</Button></view>
+      <view class="act"><Button :variant="retryable ? 'default' : 'primary'" block @tap="rescan">重新扫码</Button></view>
     </view>
 
     <template v-else-if="status === 'ready' && sheet">

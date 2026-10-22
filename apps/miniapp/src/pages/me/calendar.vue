@@ -5,6 +5,8 @@ import Empty from '@climb/ui-mp/Empty.vue';
 import { fromDateKey, monthOf, toDateKey } from '@climb/utils';
 import { computed, ref } from 'vue';
 import { api, run } from '../../api';
+import { errorMessage } from '../../lib/errors';
+import LoadFailed from '../../components/LoadFailed.vue';
 import { useRequireLogin } from '../../lib/use-login';
 
 /** 攀爬日历：按月看哪天来过、去了哪家店。哪些入场算、同一天怎么合并都由接口按 @climb/core climbCalendar 算 */
@@ -13,12 +15,19 @@ const thisMonth = ref<MonthKey>(monthOf(toDateKey(new Date())));
 const month = ref<MonthKey>(thisMonth.value);
 const data = ref<ClimbCalendar | null>(null);
 
+/** 这个月拉失败的原因；失败时不显示「来了 0 天」，显示重试 */
+const error = ref('');
 async function load() {
   const m = month.value;
-  const res = await run(() => api.me.checkIns(m)).catch(() => null);
+  error.value = '';
+  const res = await run(() => api.me.checkIns(m), { silent: true }).catch(e => {
+    if (m === month.value) error.value = errorMessage(e);
+    return null;
+  });
   // 翻得快时只认最后一次
   if (res && res.month === month.value) data.value = res;
 }
+const failedThisMonth = computed(() => !!error.value && data.value?.month !== month.value);
 
 useRequireLogin(() => {
   thisMonth.value = monthOf(toDateKey(new Date()));
@@ -53,7 +62,7 @@ const climbed = computed(() => [...byDay.value.values()]);
       <text class="title">{{ title }}</text>
       <text class="arrow" :class="{ off: month >= thisMonth }" @tap="go(1)">›</text>
     </view>
-    <text class="sum">这个月来了 {{ climbed.length }} 天</text>
+    <text v-if="!failedThisMonth" class="sum">这个月来了 {{ climbed.length }} 天</text>
 
     <view class="grid">
       <text v-for="w in WEEK_HEAD" :key="w" class="wd">{{ w }}</text>
@@ -69,7 +78,8 @@ const climbed = computed(() => [...byDay.value.values()]);
       <text class="date">{{ Number(d.on.slice(5, 7)) }}月{{ Number(d.on.slice(8)) }}日</text>
       <text class="stores">{{ d.stores.map(s => s.name).join('、') }}</text>
     </view>
-    <Empty v-if="data && !climbed.length" title="这个月还没来过" />
+    <LoadFailed v-if="failedThisMonth" :text="error" @retry="load" />
+    <Empty v-else-if="data && data.month === month && !climbed.length" title="这个月还没来过" text="扫码入场后，那天会在这里标出来。" />
   </view>
 </template>
 

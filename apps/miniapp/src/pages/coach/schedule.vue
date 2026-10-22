@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import type { CoachSchedule, CoachSlotView } from '@climb/api';
 import { addDays, formatMonthDay, toDateKey, weekdayOf } from '@climb/utils';
+import Button from '@climb/ui-mp/Button.vue';
+import Empty from '@climb/ui-mp/Empty.vue';
 import { computed, ref } from 'vue';
 import { api, run } from '../../api';
+import { errorMessage, isRetryable, NETWORK_ERROR } from '../../lib/errors';
+import LoadFailed from '../../components/LoadFailed.vue';
 import AskSheet from '../../components/AskSheet.vue';
 import { ask, choose, prompt } from '../../lib/ask';
 import { useRequireLogin } from '../../lib/use-login';
@@ -20,20 +24,29 @@ const busy = ref(false);
 
 async function load() {
   try {
+    error.value = '';
     data.value = await run(() => api.coach.schedule({ from: today.value, days: 7 }), { silent: true });
     denied.value = false;
-  } catch {
-    denied.value = true;
+  } catch (e) {
+    // 只有接口明说不是教练（403）才算没权限；断网、5xx 显示重试
+    if (isRetryable(e)) error.value = errorMessage(e);
+    else denied.value = true;
   }
 }
 
-useRequireLogin(async () => {
+/** 拉失败的原因（网络、服务器）；跟「不是教练」分开 */
+const error = ref('');
+async function start() {
   today.value = toDateKey(new Date());
   if (day.value < today.value) day.value = today.value;
+  error.value = '';
   await member.ensureLoaded().catch(() => {});
+  if (!member.state.loaded) return void (error.value = NETWORK_ERROR);
   if (!member.state.me?.coach) return void (denied.value = true);
   await load();
-});
+}
+
+useRequireLogin(start);
 
 const days = computed(() => Array.from({ length: 7 }, (_, i) => addDays(today.value, i)));
 const slots = computed(() => data.value?.days.find(d => d.on === day.value)?.slots ?? []);
@@ -107,11 +120,15 @@ async function tap(s: CoachSlotView) {
     return act(() => api.coach.cancel(s.booking!.id, { reason }), '取消了，课时已退回');
   }
 }
+const goHome = () => uni.switchTab({ url: '/pages/index/index' });
 </script>
 
 <template>
   <view class="page">
-    <view v-if="denied" class="empty">这一页只有教练能看</view>
+    <LoadFailed v-if="error && !data" :text="error" @retry="start" />
+    <Empty v-else-if="denied" title="这一页只有教练能看" text="你的账号没有绑定教练。是教练的话，找前台在后台把你设成教练。">
+      <Button mini @tap="goHome">回首页</Button>
+    </Empty>
     <template v-else-if="data">
       <!-- 顶部教练信息条，照原型：头像、名字、今天几节和下一节 -->
       <view class="coach">
@@ -176,5 +193,4 @@ async function tap(s: CoachSlotView) {
 .box.off { background: var(--neutral); }
 .what { flex: 1; min-width: 0; }
 .act-hint { flex-shrink: 0; font-size: 12px; color: var(--ink-muted); }
-.empty { padding: 80px 0; text-align: center; color: var(--ink-muted); }
 </style>

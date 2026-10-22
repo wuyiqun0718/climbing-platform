@@ -3,9 +3,11 @@ import { ApiError, type CreateOrderResult } from '@climb/api';
 import { cardFromProduct, isSingleTicket, productPerks, SHOP_SECTION_LABELS, shopSectionOf, snapshotOf, type Product } from '@climb/core';
 import { formatDot, formatYuan, toDateKey } from '@climb/utils';
 import Button from '@climb/ui-mp/Button.vue';
+import Empty from '@climb/ui-mp/Empty.vue';
 import { onLoad } from '@dcloudio/uni-app';
 import { computed, ref } from 'vue';
 import { api, pay, run } from '../../api';
+import LoadFailed from '../../components/LoadFailed.vue';
 import AskSheet from '../../components/AskSheet.vue';
 import { ask } from '../../lib/ask';
 import { REFUND_NOTE } from '../../config/checkout';
@@ -22,16 +24,21 @@ const paying = ref(false);
 /** 上次取消没付的订单，再点支付时接着付 */
 let pending: CreateOrderResult | null = null;
 
-useRequireLogin(async () => {
-  if (loaded.value) return;
+/** 拉失败的原因；失败时显示重试，不说「已经不卖了」 */
+const error = ref('');
+async function load() {
+  error.value = '';
   try {
-    const list = await run(() => api.products.list(), { loading: '加载中' });
+    const list = await run(() => api.products.list(), { loading: '加载中', silent: true });
     product.value = list.find(p => p.id === productId.value && p.onSale) ?? null;
-  } catch {
-    // run 已经提示过了
-  } finally {
     loaded.value = true;
+  } catch (e) {
+    error.value = errorMessage(e);
   }
+}
+
+useRequireLogin(() => {
+  if (!loaded.value) load();
 });
 
 // 有效期按 @climb/core 发卡的规则预先算一遍，和付款后发的卡一致
@@ -58,6 +65,8 @@ const view = computed(() => product.value && {
   perks: productPerks(product.value),
   price: formatYuan(product.value.priceCents),
 });
+
+const backToShop = () => uni.navigateBack({ fail: () => uni.redirectTo({ url: '/pages/shop/index' }) });
 
 const modal = (title: string, content: string) => ask({ title, content, showCancel: false, confirmText: '知道了' });
 
@@ -118,7 +127,10 @@ async function submit() {
         <Button variant="primary" :disabled="paying" @tap="submit">微信支付</Button>
       </view>
     </template>
-    <view v-else-if="loaded" class="empty">这个已经不卖了，回去换一个看看</view>
+    <LoadFailed v-else-if="error" :text="error" @retry="load" />
+    <Empty v-else-if="loaded" title="这个已经不卖了" text="回去换一个看看。">
+      <Button mini @tap="backToShop">回购卡页</Button>
+    </Empty>
     <AskSheet />
   </view>
 </template>

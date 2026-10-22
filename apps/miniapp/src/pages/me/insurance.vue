@@ -5,6 +5,8 @@ import Empty from '@climb/ui-mp/Empty.vue';
 import { formatDot, formatMonthDay, toDateKey } from '@climb/utils';
 import { computed, ref } from 'vue';
 import { api, run } from '../../api';
+import LoadFailed from '../../components/LoadFailed.vue';
+import { errorMessage } from '../../lib/errors';
 import { useRequireLogin } from '../../lib/use-login';
 
 // 我的 → 保险与告知书：历次保单（每张下面是它保的那几次入场）、风险告知书签没签和签过的版本。
@@ -13,11 +15,14 @@ const data = ref<MyInsurance | null>(null);
 const loaded = ref(false);
 const expanded = ref(false);
 
+/** 拉失败的原因；没拉到过时显示重试，不显示「还没有保单」 */
+const error = ref('');
 async function load() {
+  error.value = '';
   try {
-    data.value = await run(() => api.me.insurance(), { loading: loaded.value ? false : '加载中' });
-  } catch {
-    // run 已经提示过了
+    data.value = await run(() => api.me.insurance(), { loading: loaded.value ? false : '加载中', silent: true });
+  } catch (e) {
+    error.value = errorMessage(e);
   } finally {
     loaded.value = true;
   }
@@ -46,6 +51,8 @@ const waiver = computed(() => {
 
 <template>
   <view class="page">
+    <LoadFailed v-if="error && !data" :text="error" @retry="load" />
+    <template v-else>
     <template v-if="waiver">
       <text class="label">风险告知书</text>
       <view class="panel">
@@ -72,6 +79,7 @@ const waiver = computed(() => {
       </view>
     </view>
     <Empty v-if="loaded && !policies.length" title="还没有保单" text="扫码入场后这里会有记录" />
+    </template>
   </view>
 </template>
 

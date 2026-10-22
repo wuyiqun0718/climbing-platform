@@ -6,21 +6,30 @@ import Button from '@climb/ui-mp/Button.vue';
 import { onLoad } from '@dcloudio/uni-app';
 import { computed, ref } from 'vue';
 import { api, run } from '../../api';
+import { errorMessage } from '../../lib/errors';
+import LoadFailed from '../../components/LoadFailed.vue';
 
 // 看卡种不用登录，到确认订单页再登录
 const products = ref<Product[]>([]);
 const loaded = ref(false);
 const seg = ref<ShopSection | ''>('');
 
-onLoad(async q => {
-  seg.value = (q?.seg as ShopSection | undefined) ?? '';
+/** 拉失败的原因；失败时显示重试，不显示成「没有在售的卡」 */
+const error = ref('');
+async function load() {
+  error.value = '';
   try {
-    products.value = await run(() => api.products.list(), { loading: '加载中' });
-  } catch {
-    // run 已经提示过了
+    products.value = await run(() => api.products.list(), { loading: '加载中', silent: true });
+  } catch (e) {
+    error.value = errorMessage(e);
   } finally {
     loaded.value = true;
   }
+}
+
+onLoad(q => {
+  seg.value = (q?.seg as ShopSection | undefined) ?? '';
+  load();
 });
 
 // 分组、排序、哪些显示，规则在 @climb/core
@@ -54,6 +63,8 @@ function buy(productId: string) {
 
 <template>
   <view class="page">
+    <LoadFailed v-if="error && !products.length" :text="error" @retry="load" />
+    <template v-else>
     <view v-if="groups.length" class="segs">
       <text v-for="g in groups" :key="g.section" class="seg" :class="{ on: g.section === current?.section }" @tap="seg = g.section">{{ SHOP_SECTION_LABELS[g.section] }}</text>
     </view>
@@ -79,6 +90,7 @@ function buy(productId: string) {
       <text class="empty-h">暂时没有在售的卡</text>
       <text class="empty-p">前台正在调整价格，稍后再来看看。</text>
     </view>
+    </template>
   </view>
 </template>
 

@@ -6,6 +6,7 @@ import Empty from '@climb/ui-mp/Empty.vue';
 import { formatMonthDay, formatYuan, toDateKey } from '@climb/utils';
 import { computed, ref } from 'vue';
 import { api, pay, run } from '../../api';
+import LoadFailed from '../../components/LoadFailed.vue';
 import AskSheet from '../../components/AskSheet.vue';
 import { ask } from '../../lib/ask';
 import { errorMessage } from '../../lib/errors';
@@ -17,12 +18,17 @@ const loaded = ref(false);
 const paying = ref(false);
 const now = ref(new Date());
 
+/** 拉失败的原因；没拉到过时显示重试，不显示「还没有订单」 */
+const error = ref('');
+const goShop = () => uni.navigateTo({ url: '/pages/shop/index' });
+
 async function load() {
   now.value = new Date();
+  error.value = '';
   try {
-    orders.value = await run(() => api.me.orders(), { loading: loaded.value ? false : '加载中' });
-  } catch {
-    // run 已经提示过了
+    orders.value = await run(() => api.me.orders(), { loading: loaded.value ? false : '加载中', silent: true });
+  } catch (e) {
+    error.value = errorMessage(e);
   } finally {
     loaded.value = true;
   }
@@ -100,7 +106,10 @@ async function resume(orderId: string) {
       <text v-if="r.hint" class="meta">{{ r.hint }}</text>
       <view v-if="r.payable" class="pay"><Button variant="primary" mini :disabled="paying" @tap.stop="resume(r.id)">去付款</Button></view>
     </view>
-    <Empty v-if="loaded && !rows.length" title="还没有订单" />
+    <LoadFailed v-if="error && !rows.length" :text="error" @retry="load" />
+    <Empty v-else-if="loaded && !rows.length" title="还没有订单" text="买过的卡、票都会记在这里。">
+      <Button mini @tap="goShop">去购卡</Button>
+    </Empty>
     <text v-if="rows.length" class="fine">退款请找前台办理。前台买的卡也会记在这里。</text>
     <AskSheet />
   </view>

@@ -10,7 +10,8 @@ import { computed, ref } from 'vue';
 import { api, auth, run } from '../../api';
 import AskSheet from '../../components/AskSheet.vue';
 import { ask } from '../../lib/ask';
-import { codeMessage } from '../../lib/errors';
+import { codeMessage, errorMessage } from '../../lib/errors';
+import LoadFailed from '../../components/LoadFailed.vue';
 import { requireLogin } from '../../lib/use-login';
 import { member } from '../../stores';
 import { ensureStores, pickStore, storePick } from '../../stores/store-pick';
@@ -33,18 +34,27 @@ const sessions = ref<ClassSessionView[]>([]);
 const mine = ref<MyClassBooking[]>([]);
 const loaded = ref(false);
 
+/** 这一天的课表拉失败的原因；失败时显示重试，不说「这天没有团课」 */
+const scheduleError = ref('');
 /** 每次拉课表加 1；快速切日期、门店时，先发的请求晚回来不覆盖后面的 */
 let scheduleSeq = 0;
 async function loadSchedule() {
   const seq = ++scheduleSeq;
-  const list = await run(() => api.classes.list({ store: storePick.currentId, from: day.value, days: 1 })).catch(() => null);
+  let failed = '';
+  const list = await run(() => api.classes.list({ store: storePick.currentId, from: day.value, days: 1 }), { silent: true }).catch(e => {
+    failed = errorMessage(e);
+    return null;
+  });
   if (seq !== scheduleSeq) return;
-  if (list) sessions.value = list;
+  // 拉失败时清掉旧的课，免得把上一天的课当成这一天的
+  sessions.value = list ?? [];
+  scheduleError.value = failed;
   loaded.value = true;
 }
 async function loadMine() {
   if (!auth.loggedIn()) return void (mine.value = []);
-  mine.value = await run(() => api.classes.mine()).catch(() => mine.value);
+  // 课表那边已经显示了失败和重试，这里不再弹提示
+  mine.value = await run(() => api.classes.mine(), { silent: true }).catch(() => mine.value);
 }
 const reload = () => Promise.all([loadSchedule(), loadMine()]);
 
@@ -187,11 +197,12 @@ const history = computed(() => mine.value.filter(b => b.status !== 'booked' && b
       <view class="hint">
         <text v-if="classPack">你的「{{ classPack.name }}」还剩 {{ classPack.remaining }} 次，约课时自动扣。</text>
         <text v-else-if="member.state.me">还没有团课课包，<text class="link" @tap="goBuy">先买一个</text>再约。</text>
-        <text v-else>登录后就能约课。</text>
+        <text v-else-if="!member.state.failed">登录后就能约课。</text>
         <text class="fine">{{ cancelHint }}</text>
       </view>
 
-      <Empty v-if="loaded && !sessions.length" title="这天没有团课" text="换一天看看。" />
+      <LoadFailed v-if="scheduleError" :text="scheduleError" @retry="loadSchedule" />
+      <Empty v-else-if="loaded && !sessions.length" title="这天没有团课" text="换一天或换家店看看。" />
       <template v-for="s in sessions" :key="s.id">
         <!-- 取消的课：第一行时间和状态，原因单独一行，窄屏折行时不和状态挤在一起 -->
         <view v-if="s.status === 'cancelled'" class="row off cancelled">
@@ -220,7 +231,9 @@ const history = computed(() => mine.value.filter(b => b.status !== 'booked' && b
 
     <template v-else>
       <Empty v-if="!member.state.me" title="登录后看你的预约" />
-      <Empty v-else-if="!mine.length" title="还没有预约" text="去课表里约一节吧。" />
+      <Empty v-else-if="!mine.length" title="还没有预约" text="去课表里约一节吧。">
+        <Button mini @tap="tab = 'schedule'">看课表</Button>
+      </Empty>
       <view v-for="b in [...active, ...history]" :key="b.id" class="row" :class="{ off: !active.includes(b) }">
         <view class="time">
           <text class="t1">{{ formatMonthDay(b.session.on) }}</text>

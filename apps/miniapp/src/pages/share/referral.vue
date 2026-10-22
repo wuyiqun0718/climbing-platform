@@ -7,17 +7,24 @@ import Button from '@climb/ui-mp/Button.vue';
 import { onShareAppMessage } from '@dcloudio/uni-app';
 import { computed, ref } from 'vue';
 import { api, run } from '../../api';
+import LoadFailed from '../../components/LoadFailed.vue';
 import AskSheet from '../../components/AskSheet.vue';
 import { ask } from '../../lib/ask';
-import { codeMessage } from '../../lib/errors';
+import { codeMessage, errorMessage } from '../../lib/errors';
 import { useRequireLogin } from '../../lib/use-login';
 import { member } from '../../stores';
 import { claimPath, shareMessage } from './share-link';
 
 /** 名额和能不能发都由后端按 @climb/core referralStatus 算好，页面只显示 */
 const data = ref<MyReferrals | null>(null);
+/** 拉失败的原因；没拉到过时整页显示重试，不留空白 */
+const error = ref('');
 const load = async () => {
-  data.value = await run(() => api.me.referrals()).catch(() => data.value);
+  error.value = '';
+  data.value = await run(() => api.me.referrals(), { silent: true }).catch(e => {
+    error.value = errorMessage(e);
+    return data.value;
+  });
 };
 useRequireLogin(() => {
   load();
@@ -60,6 +67,7 @@ const goShop = () => uni.navigateTo({ url: '/pages/shop/index?seg=period' });
 
 <template>
   <view class="page">
+    <LoadFailed v-if="error && !data" :text="error" @retry="load" />
     <view v-if="status" class="board">
       <text class="h">老带新</text>
       <text class="p">期限卡会员每个月可以带 {{ status.perMonth }} 位新朋友免费来爬一次。{{ sameDay ? '朋友要跟你同一天来，你先扫码入场，TA 再扫码。' : '' }}体验券当月底前有效。</text>

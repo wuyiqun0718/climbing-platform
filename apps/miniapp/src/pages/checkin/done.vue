@@ -6,7 +6,7 @@ import { formatDot } from '@climb/utils';
 import { onLoad, onShow } from '@dcloudio/uni-app';
 import { computed, ref } from 'vue';
 import { api, run } from '../../api';
-import { errorMessage } from '../../lib/errors';
+import { errorMessage, isRetryable } from '../../lib/errors';
 import { requireLogin } from '../../lib/use-login';
 import { startScan } from './start-scan';
 import AskSheet from '../../components/AskSheet.vue';
@@ -27,17 +27,26 @@ const view = computed(() => {
   return r && checkInDoneView({ reentry: r.reentry, deducted: r.deducted, cardKind: r.cardKind, policyStatus: r.policy.status });
 });
 
+/** 断网、服务器出错时能重试；记录不存在（404）就只给回首页 */
+const checkInId = ref('');
+const retryable = ref(false);
+async function loadResult() {
+  try {
+    result.value = await run(() => api.checkIns.get(checkInId.value), { silent: true, loading: '加载中' });
+    status.value = 'done';
+  } catch (e) {
+    status.value = 'bad';
+    message.value = errorMessage(e);
+    retryable.value = isRetryable(e);
+  }
+}
+
 onLoad(async q => {
   const query = (q ?? {}) as Record<string, string | undefined>;
   if (!(await requireLogin({ route: DONE_PAGE, query }))) return;
   if (query.id) {
-    try {
-      result.value = await run(() => api.checkIns.get(query.id!), { silent: true, loading: '加载中' });
-      status.value = 'done';
-    } catch (e) {
-      status.value = 'bad';
-      message.value = errorMessage(e);
-    }
+    checkInId.value = query.id;
+    await loadResult();
   } else if (query.wait) {
     status.value = 'wait';
     await loadWait();
@@ -66,7 +75,9 @@ const goHome = () => uni.switchTab({ url: '/pages/index/index' });
   <view class="page" :class="{ ok: status === 'done' && result && view }">
     <view v-if="status === 'bad'" class="panel">
       <text class="h">{{ message }}</text>
-      <view class="act"><Button variant="primary" block @tap="goHome">回首页</Button></view>
+      <text v-if="retryable" class="p">入场已经办好了的话不会受影响，网络好了再看一眼结果。</text>
+      <view v-if="retryable" class="act"><Button variant="primary" block @tap="loadResult">重试</Button></view>
+      <view class="act"><Button :variant="retryable ? 'default' : 'primary'" block @tap="goHome">回首页</Button></view>
     </view>
 
     <template v-else-if="status === 'done' && result && view">

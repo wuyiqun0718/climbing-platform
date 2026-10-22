@@ -8,10 +8,11 @@ import { formatDot, toDateKey } from '@climb/utils';
 import { onLoad, onShareAppMessage } from '@dcloudio/uni-app';
 import { computed, ref } from 'vue';
 import { api, run } from '../../api';
+import LoadFailed from '../../components/LoadFailed.vue';
 import AskSheet from '../../components/AskSheet.vue';
 import { ask } from '../../lib/ask';
 import { cardView } from '../../lib/card-view';
-import { codeMessage } from '../../lib/errors';
+import { codeMessage, NETWORK_ERROR } from '../../lib/errors';
 import { useRequireLogin } from '../../lib/use-login';
 import { member } from '../../stores';
 import { claimPath, shareMessage } from './share-link';
@@ -60,11 +61,15 @@ onShareAppMessage(() => message.value ?? { title: '一起来攀岩', path: '/pag
 
 // H5 没有微信转发，开发时把领取路径复制出来
 const copyPath = () => share.value && uni.setClipboardData({ data: claimPath(share.value.token) });
+const goShop = () => uni.navigateTo({ url: '/pages/shop/index?seg=count' });
 </script>
 
 <template>
   <view class="page">
-    <Empty v-if="member.state.loaded && !card" title="没有能送给朋友的次卡" />
+    <LoadFailed v-if="!member.state.loaded && member.state.failed" :text="NETWORK_ERROR" @retry="member.load().catch(() => {})" />
+    <Empty v-else-if="member.state.loaded && !card" title="没有能送给朋友的次卡" text="买一张次卡，就能把次数分给朋友。">
+      <Button mini @tap="goShop">去购卡</Button>
+    </Empty>
     <template v-else-if="view && card">
       <MemberCard :kind="view.kind" :name="view.name" :value="view.value" :unit="view.unit" :meta="view.meta" :tone="view.tone" :progress="view.progress" />
 

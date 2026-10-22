@@ -2,7 +2,7 @@ import { ApiError, createApi, type ApiRequest, type RequestAdapter } from '@clim
 import { defaultRules } from '@climb/core';
 import { describe, expect, it, vi } from 'vitest';
 import { createMock, MOCK_MEMBERS, mockToken } from '../mock';
-import { errorMessage, NETWORK_ERROR } from './errors';
+import { errorMessage, NETWORK_ERROR, isRetryable } from './errors';
 import { createRunner, withRelogin } from './request';
 
 const TODAY = '2026-10-21';
@@ -100,5 +100,14 @@ describe('run：转圈和提示', () => {
     const { log, ui } = fakeUi();
     await createRunner(ui)(async () => 1, { loading: false });
     expect(log).toEqual([]);
+  });
+});
+
+describe('isRetryable', () => {
+  it('断网和 5xx 可以重试，4xx 不行', () => {
+    expect(isRetryable(new Error('断网'))).toBe(true);
+    expect(isRetryable(new ApiError(502, null))).toBe(true);
+    expect(isRetryable(new ApiError(403, { code: 'forbidden' }))).toBe(false);
+    expect(isRetryable(new ApiError(404, null))).toBe(false);
   });
 });

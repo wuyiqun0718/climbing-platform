@@ -7,7 +7,8 @@ import Button from '@climb/ui-mp/Button.vue';
 import { onLoad, onShow } from '@dcloudio/uni-app';
 import { computed, ref } from 'vue';
 import { api, auth, run } from '../../api';
-import { codeMessage } from '../../lib/errors';
+import LoadFailed from '../../components/LoadFailed.vue';
+import { codeMessage, errorMessage, isRetryable } from '../../lib/errors';
 import { requireLogin } from '../../lib/use-login';
 import { member } from '../../stores';
 import { CLAIM_PAGE } from './share-link';
@@ -18,13 +19,19 @@ onLoad(q => { token.value = (q?.t as string | undefined) ?? ''; });
 /** 没登录也能看；能不能领由后端按 @climb/core claimBlockedBy 算好，领的时候还会再校验一遍 */
 const share = ref<ShareView | null>(null);
 const failed = ref(false);
+/** 网络、服务器出错：可以重试，跟「链接不对」分开 */
+const error = ref('');
 async function load() {
   if (!token.value) return void (failed.value = true);
-  await auth.whenReady();
+  error.value = '';
   try {
-    share.value = await run(() => api.shares.get(token.value));
-  } catch {
-    failed.value = !share.value;
+    await auth.whenReady();
+    share.value = await run(() => api.shares.get(token.value), { silent: true });
+    failed.value = false;
+  } catch (e) {
+    if (share.value) return;
+    if (isRetryable(e)) error.value = errorMessage(e);
+    else failed.value = true;
   }
 }
 // 登录完回到这里会再走一次 onShow，按登录后的身份重新查
@@ -70,7 +77,8 @@ const goHome = () => uni.switchTab({ url: '/pages/index/index' });
 
 <template>
   <view class="page">
-    <view v-if="failed" class="box bad">
+    <LoadFailed v-if="error && !share" :text="error" @retry="load" />
+    <view v-else-if="failed" class="box bad">
       <text class="p">这个分享打不开，可能链接不完整，让朋友重新发一次。</text>
       <Button block @click="goHome">去首页</Button>
     </view>
