@@ -73,7 +73,7 @@ async function onKeydown(e: KeyboardEvent, i: number) {
 .tabs button.on { color: var(--ink); background: var(--surface); border-color: var(--ink); box-shadow: 0 var(--stroke) 0 var(--surface); }
 .chips { flex-wrap: wrap; gap: 8px; }
 .chips button {
-  min-height: 32px;
+  min-height: 34px;
   padding: 0 14px;
   font-size: 13px;
   color: var(--ink);

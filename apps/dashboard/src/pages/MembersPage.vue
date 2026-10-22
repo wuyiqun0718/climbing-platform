@@ -108,7 +108,10 @@ const emptyText = () => (qFromRoute() ? `没找到「${qFromRoute()}」，换个
   <DeskOrderModal v-model:open="orderOpen" @created="onOrdered" />
   <MemberForm v-model:open="formOpen" :phone="prefillPhone()" @created="onCreated" @open-existing="openMember" />
   <form class="search" role="search" @submit.prevent="search()">
-    <input v-model="input" class="input-sm" type="search" placeholder="手机号（后四位也行）或名字" aria-label="搜索会员" maxlength="30" />
+    <span class="search-box">
+      <svg class="search-icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" /><path d="m11 11 3.5 3.5" /></svg>
+      <input v-model="input" class="input-sm" type="search" placeholder="手机号（后四位也行）或名字" aria-label="搜索会员" maxlength="30" />
+    </span>
     <UiButton type="submit">搜索</UiButton>
   </form>
   <p v-if="error" class="state error" role="alert">
@@ -157,13 +160,15 @@ const emptyText = () => (qFromRoute() ? `没找到「${qFromRoute()}」，换个
 .page-h h1 { margin: 0; font-family: var(--font-display); font-size: 34px; font-weight: 400; }
 .page-h p { margin: 4px 0 16px; font-size: 13px; color: var(--ink-muted); }
 .search { display: flex; gap: 8px; max-width: 420px; margin-bottom: 16px; }
-.search input { flex: 1; min-width: 0; }
+.search-box { position: relative; display: flex; flex: 1; min-width: 0; }
+.search-box input { flex: 1; min-width: 0; padding-left: 32px; }
+.search-icon { position: absolute; top: 50%; left: 11px; width: 15px; height: 15px; fill: none; stroke: var(--ink-muted); stroke-width: 2; stroke-linecap: round; transform: translateY(-50%); pointer-events: none; }
 .state { margin: 0 0 16px; font-size: 13px; color: var(--ink-muted); }
 .state.error { display: flex; align-items: center; gap: 12px; padding: 10px 14px; color: var(--ink); background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }
 .panel { min-width: 0; padding: 16px 18px; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
 .pager { margin-top: 12px; }
 .who { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; }
-.avatar { display: grid; flex: none; width: 30px; height: 30px; place-items: center; font-size: 13px; font-weight: 700; background: var(--brand-soft); border-radius: 50%; }
+.avatar { display: grid; flex: none; width: 30px; height: 30px; place-items: center; font-size: 13px; font-weight: 700; background: var(--brand-soft); border: var(--stroke) solid var(--ink); border-radius: 50%; }
 .muted { color: var(--ink-muted); }
 .chip { display: inline-block; margin-left: 6px; padding: 1px 8px; font-size: 12px; font-weight: 600; border-radius: 999px; }
 .chip.quiet { color: var(--ink); background: var(--neutral-soft); }

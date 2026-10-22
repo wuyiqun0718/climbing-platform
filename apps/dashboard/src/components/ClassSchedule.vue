@@ -218,7 +218,7 @@ async function copyLastWeek() {
 .off { margin: 0; font-size: 12px; color: var(--ink-muted); }
 .state { margin: 0 0 12px; font-size: 13px; color: var(--ink-muted); }
 /* 七列装不下（窄屏）就整周横滑，列宽不再往下压 */
-.week { display: grid; grid-template-columns: repeat(7, minmax(138px, 1fr)); gap: 10px; min-width: 0; margin-bottom: 24px; padding-bottom: 4px; overflow-x: auto; transition: opacity 0.15s; }
+.week { display: grid; grid-template-columns: repeat(7, minmax(126px, 1fr)); gap: 10px; min-width: 0; margin-bottom: 24px; padding-bottom: 4px; overflow-x: auto; transition: opacity 0.15s; }
 .week.loading { opacity: 0.55; }
 .col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .col-h { display: flex; align-items: baseline; justify-content: space-between; padding: 6px 10px; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }

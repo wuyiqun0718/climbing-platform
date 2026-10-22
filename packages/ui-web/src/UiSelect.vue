@@ -189,7 +189,7 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-sm);
   cursor: pointer;
 }
-.sm .ui-select-trigger { gap: 10px; min-height: 32px; padding: 0 12px; font-size: 13px; }
+.sm .ui-select-trigger { gap: 10px; min-height: 34px; padding: 0 12px; font-size: 13px; }
 .ui-select-trigger:focus-visible,
 .open .ui-select-trigger { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 55%, transparent); }
 .ui-select-trigger:disabled { cursor: default; opacity: 0.5; }

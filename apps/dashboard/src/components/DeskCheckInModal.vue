@@ -134,6 +134,8 @@ async function submit() {
 .opt small { grid-column: 2; font-size: 12px; color: var(--ink-muted); }
 .opt .deduct { grid-column: 3; grid-row: 1 / span 2; font-size: 12.5px; }
 .opt.off { cursor: default; opacity: 0.55; }
+/* 选中的那张卡整卡描黑框（1px 线加 1px 阴影，不跳动） */
+.opt:has(input:checked) { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
 .hint, .note { margin: 0; font-size: 13px; color: var(--ink-muted); }
 .warn, .err { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; padding: 9px 12px; font-size: 13px; background: var(--accent-soft); border-radius: var(--radius-sm); }
 </style>
