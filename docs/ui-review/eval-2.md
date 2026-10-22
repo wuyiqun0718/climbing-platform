@@ -61,18 +61,18 @@
 
 | # | 问题 | 位置 | 状态 |
 | --- | --- | --- | --- |
-| 3-P1-1 | 确认订单的「生效时间」一行：值太长时标题和值挤在一起，不像下一行「到期时间」那样左右分开；375 宽下更明显，也没有分隔线 | `pages/shop/checkout.vue` | 已修（eval3-polish）：标题左、值右，行间加分隔线；「接在现有期限卡后面」挪到值下面的小字；卡种改成黑底小标签（同原型） |
-| 3-P1-2 | 教练排班的空闲格子只写「空闲」，看不出点了能干什么（原型右边有「点一下占上」） | `pages/coach/schedule.vue` | 已修（eval3-polish）：右边写「点一下占上 / 取消 / 确认」，过去的格子不写 |
+| 3-P1-1 | 确认订单的「生效时间」一行：值太长时标题和值挤在一起，不像下一行「到期时间」那样左右分开；375 宽下更明显，也没有分隔线 | `pages/shop/checkout.vue` | 已修 0fe1426（eval3-polish）：标题左、值右，行间加分隔线；「接在现有期限卡后面」挪到值下面的小字；卡种改成黑底小标签（同原型） |
+| 3-P1-2 | 教练排班的空闲格子只写「空闲」，看不出点了能干什么（原型右边有「点一下占上」） | `pages/coach/schedule.vue` | 已修 0fe1426（eval3-polish）：右边写「点一下占上 / 取消 / 确认」，过去的格子不写 |
 | 3-P1-3 | 确认订单的退款说明直接显示「（占位，等馆方确认）」，会员能看到 | `pages/shop/checkout.vue` `REFUND_NOTE` | 没改，见待拍板 7 |
 
 ### P2
 
 | # | 问题 | 位置 | 状态 |
 | --- | --- | --- | --- |
-| 3-P2-1 | 首页快捷入口图标跟原型对不上：「购卡」用的是银行卡图标（和 tab「卡包」同一个），团课是日历，私教是人像；原型是票、两个人、哑铃 | `pages/index/index.vue`、`lib/icons.ts` | 已修（eval3-polish）：加 ticket / users / dumbbell 线稿图标 |
-| 3-P2-2 | 扫码入场大按钮右边的箭头是「›」文字，比标题还粗，和左边图标不在一条线上 | `pages/index/index.vue` | 已修（eval3-polish）：换成 24px 线稿 chevron，跟扫码图标同一套 |
-| 3-P2-3 | 入场确认选中的卡，单选圆圈整个涂黑，像个黑点；原型是圆圈里一个实心点 | `pages/checkin/confirm.vue` `.radio` | 已修（eval3-polish） |
-| 3-P2-4 | 入场确认的保险一行没有图标，原型有盾牌 | `pages/checkin/confirm.vue` | 已修（eval3-polish）：用「我的」菜单里同一个 shield 图标 |
+| 3-P2-1 | 首页快捷入口图标跟原型对不上：「购卡」用的是银行卡图标（和 tab「卡包」同一个），团课是日历，私教是人像；原型是票、两个人、哑铃 | `pages/index/index.vue`、`lib/icons.ts` | 已修 0fe1426（eval3-polish）：加 ticket / users / dumbbell 线稿图标 |
+| 3-P2-2 | 扫码入场大按钮右边的箭头是「›」文字，比标题还粗，和左边图标不在一条线上 | `pages/index/index.vue` | 已修 0fe1426（eval3-polish）：换成 24px 线稿 chevron，跟扫码图标同一套 |
+| 3-P2-3 | 入场确认选中的卡，单选圆圈整个涂黑，像个黑点；原型是圆圈里一个实心点 | `pages/checkin/confirm.vue` `.radio` | 已修 0fe1426（eval3-polish） |
+| 3-P2-4 | 入场确认的保险一行没有图标，原型有盾牌 | `pages/checkin/confirm.vue` | 已修 0fe1426（eval3-polish）：用「我的」菜单里同一个 shield 图标 |
 | 3-P2-5 | 首页老带新横条副标题在 375 下折成两行（原型一行「这个月还能免费带 1 位新朋友来爬」） | `pages/index/index.vue` | 没改：要接 `/me/referrals` 拿名额，下一轮做 |
 | 3-P2-6 | 已签过告知书的会员，确认页看不到「已签过」那一行（原型有） | `pages/checkin/confirm.vue` | 没改：preview 接口签过时不返回版本信息，要接口带上才能写日期 |
 | 3-P2-7 | 教练排班没有原型的日期标题「明天（10月23日）· 2 节」和顶部教练信息条 | `pages/coach/schedule.vue` | 没改 |
