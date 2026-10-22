@@ -340,11 +340,15 @@
 
 ### 32. 日期、时间还是原生输入框
 
+> **已修** `f8aab78`（日期）。`ui-web/UiDatePicker.vue`：外观同 UiSelect（md 42px / sm 34px），自己画的月历（周一开头、今天加圈、选中黑底、min/max 外灰掉、「今天」快捷），键盘：方向键按天 / 周、PageUp / PageDown 换月、Home / End 到周一 / 周日、Enter 选、Esc 收起（弹窗里只收月历）。日期计算在 `datepicker.ts`，10 条单测；仓库没有 @vue/test-utils，组件本身的键盘和弹窗里 Esc 用 Playwright 走了一遍。替换了入场、财务（从 / 到）、加一节课、调整卡。**时间还是原生**：加一节课的「开始时间」`type="time"` 没换，下次做时间选择（可能就是 UiSelect 按 15 分钟一档）。截图 `before|after/eval4-datepicker/`（1280、390 各四张）。
+
 - 页面：入场、财务、加一节课、调整卡。
 - 问题：边框和高度已经统一（第 0 条），但点开是浏览器自己的日历，样式和 UiSelect 的列表不一样。
 - 建议：要写一个日期选择组件（键盘、读屏、最小最大日期），这轮不做，记下。
 
 ### 33. 侧栏没有图标
+
+> **已修** `873d4fc`。`navIcons.ts` 放图标，原型有的照抄 `prototype/js/ui.js`，员工、设置、前台平板按同样画法补；实测 1280 / 768 / 390 都是图标 18px、间距 10px、和文字中线差 0。截图 `before|after/eval4-nav/sidebar-1280.png`、`sidebar-768.png`、`sidebar-390.png`。
 
 - 页面：所有已登录页。对照 `prototype/dash.png`：每项前面一个 18px 线性图标，图标和文字间距约 10px。
 - 建议：内联 SVG（stroke 用 currentColor），18px，和文字垂直居中，间距 10px；选中项图标跟文字一起变黑。
