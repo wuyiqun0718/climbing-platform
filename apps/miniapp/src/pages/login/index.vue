@@ -3,9 +3,10 @@
 // 打开方式见 src/lib/use-login.ts：redirect 是登录完要回去的页面。
 // 第一次验证前要先同意隐私保护指引（src/config/privacy.ts），不同意不能登录。
 import Button from '@climb/ui-mp/Button.vue';
+import Field from '@climb/ui-mp/Field.vue';
 import { onLoad } from '@dcloudio/uni-app';
 import gym from '@gym';
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import { auth, privacy, run } from '../../api';
 import { PRIVACY } from '../../config/privacy';
 import { backAfterLogin } from '../../lib/use-login';
@@ -69,8 +70,11 @@ function onPhone(e: { detail: { code?: string; errMsg?: string } }) {
 // #ifdef H5
 // H5 只用来开发调试，拿不到微信手机号：mock 下手机号就是 code
 const phone = ref('');
+/** 填错的提示写在框下面，改了就消失 */
+const phoneError = ref('');
+watch(phone, () => (phoneError.value = ''));
 function onH5Submit() {
-  if (!/^1\d{10}$/.test(phone.value)) return uni.showToast({ title: '手机号是 11 位数字', icon: 'none' });
+  if (!/^1\d{10}$/.test(phone.value)) return void (phoneError.value = '手机号是 1 开头的 11 位数字');
   submit(phone.value);
 }
 // #endif
@@ -107,7 +111,7 @@ function onH5Submit() {
       <!-- #endif -->
 
       <!-- #ifdef H5 -->
-      <input v-model="phone" class="input" type="number" maxlength="11" placeholder="手机号" />
+      <view class="phone"><Field v-model="phone" type="number" :maxlength="11" placeholder="手机号" :error="phoneError" @confirm="onH5Submit" /></view>
       <Button variant="primary" block :disabled="busy" @click="onH5Submit">验证并登录</Button>
       <!-- #endif -->
     </template>
@@ -119,7 +123,7 @@ function onH5Submit() {
 .logo { width: 80px; height: 80px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }
 .title { margin-top: 16px; font-family: var(--font-display); font-size: 24px; }
 .desc { margin: 12px 0 32px; font-size: 14px; line-height: 1.6; color: var(--ink-muted); text-align: center; }
-.input { box-sizing: border-box; width: 100%; height: 44px; margin-bottom: 12px; padding: 0 12px; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); font-size: 16px; }
+.phone { width: 100%; margin-bottom: 12px; }
 .second { width: 100%; margin-top: 12px; }
 .privacy { display: flex; flex-direction: column; width: 100%; margin-top: 24px; }
 .privacy-title { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
