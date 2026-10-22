@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { CardLedgerItem, FreezeOptions } from '@climb/api';
-import { isCardLive, LEDGER_REASON_LABELS } from '@climb/core';
+import { freezeUntilOn, isCardLive, LEDGER_REASON_LABELS } from '@climb/core';
 import MemberCard from '@climb/ui-mp/MemberCard.vue';
 import Button from '@climb/ui-mp/Button.vue';
+import Stepper from '@climb/ui-mp/Stepper.vue';
 import { formatDot, formatMonthDay, toDateKey } from '@climb/utils';
 import { onLoad } from '@dcloudio/uni-app';
 import { computed, ref } from 'vue';
@@ -42,13 +43,13 @@ async function loadLedger() {
 
 // 期限卡自助冻结：能不能冻、能冻几天由后端按 @climb/core 的规则算，这里只负责显示
 const freeze = ref<FreezeOptions | null>(null);
-const dayIndex = ref(0);
-const dayOptions = computed(() => {
+const pickedDays = ref(7);
+/** 常用天数，一点就选上；超出能冻范围的不列 */
+const quickDays = computed(() => {
   const f = freeze.value;
-  return f ? Array.from({ length: f.maxDays - f.minDays + 1 }, (_, i) => f.minDays + i) : [];
+  return f ? [7, 14, 30].filter(d => d >= f.minDays && d <= f.maxDays) : [];
 });
-const onPickDays = (e: { detail: { value: string | number } }) => { dayIndex.value = Number(e.detail.value); };
-const pickedDays = computed(() => dayOptions.value[dayIndex.value]);
+const untilText = computed(() => formatMonthDay(freezeUntilOn(today.value, pickedDays.value)));
 const quotaText = computed(() => {
   const f = freeze.value;
   if (!f) return '';
@@ -61,7 +62,8 @@ async function loadFreeze() {
   freeze.value = null;
   if (c?.kind !== 'period' || c.status === 'frozen') return;
   freeze.value = await api.me.freezeOptions(c.id).catch(() => null);
-  dayIndex.value = Math.max(0, dayOptions.value.indexOf(Math.min(7, freeze.value?.maxDays ?? 7)));
+  const f = freeze.value;
+  if (f) pickedDays.value = Math.min(f.maxDays, Math.max(f.minDays, 7));
 }
 
 const confirm = (title: string, content: string) => ask({ title, content });
@@ -116,11 +118,18 @@ const rows = computed(() => ledger.value.map(l => ({
       </view>
       <view v-else-if="freeze" class="freeze">
         <template v-if="!freeze.blockedBy">
-          <picker mode="selector" :range="dayOptions" :value="dayIndex" @change="onPickDays">
-            <view class="freeze-t">冻结 <text class="num">{{ pickedDays }}</text> 天（{{ freeze.minDays }}–{{ freeze.maxDays }} 天），点这里改</view>
-          </picker>
-          <text v-if="quotaText" class="fine">{{ quotaText }}</text>
-          <Button variant="dark" block @click="doFreeze">冻结</Button>
+          <view class="pick">
+            <view class="pick-l">
+              <text class="freeze-h">冻结天数</text>
+              <text class="pick-s">一次 {{ freeze.minDays }}–{{ freeze.maxDays }} 天</text>
+            </view>
+            <Stepper v-model="pickedDays" :min="freeze.minDays" :max="freeze.maxDays" unit="天" />
+          </view>
+          <view v-if="quickDays.length" class="chips">
+            <view v-for="d in quickDays" :key="d" class="chip" :class="{ on: d === pickedDays }" role="button" @tap="pickedDays = d">{{ d }} 天</view>
+          </view>
+          <text class="pick-s">从今天冻到 {{ untilText }}（含）{{ quotaText ? `，${quotaText}` : '' }}</text>
+          <Button variant="dark" block @click="doFreeze">冻结 {{ pickedDays }} 天</Button>
         </template>
         <text v-else-if="freeze.blockedBy !== 'freeze-card-not-active'" class="freeze-t">暂时不能冻结：{{ codeMessage(freeze.blockedBy) }}</text>
       </view>
@@ -151,8 +160,14 @@ const rows = computed(() => ledger.value.map(l => ({
 .delta { font-family: var(--font-number); font-weight: 700; color: var(--ink); }
 .delta.neg { color: var(--ink-muted); }
 .fine { display: block; margin-top: 14px; font-size: 12px; line-height: 1.6; color: var(--ink-muted); }
-.freeze { margin-top: 16px; padding: 12px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); background: var(--surface); display: flex; flex-direction: column; gap: 8px; }
+.freeze { margin-top: 16px; padding: 14px 12px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); background: var(--surface); display: flex; flex-direction: column; gap: 12px; }
 .freeze-t { font-size: 14px; }
-.num { font-family: var(--font-number); font-weight: 700; }
+.freeze-h { font-size: 15px; font-weight: 700; }
+.pick { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pick-l { display: flex; flex-direction: column; gap: 2px; }
+.pick-s { font-size: 12px; line-height: 1.5; color: var(--ink-muted); }
+.chips { display: flex; gap: 8px; }
+.chip { flex: 1; padding: 8px 0; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); background: var(--surface); text-align: center; font-size: 14px; font-weight: 600; }
+.chip.on { background: var(--brand); color: var(--on-brand); }
 .empty { padding: 80px 0; text-align: center; color: var(--ink-muted); }
 </style>

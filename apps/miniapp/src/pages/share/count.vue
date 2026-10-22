@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { shareBlockedBy, type Share } from '@climb/core';
 import Button from '@climb/ui-mp/Button.vue';
+import Stepper from '@climb/ui-mp/Stepper.vue';
 import Empty from '@climb/ui-mp/Empty.vue';
 import MemberCard from '@climb/ui-mp/MemberCard.vue';
 import { formatDot, toDateKey } from '@climb/utils';
@@ -34,7 +35,6 @@ const blockedBy = computed(() => (card.value ? shareBlockedBy(card.value, today.
 const remaining = computed(() => (card.value?.kind === 'count' ? card.value.remaining : 0));
 
 const qty = ref(1);
-const step = (d: number) => { qty.value = Math.min(remaining.value, Math.max(1, qty.value + d)); };
 
 /** 生成好的分享；生成时次数已经从卡里扣掉 */
 const share = ref<Share | null>(null);
@@ -87,11 +87,7 @@ const copyPath = () => share.value && uni.setClipboardData({ data: claimPath(sha
 
       <view v-else class="box">
         <text class="p">从「{{ card.name }}」里拿出几次送给朋友。朋友在微信里点开领取后，就能在 {{ formatDot(card.expiresOn) }} 前扫码入场。</text>
-        <view class="stepper">
-          <button class="sbtn" :disabled="qty <= 1" @click="step(-1)">−</button>
-          <text class="num">{{ qty }}<text class="unit">次</text></text>
-          <button class="sbtn" :disabled="qty >= remaining" @click="step(1)">+</button>
-        </view>
+        <Stepper v-model="qty" :min="1" :max="remaining" unit="次" size="lg" />
         <text class="fine center">送出后你的卡还剩 {{ remaining - qty }} 次</text>
         <Button variant="dark" block @click="create">生成分享</Button>
       </view>
@@ -109,8 +105,4 @@ const copyPath = () => share.value && uni.setClipboardData({ data: claimPath(sha
 .share-title { display: block; font-size: 14px; color: var(--ink); }
 .share-path { display: block; margin-top: 8px; font-size: 12px; line-height: 1.5; color: var(--ink-muted); overflow-wrap: anywhere; }
 .center { text-align: center; }
-.stepper { display: flex; align-items: center; justify-content: center; gap: 24px; }
-.sbtn { margin: 0; width: 44px; height: 44px; line-height: 40px; padding: 0; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font-size: 22px; }
-.num { font-family: var(--font-number); font-size: 40px; font-weight: 700; }
-.unit { font-size: 14px; margin-left: 2px; }
 </style>

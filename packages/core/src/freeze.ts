@@ -15,6 +15,9 @@ const plannedDays = (c: PeriodCard) => daysBetween(c.frozenFrom!, c.frozenUntil!
 const isFrozenPeriod = (c: Card): c is PeriodCard & { frozenFrom: DateKey; frozenUntil: DateKey } =>
   c.kind === 'period' && c.status === 'frozen' && !!c.frozenFrom && !!c.frozenUntil;
 
+/** 从 from 起冻 days 天，冻到哪天（含） */
+export const freezeUntilOn = (from: DateKey, days: number): DateKey => addDays(from, days - 1);
+
 /** 期限卡实际要用到哪天：冻结中的按冻满计划天数算（解冻前到期日还没顺延），其他就是到期日 */
 export function periodEndOn(card: PeriodCard): DateKey {
   return isFrozenPeriod(card) ? addDays(card.expiresOn, plannedDays(card)) : card.expiresOn;
@@ -71,7 +74,7 @@ export function freezePeriodCard(args: {
   if (!Number.isInteger(days) || days < rules.minDays || days > rules.maxDays) {
     throw new RuleError('freeze-days-out-of-range', `一次能冻 ${rules.minDays}–${rules.maxDays} 天`);
   }
-  const frozen: PeriodCard = { ...(card as PeriodCard), status: 'frozen', frozenFrom: today, frozenUntil: addDays(today, days - 1) };
+  const frozen: PeriodCard = { ...(card as PeriodCard), status: 'frozen', frozenFrom: today, frozenUntil: freezeUntilOn(today, days) };
   return { card: frozen, followers: chainFollowers(frozen, args.cards) };
 }
 

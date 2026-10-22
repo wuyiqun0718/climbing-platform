@@ -4,6 +4,7 @@
 import type { Card, Share } from '@climb/core';
 import { computed, ref } from 'vue';
 import { api, auth, mock, privacy, run } from '../api';
+import { ask } from '../lib/ask';
 import { member } from '../stores';
 
 const open = ref(false);
@@ -84,15 +85,11 @@ function newWx() {
 }
 
 function reset() {
-  uni.showModal({
-    title: '重置 mock 数据',
-    content: '卡包、分享、入场记录都回到初始状态',
-    success: r => {
-      if (!r.confirm || !mock) return;
-      mock.reset();
-      // 重置后新微信绑的会员没了，重新登录一次
-      relogin();
-    },
+  ask({ title: '重置 mock 数据', content: '卡包、分享、入场记录都回到初始状态', confirmText: '重置' }).then(ok => {
+    if (!ok || !mock) return;
+    mock.reset();
+    // 重置后新微信绑的会员没了，重新登录一次
+    relogin();
   });
 }
 

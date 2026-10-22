@@ -1,5 +1,6 @@
 import gym from '@gym';
 import { mock } from '../../api';
+import { choose } from '../../lib/ask';
 import { checkinUrl, fromScanCode, NOT_OURS_MESSAGE, type ScanResult } from './scan';
 
 type Nav = 'navigateTo' | 'redirectTo';
@@ -11,18 +12,16 @@ function go(r: ScanResult, method: Nav) {
   else uni.navigateTo({ url });
 }
 
-/** H5 没有摄像头扫码：mock 下选一家店，让「前台平板」现发一个码，当作扫到了；最后一项试「扫到别的码」的提示 */
+/** H5 没有摄像头扫码：mock 下选一家店（调用的页面要放 AskSheet），让「前台平板」现发一个码，当作扫到了；最后一项试「扫到别的码」的提示 */
 function simulateScan(method: Nav) {
   if (!mock) return uni.showToast({ title: 'H5 下扫不了码，用微信打开小程序', icon: 'none' });
   const stores = mock.db.stores;
-  uni.showActionSheet({
-    itemList: [...stores.map(s => `模拟扫码：${s.name}`), '模拟扫到别的码'],
-    success: ({ tapIndex }) => {
-      const store = stores[tapIndex];
-      if (!store) return go(fromScanCode(gym.entryQrLink, { result: 'https://example.com/' }), method);
-      const qr = mock!.issueEntryQr(store.id);
-      go({ ok: true, qr }, method);
-    },
+  choose('模拟扫码（H5 开发用）', [...stores.map(s => s.name), '扫到别的码']).then(i => {
+    if (i < 0) return;
+    const store = stores[i];
+    if (!store) return go(fromScanCode(gym.entryQrLink, { result: 'https://example.com/' }), method);
+    const qr = mock!.issueEntryQr(store.id);
+    go({ ok: true, qr }, method);
   });
 }
 

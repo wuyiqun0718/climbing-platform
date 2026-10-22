@@ -13,6 +13,7 @@ import { startScan } from '../checkin/start-scan';
 import { api } from '../../api';
 import { member } from '../../stores';
 import { currentStoreName, ensureStores, storePick } from '../../stores/store-pick';
+import AskSheet from '../../components/AskSheet.vue';
 
 // 跨天后回到首页要按新的一天算
 const today = ref(toDateKey(new Date()));
@@ -206,6 +207,7 @@ onShow(() => {
     </template>
 
     <DevPanel />
+    <AskSheet />
   </view>
 </template>
 

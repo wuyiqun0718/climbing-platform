@@ -3,6 +3,8 @@ import type { CoachSchedule, CoachSlotView } from '@climb/api';
 import { addDays, toDateKey, weekdayOf } from '@climb/utils';
 import { computed, ref } from 'vue';
 import { api, run } from '../../api';
+import AskSheet from '../../components/AskSheet.vue';
+import { ask, choose, prompt } from '../../lib/ask';
 import { useRequireLogin } from '../../lib/use-login';
 import { member } from '../../stores';
 
@@ -45,15 +47,6 @@ function slotText(s: CoachSlotView) {
   return s.past ? '已过' : '空闲';
 }
 
-const sheet = (itemList: string[]) => new Promise<number>(resolve => {
-  uni.showActionSheet({ itemList, success: r => resolve(r.tapIndex), fail: () => resolve(-1) });
-});
-const ask = (title: string, placeholder: string) => new Promise<string | null>(resolve => {
-  uni.showModal({ title, editable: true, placeholderText: placeholder, success: r => resolve(r.confirm ? (r.content ?? '') : null), fail: () => resolve(null) });
-});
-const confirm = (title: string, content: string) => new Promise<boolean>(resolve => {
-  uni.showModal({ title, content, success: r => resolve(r.confirm), fail: () => resolve(false) });
-});
 
 /** 提交中不能再点；做完重新拉一次 */
 async function act(fn: () => Promise<unknown>, done: string) {
@@ -73,23 +66,23 @@ async function tap(s: CoachSlotView) {
   if (busy.value || s.past) return;
   const when = `${dayLabel(s.on)} ${hh(s.hour)}`;
   if (s.status === 'free') {
-    const i = await sheet(['线下约的学员', '有事不接课']);
+    const i = await choose(`${when} 占上`, ['线下约的学员', '有事不接课']);
     if (i < 0) return;
     const kind = i === 0 ? 'offline' : 'off';
-    const note = await ask(i === 0 ? '学员名字（可以不填）' : '原因（可以不填）', i === 0 ? '比如：小王' : '比如：带队比赛');
+    const note = await prompt(i === 0 ? '学员名字（可以不填）' : '原因（可以不填）', i === 0 ? '比如：小王' : '比如：带队比赛');
     if (note === null) return;
     return act(() => api.coach.mark({ on: s.on, hour: s.hour, kind, note }), '占上了，会员那边约不了这个时段');
   }
   if ((s.status === 'offline' || s.status === 'off') && s.mark) {
-    if (!(await confirm('取消占用？', `${when} 会重新开放给会员约。`))) return;
+    if (!(await ask({ title: '取消占用？', content: `${when} 会重新开放给会员约。`, confirmText: '取消占用', cancelText: '留着' }))) return;
     return act(() => api.coach.unmark(s.mark!.id), '取消了');
   }
   if (s.status === 'member' && s.booking && (s.booking.status === 'pending' || s.booking.status === 'booked')) {
     const items = s.booking.status === 'pending' ? ['确认这节课', '拒绝'] : ['取消这节课'];
-    const i = await sheet(items);
+    const i = await choose(`${when} ${s.booking.memberName}`, items);
     if (i < 0) return;
     if (items[i] === '确认这节课') return act(() => api.coach.confirm(s.booking!.id), '确认了');
-    const reason = await ask(`告诉${s.booking.memberName}为什么取消`, '会员能看到，课时会退回');
+    const reason = await prompt(`告诉${s.booking.memberName}为什么取消`, '会员能看到，课时会退回');
     if (reason === null) return;
     return act(() => api.coach.cancel(s.booking!.id, { reason }), '取消了，课时已退回');
   }
@@ -116,6 +109,7 @@ async function tap(s: CoachSlotView) {
         <text class="what">{{ slotText(s) }}</text>
       </view>
     </template>
+    <AskSheet />
   </view>
 </template>
 

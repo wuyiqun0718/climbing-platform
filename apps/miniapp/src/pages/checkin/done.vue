@@ -9,6 +9,7 @@ import { api, run } from '../../api';
 import { errorMessage } from '../../lib/errors';
 import { requireLogin } from '../../lib/use-login';
 import { startScan } from './start-scan';
+import AskSheet from '../../components/AskSheet.vue';
 
 // 入场成功页：签到页入场后 redirectTo 过来（?id=入场记录），刷新页面也能按 id 再拉一次。
 // 老带新的领取人被拦下、选了「等等再扫」时进 ?wait=1：等邀请人入场。
@@ -103,6 +104,7 @@ const goHome = () => uni.switchTab({ url: '/pages/index/index' });
         <view class="act"><Button block @tap="goHome">回首页</Button></view>
       </view>
     </template>
+    <AskSheet />
   </view>
 </template>
 

@@ -12,6 +12,7 @@ import { cardView } from '../../lib/card-view';
 import { useRequireLogin } from '../../lib/use-login';
 import { member } from '../../stores';
 import { startScan } from '../checkin/start-scan';
+import AskSheet from '../../components/AskSheet.vue';
 
 // 要登录：没登录先去登录页，登录完回到这里
 useRequireLogin(() => {
@@ -113,6 +114,7 @@ function open(key: string, cardId?: string) {
 
       <view v-if="member.state.loaded" class="buy-more"><Button block @tap="open('shop')">+ 购买新卡</Button></view>
     </template>
+    <AskSheet />
   </view>
 </template>
 

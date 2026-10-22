@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { freezeBlockedBy, freezePeriodCard, freezeQuotaLeft, periodEndOn, settleFreeze, unfreezePeriodCard } from './freeze';
+import { freezeBlockedBy, freezePeriodCard, freezeUntilOn, freezeQuotaLeft, periodEndOn, settleFreeze, unfreezePeriodCard } from './freeze';
 import { defaultFreezeRules, defaultRules, type FreezeRules } from './gym';
 import { periodStartsOn } from './orders';
 import { createReferral } from './referral';
@@ -116,5 +116,13 @@ describe('冻结和后面接着的期限卡', () => {
   it('冻满自动解冻时后面的卡不用再挪', () => {
     const frozen = freeze(10, [], rules, [year, next]);
     expect(settleFreeze(frozen.card, [frozen.card, ...frozen.followers], '2026-10-22')!.followers).toEqual([]);
+  });
+});
+
+describe('冻到哪天', () => {
+  it('含首尾：今天起冻 1 天就是冻到今天，冻 7 天到第 7 天', () => {
+    expect(freezeUntilOn('2026-10-23', 1)).toBe('2026-10-23');
+    expect(freezeUntilOn('2026-10-23', 7)).toBe('2026-10-29');
+    expect(freezeUntilOn('2026-10-30', 3)).toBe('2026-11-01');
   });
 });

@@ -7,6 +7,8 @@ import { onLoad } from '@dcloudio/uni-app';
 import gym from '@gym';
 import { computed, ref } from 'vue';
 import { api, pay, run } from '../../api';
+import AskSheet from '../../components/AskSheet.vue';
+import { ask } from '../../lib/ask';
 import { errorCode, errorMessage } from '../../lib/errors';
 import { requireLogin } from '../../lib/use-login';
 import { member } from '../../stores';
@@ -83,7 +85,7 @@ const single = computed(() => sheet.value?.singleTicket ?? null);
 const confirmText = computed(() => (sheet.value?.mustBuy && single.value ? `微信支付 ${formatYuan(single.value.priceCents)} 并入场` : '确认入场'));
 const canSubmit = computed(() => !!sheet.value && (sheet.value.mustBuy ? !!single.value : !!selected.value) && (!waiver.value || agreed.value));
 
-const modal = (title: string, content: string) => uni.showModal({ title, content, showCancel: false, confirmText: '知道了' });
+const modal = (title: string, content: string) => ask({ title, content, showCancel: false, confirmText: '知道了' });
 
 /** 用某张卡入场。码在买票时过期了就让会员重新扫，卡已经在卡包里了 */
 async function enter(cardId: string, cardName: string, bought: boolean) {
@@ -207,6 +209,7 @@ const goShop = () => uni.navigateTo({ url: '/pages/shop/index' });
       <view class="act block"><Button variant="primary" block :disabled="!canSubmit || submitting" @tap="submit">{{ confirmText }}</Button></view>
       <view v-if="sheet.mustBuy && sheet.waitingInviter" class="act block"><Button block @tap="waitInviter">我等等再扫</Button></view>
     </template>
+    <AskSheet />
   </view>
 </template>
 
