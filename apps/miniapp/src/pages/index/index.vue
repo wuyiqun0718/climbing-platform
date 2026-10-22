@@ -21,6 +21,7 @@ const today = ref(toDateKey(new Date()));
 const mark = ref('/static/gym/mark.png');
 const markFallback = () => { mark.value = `/static/gym/${gym.logo}`; };
 const scanIcon = iconStyle('scan');
+const arrowIcon = iconStyle('chevron');
 
 const me = computed(() => member.state.me);
 // 哪些卡算能入场、还剩多少，规则在 @climb/core
@@ -45,10 +46,10 @@ const sub = computed(() => {
 
 const quick = computed(() =>
   [
-    { key: 'shop', label: '购卡', tone: 'accent', icon: iconStyle('card'), show: true },
-    { key: 'classes', label: '团课', tone: 'neutral', icon: iconStyle('calendar'), show: gym.features.groupClasses },
+    { key: 'shop', label: '购卡', tone: 'accent', icon: iconStyle('ticket'), show: true },
+    { key: 'classes', label: '团课', tone: 'neutral', icon: iconStyle('users'), show: gym.features.groupClasses },
     // 私教、活动页面还没开放：淡一点，点了只提示一句
-    { key: 'pt', label: '私教', tone: 'brand', icon: iconStyle('person'), soon: true, show: gym.features.personalTraining },
+    { key: 'pt', label: '私教', tone: 'brand', icon: iconStyle('dumbbell'), soon: true, show: gym.features.personalTraining },
     { key: 'events', label: '活动', tone: 'surface', icon: iconStyle('flag'), soon: true, show: gym.features.events },
   ].filter(q => q.show),
 );
@@ -139,7 +140,7 @@ onShow(() => {
             <text class="scan-title">{{ enteredToday ? '今天已入场' : '扫码入场' }}</text>
             <text class="scan-hint">{{ enteredToday ? '再扫一次不会重复扣次' : '对准前台的二维码扫一下' }}</text>
           </view>
-          <text class="arrow">›</text>
+          <view class="ic arrow" :style="arrowIcon" />
         </view>
       </view>
     </view>
@@ -235,7 +236,7 @@ onShow(() => {
 .scan-t { flex: 1; display: flex; flex-direction: column; margin-left: 14px; }
 .scan-title { font-family: var(--font-display); font-size: 30px; line-height: 1.1; }
 .scan-hint { margin-top: 2px; font-size: 12px; opacity: 0.75; }
-.arrow { font-size: 28px; }
+.arrow { flex-shrink: 0; width: 24px; height: 24px; }
 
 .quick { display: flex; padding: 18px 10px 4px; }
 .q { flex: 1; display: flex; flex-direction: column; align-items: center; }

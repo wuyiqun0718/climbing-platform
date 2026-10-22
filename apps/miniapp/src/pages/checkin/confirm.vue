@@ -9,6 +9,7 @@ import { computed, ref } from 'vue';
 import { api, pay, run } from '../../api';
 import AskSheet from '../../components/AskSheet.vue';
 import { ask } from '../../lib/ask';
+import { iconStyle } from '../../lib/icons';
 import { errorCode, errorMessage } from '../../lib/errors';
 import { requireLogin } from '../../lib/use-login';
 import { member } from '../../stores';
@@ -70,6 +71,7 @@ async function loadPreview() {
 }
 
 const rescan = () => startScan('redirectTo');
+const shieldIcon = iconStyle('shield');
 const pick = (cardId: string) => { if (sheet.value) selected.value = pickEntryCard({ options: sheet.value.options, selected: selected.value }, cardId); };
 
 function optionSub(o: EntryOption): string {
@@ -201,7 +203,8 @@ const goShop = () => uni.navigateTo({ url: '/pages/shop/index' });
 
       <text class="label">当日保险</text>
       <view class="panel ins">
-        <text class="b">入场当日保险</text>
+        <view class="ins-ic" :style="shieldIcon" />
+        <text class="b ins-b">入场当日保险</text>
         <text class="tag">{{ sheet.insurance.tag }}</text>
       </view>
       <text class="fine">{{ sheet.insurance.note }}</text>
@@ -230,14 +233,17 @@ const goShop = () => uni.navigateTo({ url: '/pages/shop/index' });
 .opt { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; padding: 12px 14px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); background: var(--surface); }
 .opt.on { background: var(--brand); }
 .opt.off { opacity: 0.5; }
-.radio { width: 16px; height: 16px; border: var(--stroke) solid var(--ink); border-radius: 50%; background: var(--surface); }
-.opt.on .radio { background: var(--ink); }
+.radio { flex-shrink: 0; width: 16px; height: 16px; border: var(--stroke) solid var(--ink); border-radius: 50%; background: var(--surface); }
+/* 选中：白底圆圈加实心点，跟原型一样，不是整颗涂黑 */
+.opt.on .radio { background: radial-gradient(circle, var(--ink) 0 4px, var(--surface) 4.5px); }
 .opt-t { display: flex; flex-direction: column; gap: 2px; }
 .b { font-size: 15px; font-weight: 600; }
 .small { font-size: 12px; color: var(--ink-muted); }
 /* 品牌底上的说明用正文色压淡，灰字对比度不够 */
 .opt.on .small { color: var(--on-brand); opacity: 0.75; }
-.ins { flex-direction: row; align-items: center; justify-content: space-between; }
+.ins { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; }
+.ins-ic { flex-shrink: 0; width: 22px; height: 22px; background: var(--ink); mask-size: 100% 100%; -webkit-mask-size: 100% 100%; mask-repeat: no-repeat; -webkit-mask-repeat: no-repeat; }
+.ins-b { flex: 1; }
 .tag { padding: 2px 8px; border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; }
 .fine { display: block; margin-bottom: 16px; font-size: 12px; line-height: 1.6; color: var(--ink-muted); }
 .act { margin-top: 14px; }

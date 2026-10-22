@@ -48,6 +48,16 @@ function slotText(s: CoachSlotView) {
 }
 
 
+/** 格子右边写点了会怎样，空闲的格子看得出能点 */
+function slotHint(s: CoachSlotView) {
+  if (s.past) return '';
+  if (s.status === 'free') return '点一下占上';
+  if ((s.status === 'offline' || s.status === 'off') && s.mark) return '点一下取消';
+  if (s.status === 'member' && s.booking?.status === 'pending') return '点一下确认';
+  if (s.status === 'member' && s.booking?.status === 'booked') return '点一下取消';
+  return '';
+}
+
 /** 提交中不能再点；做完重新拉一次 */
 async function act(fn: () => Promise<unknown>, done: string) {
   busy.value = true;
@@ -107,6 +117,7 @@ async function tap(s: CoachSlotView) {
       <view v-for="s in slots" :key="s.hour" class="row" :class="[s.status, { past: s.past }]" :role="s.past ? undefined : 'button'" @tap="tap(s)">
         <text class="time">{{ hh(s.hour) }}</text>
         <text class="what">{{ slotText(s) }}</text>
+        <text v-if="slotHint(s)" class="act-hint">{{ slotHint(s) }}</text>
       </view>
     </template>
     <AskSheet />
@@ -131,5 +142,7 @@ async function tap(s: CoachSlotView) {
 .row.past { opacity: 0.5; }
 .time { font-family: var(--font-number); font-weight: 700; width: 52px; }
 .what { flex: 1; }
+.act-hint { flex-shrink: 0; font-size: 12px; color: var(--ink-muted); }
+.row.free .what { font-weight: 600; }
 .empty { padding: 80px 0; text-align: center; color: var(--ink-muted); }
 </style>
