@@ -108,6 +108,8 @@
 
 ### 9. 复选框、单选框是浏览器默认蓝色
 
+> **已修** `251672b`。`forms.css` 加 `accent-color: var(--brand-strong)`。截图 `before|after/eval2-p2a/settings.png`。
+
 - 页面：设置、团课规则、卡种表单「在售」、登记入场选卡。
 - 建议：`forms.css` 里 `accent-color: var(--brand-strong)`（原型是 olive-700）。
 
@@ -119,10 +121,14 @@
 
 ### 11. 课程页私教日期在手机宽度折成四行
 
+> **已修** `251672b`。`CoachTimeline.vue` 日期 chips `nowrap` + 横滑，留 4px 给聚焦描边。截图 `before|after/eval2-p2a/courses-pt-390.png`。
+
 - 页面：`/courses` 390 宽。
 - 建议：日期 chips 一行横滑，不折行。
 
 ### 12. 手机号列右对齐
+
+> **已修** `251672b`。三处手机号列 `align: 'left'`，保留 `num` 的等宽数字字体。截图 `before|after/eval2-p2a/members.png`、`staff.png`。
 
 - 页面：会员、员工、课程名单。
 - 问题：手机号按数字列右对齐，但它是编号不是数量，左对齐更好读，也和原型一致。
@@ -130,10 +136,14 @@
 
 ### 13. 会员详情卡片上的「看流水 →」和「调整」两种样式
 
+> **已修** `251672b`。「看流水 →」改成 13px 700 ink 下划线，和下面的「调整」一致，两行间距收紧。整张卡仍是看流水的按钮。截图 `before|after/eval2-p2a/member-card.png`。
+
 - 页面：`/members/:id` 卡片。
 - 建议：都用 UiButton link 样式，放同一行。
 
 ### 14. 设置页冻结天数输入框占满整行
+
+> **已修** `251672b`。「每次最少 / 最多冻几天」加 `.short`，120px。截图 `before|after/eval2-p2a/settings.png`。
 
 - 页面：`/settings`。
 - 问题：上面两项是 120px，下面两项 476px，同一张卡里宽度不一致。
@@ -153,6 +163,8 @@
 - 建议：左右 / Home / End 切换，未选中的 `tabindex=-1`。
 
 ### 17. 填错的输入框没有视觉标记
+
+> **已修** `251672b`。`forms.css` `[aria-invalid='true']` 用 accent-soft 底。截图 `before|after/eval2-p2a/member-form-invalid.png`。
 
 - 页面：所有 Field。
 - 问题：报错时只在下面出提示块，输入框本身没变化（`aria-invalid` 有）。
