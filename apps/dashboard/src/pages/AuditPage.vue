@@ -1,10 +1,10 @@
 <script setup lang="ts">
 /**
  * 操作日志（任务 23），只读：谁、什么时候、做了什么、原因、改前改后。跟顶部门店切换联动；看全部门店时也有卡种、员工这类全馆的。
- * 动作名和文字在 @climb/core 的 audit.ts，能看哪些在 permissions.ts（audit 页、canSeeAllAuditLogs，等馆方）。
+ * 动作名和文字在 @climb/core 的 audit.ts，改前改后的文字在 auditText.ts；能看哪些在 permissions.ts（audit 页、canSeeAllAuditLogs，等馆方）。
  */
 import { type AuditLogRow, type PageOf } from '@climb/api';
-import { AUDIT_ACTIONS, AUDIT_ACTION_TEXT, type AuditAction } from '@climb/core';
+import { AUDIT_ACTIONS, AUDIT_ACTION_TEXT, auditChangeLines, type AuditAction } from '@climb/core';
 import { DataTable, Pager, errorText, type Column, UiButton, UiSelect } from '@climb/ui-web';
 import { formatDotTime } from '@climb/utils';
 import { computed, ref, watch } from 'vue';
@@ -36,14 +36,8 @@ watch(() => [session.state.staff?.id, session.state.storeId, action.value], () =
 watch(() => [session.state.staff?.id, session.state.storeId, action.value, page.value], () => session.state.staff && load(), { immediate: true });
 
 const storeNameOf = (id: string | null) => (id ? storeLabel(id) : '全馆');
-const show = (v: unknown) => (v === undefined || v === null ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v));
 /** 改前改后：一个字段一行，「字段：前 → 后」；新建的只列改后 */
-function changeText(r: AuditLogRow): string {
-  const b = r.before ?? {};
-  const a = r.after ?? {};
-  const keys = [...new Set([...Object.keys(b), ...Object.keys(a)])];
-  return keys.map(k => (r.before ? `${k}：${show(b[k])} → ${show(a[k])}` : `${k}：${show(a[k])}`)).join('\n') || '—';
-}
+const changeText = (r: AuditLogRow) => auditChangeLines(r, { storeName: storeLabel }).join('\n') || '—';
 
 const columns = computed<Column<AuditLogRow>[]>(() => [
   { key: 'at', label: '时间', format: r => formatDotTime(r.at) },

@@ -36,6 +36,7 @@ export * from './refund';
 export * from './product';
 export * from './staff';
 export * from './audit';
+export * from './auditText';
 export * from './classTypes';
 export * from './classSchedule';
 export * from './classRoster';

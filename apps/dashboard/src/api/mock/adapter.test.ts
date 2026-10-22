@@ -1,5 +1,5 @@
 import { ApiError, createAdminApi, createApi, createDeskApi, type AdminClassRow, type CreateClassBody, type CreateStaffBody, type MarkPtSlotBody, type PtTimelineView } from '@climb/api';
-import { defaultFreezeRules, freezeBlockedBy, ledgerMismatch, remainingOf, mergeDeskFeed, parseEntryQrLink, parseEntryQrParams } from '@climb/core';
+import { auditChangeLines, defaultFreezeRules, freezeBlockedBy, ledgerMismatch, remainingOf, mergeDeskFeed, parseEntryQrLink, parseEntryQrParams } from '@climb/core';
 import { addDays, endOfMonth } from '@climb/utils';
 import { describe, expect, it } from 'vitest';
 import { createMockAdapter } from './adapter';
@@ -55,6 +55,19 @@ describe('后台 mock', () => {
     expect(all.activeMembers).toBe(each.reduce((n, d) => n + d.activeMembers, 0));
     expect(new Set(each.map(d => d.todayEntries)).size).toBe(each.length);
     expect(each[0]).toMatchObject({ storeId: 'bingang', today: '2026-10-21' });
+  });
+
+  it('看板本月营收按订单算，和财务页「本月」的营收一致；收一笔马上算进去', async () => {
+    const { api, login } = setup();
+    await login('13800000001');
+    const month = { from: '2026-10-01', to: '2026-10-21' };
+    expect((await api.dashboard()).monthRevenueCents).toBe((await api.finance(month)).grossCents);
+    expect((await api.dashboard({ store: 'huiju' })).monthRevenueCents).toBe((await api.finance({ ...month, store: 'huiju' })).grossCents);
+    const before = (await api.dashboard({ store: 'bingang' })).monthRevenueCents!;
+    const m = await api.members.create({ phone: '13912345678', name: '营收测试', source: 'walkin', storeId: 'bingang' });
+    await api.orders.create({ requestId: 'rv1', memberId: m.id, productId: 'p-10x', storeId: 'bingang', channel: 'desk_cash', amountCents: 120_000, priceReason: '老会员' });
+    expect((await api.dashboard({ store: 'bingang' })).monthRevenueCents).toBe(before + 120_000);
+    expect((await api.dashboard({ store: 'bingang' })).monthRevenueCents).toBe((await api.finance({ ...month, store: 'bingang' })).grossCents);
   });
 
   it('只管一家店的员工看不了别的店和全部门店', async () => {
@@ -1312,6 +1325,19 @@ describe('后台 mock：操作日志', () => {
       ['p-30', null, { priceCents: 59_900 }, { priceCents: 49_900 }],
       ['p-30', null, { onSale: true }, { onSale: false }],
     ]);
+  });
+
+  it('页面上的改前改后（core 的 auditChangeLines）每个字段都有中文名，id 不列', async () => {
+    const { api, db, login, order, ci } = await deskOps();
+    await api.checkIns.void(ci.checkIn.id, { reason: '扫错了卡' });
+    await login('13800000002');
+    await api.cards.adjust(order.card.id, { remaining: 12, reason: '补偿闭馆' });
+    await api.orders.refund(order.order.id, { requestId: 'rf1', amountCents: 50_000, reason: '搬家了' });
+    await api.products.create({ category: 'period', name: '半年卡', priceCents: 299_900, days: 180, perks: ['不限次'], onSale: true });
+    const lines = db.auditLogs.flatMap(l => auditChangeLines(l));
+    expect(lines.length).toBeGreaterThan(20);
+    expect(lines.filter(t => /^[A-Za-z]/.test(t) || /Id：|Cents/.test(t))).toEqual([]);
+    expect(lines).toContain('实收：¥1,200');
   });
 
   it('查询：最新的在前，带员工名；按门店、操作类型筛', async () => {

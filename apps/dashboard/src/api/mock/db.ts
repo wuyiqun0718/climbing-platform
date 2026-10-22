@@ -151,8 +151,8 @@ export interface MockDb {
   entryQrLink: string;
   /** mock 的「现在」几点（HH:mm:ss），测试里固定；不填用本机时间。日期用 today */
   clock?: string;
-  /** 每家店的看板数字（示例），全部门店 = 各店相加 */
-  storeStats: Record<string, { monthRevenueCents: number; todayEntries: number; lastWeekSameTimeEntries: number; activeMembers: number }>;
+  /** 每家店的看板数字（示例），全部门店 = 各店相加；本月营收按 orders 算 */
+  storeStats: Record<string, { todayEntries: number; lastWeekSameTimeEntries: number; activeMembers: number }>;
   members: MockMember[];
   referrals: MockReferral[];
   /** 次卡转赠（对应 shares 表 kind = count）；领了的在 cards 里有一张好友送的次卡（shareId 指回来） */
@@ -169,7 +169,7 @@ export interface MockDb {
   refundRequests: Record<string, RefundResult>;
   /** 撤销入场的结果：入场 ID → 第一次撤销的结果，重复撤销原样返回 */
   checkInVoids: Record<string, VoidCheckInResult>;
-  /** 订单和退款（财务页用；看板的营收目前还是 storeStats 里的示例数字） */
+  /** 订单和退款（财务页和看板的本月营收都按这个算） */
   orders: MockOrder[];
   refunds: MockRefund[];
   /** 入场记录：每个到过店的会员最近几次；次卡扣的次数记在 ledger 里，跟卡上的剩余对得上 */
@@ -225,9 +225,9 @@ export function createMockDb(today: DateKey, rules: GymRules = defaultRules): Mo
     refundRequests: {},
     waiverVersion: '2026-01',
     storeStats: {
-      bingang: { monthRevenueCents: 6_194_200, todayEntries: 45, lastWeekSameTimeEntries: 41, activeMembers: 138 },
-      huiju: { monthRevenueCents: 4_504_900, todayEntries: 33, lastWeekSameTimeEntries: 35, activeMembers: 101 },
-      huanqiu: { monthRevenueCents: 3_378_700, todayEntries: 25, lastWeekSameTimeEntries: 22, activeMembers: 73 },
+      bingang: { todayEntries: 45, lastWeekSameTimeEntries: 41, activeMembers: 138 },
+      huiju: { todayEntries: 33, lastWeekSameTimeEntries: 35, activeMembers: 101 },
+      huanqiu: { todayEntries: 25, lastWeekSameTimeEntries: 22, activeMembers: 73 },
     },
   };
 }

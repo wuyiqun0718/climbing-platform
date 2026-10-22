@@ -285,13 +285,15 @@ function expiringRows(db: MockDb, storeIds: string[]): ExpiringCardRow[] {
 
 type StoreStat = keyof MockDb['storeStats'][string];
 const sumStats = (db: MockDb, ids: string[], k: StoreStat) => ids.reduce((n, id) => n + (db.storeStats[id]?.[k] ?? 0), 0);
+/** 本月营收：按订单算，口径同财务页默认的「本月」（1 日到今天的营收，退款前） */
+const monthRevenue = (db: MockDb, ids: string[]) => summarizeRevenue(db.orders.filter(o => ids.includes(o.storeId)), db.refunds, `${db.today.slice(0, 8)}01`, db.today).grossCents;
 
 function storeCompare(db: MockDb): StoreCompareRow[] {
   return db.stores.map(st => {
     const nc = newcomerRows(db, [st.id]);
     return {
       storeId: st.id,
-      monthRevenueCents: sumStats(db, [st.id], 'monthRevenueCents'),
+      monthRevenueCents: monthRevenue(db, [st.id]),
       todayEntries: sumStats(db, [st.id], 'todayEntries'),
       activeMembers: sumStats(db, [st.id], 'activeMembers'),
       newcomers: nc.reduce((n, r) => n + r.visitors, 0),
@@ -1939,7 +1941,7 @@ const routes: { method: ApiRequest['method']; path: RegExp; auth: boolean; handl
       const res: DashboardSummary = {
         storeId,
         today: db.today,
-        monthRevenueCents: canSeePage(staff!.role, 'finance') ? sum('monthRevenueCents') : null,
+        monthRevenueCents: canSeePage(staff!.role, 'finance') ? monthRevenue(db, ids) : null,
         todayEntries: sum('todayEntries'),
         lastWeekSameTimeEntries: sum('lastWeekSameTimeEntries'),
         todayBookings: classBookingsOn(db.classSessions, db.classBookings, db.today, ids) + ptBookingsOn(db.ptBookings, db.today, ids),
