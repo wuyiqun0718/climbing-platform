@@ -36,7 +36,15 @@ function logout() {
         <span>{{ gym.shortName }}</span>
       </div>
       <nav>
-        <RouterLink v-for="n in nav" :key="n.path" :to="n.path" class="nav-item">{{ n.label }}</RouterLink>
+        <!-- 按 meta.page 判断当前项，会员详情也算「会员」 -->
+        <RouterLink
+          v-for="n in nav"
+          :key="n.path"
+          :to="n.path"
+          class="nav-item"
+          :class="{ on: route.meta.page === n.name }"
+          :aria-current="route.meta.page === n.name ? 'page' : undefined"
+        >{{ n.label }}</RouterLink>
       </nav>
       <div v-if="session.state.staff" class="me">
         <div class="me-name">{{ session.state.staff.name }}</div>
@@ -74,7 +82,7 @@ function logout() {
 nav { display: grid; gap: 4px; }
 .nav-item { padding: 10px 12px; border-radius: var(--radius-sm); color: var(--side-text); text-decoration: none; font-size: 14px; }
 .nav-item:hover { background: var(--side-hover); color: var(--surface); }
-.nav-item.router-link-exact-active { background: var(--brand); color: var(--on-brand); font-weight: 700; }
+.nav-item.on { background: var(--brand); color: var(--on-brand); font-weight: 700; }
 .me { margin-top: auto; display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 8px; padding: 12px 8px 0; border-top: 1px solid var(--side-line); }
 .me-name { font-size: 14px; font-weight: 700; }
 .me-role { grid-row: 2; font-size: 12px; color: var(--side-muted); }

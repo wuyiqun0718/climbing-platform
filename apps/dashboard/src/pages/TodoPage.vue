@@ -7,11 +7,11 @@ const route = useRoute();
 <template>
   <header class="page-h">
     <h1>{{ route.meta.label }}</h1>
-    <p>这个页面还在做，先别在这里操作</p>
+    <p>这个页面还在做</p>
   </header>
   <section class="panel">
     <h2>还没做完</h2>
-    <p>设计稿在 prototype/ 原型的「管理后台」里。做好之前，相关的事先在其它页面或线下处理。</p>
+    <p>{{ route.meta.label }}的报名、签到还在做，做好之前请先线下登记。</p>
   </section>
 </template>
 

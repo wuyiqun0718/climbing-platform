@@ -21,6 +21,9 @@ const error = ref('');
 const latest = createLatest();
 
 const rangeError = computed(() => financeRangeError(from.value, to.value));
+// 标题跟着已经加载的数字走：区间填错时数字还是上一次的，标题不能先变
+const shown = computed(() => (data.value ? { from: data.value.from, to: data.value.to } : { from: from.value, to: to.value }));
+const dim = computed(() => loading.value || !!rangeError.value);
 const storeName = computed(() =>
   session.state.storeId === null ? '全部门店' : (session.state.stores.find(s => s.id === session.state.storeId)?.name ?? ''),
 );
@@ -85,7 +88,7 @@ const show = (v: number | undefined) => (v === undefined ? '—' : formatYuan(v)
 <template>
   <header class="page-h">
     <h1>财务</h1>
-    <p>{{ formatDot(from) }} 到 {{ formatDot(to) }}，{{ storeName }}</p>
+    <p>{{ formatDot(shown.from) }} 到 {{ formatDot(shown.to) }}，{{ storeName }}</p>
   </header>
   <div class="filters">
     <Tabs variant="chips" label="日期区间" :options="RANGE_PRESETS" :model-value="activePreset" @update:model-value="usePreset" />
@@ -97,13 +100,13 @@ const show = (v: number | undefined) => (v === undefined ? '—' : formatYuan(v)
   <p v-if="error" class="state error" role="alert">
     {{ error }}<UiButton size="sm" @click="load">重试</UiButton>
   </p>
-  <section class="grid" :class="{ loading }" :aria-busy="loading">
+  <section class="grid" :class="{ loading: dim }" :aria-busy="loading">
     <StatTile hero label="营收" :value="show(data?.grossCents)" note="按收款日，退款前" />
     <StatTile label="退款" :value="show(data?.refundCents)" :note="data ? `${data.refunds.length} 笔，按退款日` : undefined" />
     <StatTile label="净收入" :value="show(data?.netCents)" note="营收减去退款" />
   </section>
   <p v-if="loading && !data" class="state">加载中…</p>
-  <section v-if="data" class="grid two" :class="{ loading }">
+  <section v-if="data" class="grid two" :class="{ loading: dim }">
     <div class="panel">
       <h2>按收款方式</h2>
       <BarList class="bars" :rows="bars(channelRows)" />
@@ -115,7 +118,7 @@ const show = (v: number | undefined) => (v === undefined ? '—' : formatYuan(v)
       <DataTable plain :columns="bucketColumns('品类')" :rows="categoryRows" row-key="key" />
     </div>
   </section>
-  <section v-if="data" class="panel wide" :class="{ loading }">
+  <section v-if="data" class="panel wide" :class="{ loading: dim }">
     <h2>退款</h2>
     <p class="sub">微信订单原路退回；线下收的钱线下退，这里只记录</p>
     <DataTable plain :columns="refundColumns" :rows="data.refunds" row-key="refundId" empty="这段时间没有退款" />
@@ -126,7 +129,7 @@ const show = (v: number | undefined) => (v === undefined ? '—' : formatYuan(v)
 .page-h h1 { margin: 0; font-family: var(--font-display); font-size: 34px; font-weight: 400; }
 .page-h p { margin: 4px 0 16px; font-size: 13px; color: var(--ink-muted); }
 .filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 16px; font-size: 13px; }
-.bad { color: var(--ink); font-weight: 600; }
+.bad { padding: 6px 10px; color: var(--ink); font-weight: 600; background: var(--accent-soft); border-radius: var(--radius-sm); }
 .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; transition: opacity 0.15s; }
 .grid.loading, .panel.loading { opacity: 0.55; }
 .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 16px; }

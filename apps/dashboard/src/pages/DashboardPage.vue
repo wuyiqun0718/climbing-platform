@@ -5,7 +5,7 @@ import { formatDot, formatYuan, toDateKey, weekdayOf } from '@climb/utils';
 import gym from '@gym';
 import { computed, ref, watch } from 'vue';
 import { api } from '../api';
-import { canSeeAllStores } from '../permissions';
+import { canSeeAllStores, canSeePage } from '../permissions';
 import { session, storeLabel } from '../session';
 import { createLatest, entriesCompare, expiryText, funnelSteps, newcomerTotals, pct } from './dashboard';
 
@@ -75,6 +75,7 @@ const compareColumns: Column<StoreCompareRow>[] = [
 const revenueTotal = computed(() => (compareRows.value ?? []).reduce((n, r) => n + r.monthRevenueCents, 0));
 const revenueMax = computed(() => Math.max(0, ...(compareRows.value ?? []).map(r => r.monthRevenueCents)));
 
+const seeRevenue = computed(() => !!session.state.staff && canSeePage(session.state.staff.role, 'finance'));
 const show = (v: number | null | undefined, fmt: (n: number) => string | number = n => n) => (v === undefined || v === null ? '—' : fmt(v));
 </script>
 
@@ -86,8 +87,9 @@ const show = (v: number | null | undefined, fmt: (n: number) => string | number 
   <p v-if="error" class="state error" role="alert">
     {{ error }}<UiButton size="sm" @click="load">重试</UiButton>
   </p>
-  <section class="grid" :class="{ loading }" :aria-busy="loading">
-    <StatTile hero label="本月营收" :value="show(data?.monthRevenueCents, formatYuan)" note="本月 1 日到今天" />
+  <section class="grid" :class="{ loading, three: !seeRevenue }" :aria-busy="loading">
+    <!-- 前台看不到营收（接口给 null），整张卡不显示，免得一个大横线像数据坏了 -->
+    <StatTile v-if="seeRevenue" hero label="本月营收" :value="show(data?.monthRevenueCents, formatYuan)" note="本月 1 日到今天" />
     <StatTile label="今日入场" :value="show(data?.todayEntries)" unit="人次" :note="compare?.text" />
     <StatTile label="今日约课" :value="show(data?.todayBookings)" unit="人次" note="团课和私教" />
     <StatTile label="有效会员" :value="show(data?.activeMembers)" unit="人" note="有能用的卡的人" />
@@ -144,6 +146,7 @@ const show = (v: number | null | undefined, fmt: (n: number) => string | number 
 .state { margin: 0 0 16px; font-size: 13px; color: var(--ink-muted); }
 .state.error { display: flex; align-items: center; gap: 12px; padding: 10px 14px; color: var(--ink); background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }
 .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 16px; }
+.grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .panel { min-width: 0; padding: 16px 18px; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
 .panel h2 { margin: 0; font-family: var(--font-display); font-size: 20px; font-weight: 400; }
 .panel .sub { margin: 2px 0 14px; font-size: 12px; color: var(--ink-muted); }
@@ -162,6 +165,6 @@ const show = (v: number | null | undefined, fmt: (n: number) => string | number 
 .expiring a { font-size: 14px; font-weight: 700; color: var(--ink); }
 .expiring small { grid-row: 2; font-size: 12px; color: var(--ink-muted); }
 .expiring .when { grid-row: 1 / span 2; grid-column: 2; align-self: center; font-size: 12px; font-weight: 600; }
-@media (max-width: 1100px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 560px) { .grid, .grid.two { grid-template-columns: 1fr; } }
+@media (max-width: 1100px) { .grid, .grid.three { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .grid, .grid.two, .grid.three { grid-template-columns: 1fr; } }
 </style>
