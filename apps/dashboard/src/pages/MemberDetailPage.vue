@@ -153,7 +153,9 @@ const back = () => (window.history.state?.back ? router.back() : router.push({ n
   <DeskCheckInModal v-if="data" v-model:open="checkInOpen" :member="{ id: data.id, name: data.name }" @created="onCheckedIn" />
   <DeskOrderModal v-if="data" v-model:open="orderOpen" :member="{ id: data.id, name: data.name }" @created="onOrdered" />
 
-  <p v-if="notFound" class="state" role="alert">没有这个会员，可能已经被合并或删除了。</p>
+  <p v-if="notFound" class="state error" role="alert">
+    没有这个会员，可能已经被合并或删除了。<UiButton size="sm" @click="router.push({ name: 'members' })">回会员列表</UiButton>
+  </p>
   <p v-else-if="error" class="state error" role="alert">
     {{ error }}<UiButton size="sm" @click="load">重试</UiButton>
   </p>
@@ -242,7 +244,8 @@ const back = () => (window.history.state?.back ? router.back() : router.push({ n
 .page-h h1 { margin: 4px 0 16px; font-family: var(--font-display); font-size: 34px; font-weight: 400; }
 .title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .actions { display: flex; gap: 8px; }
-.back { padding: 0; font: inherit; font-size: 13px; color: var(--ink-muted); background: none; border: 0; cursor: pointer; }
+.back { min-height: 32px; padding: 0; font: inherit; font-size: 14px; font-weight: 600; color: var(--ink); background: none; border: 0; cursor: pointer; }
+.back:hover { text-decoration: underline; }
 h2 { margin: 22px 0 10px; font-family: var(--font-display); font-size: 22px; font-weight: 400; }
 .state { margin: 0 0 16px; font-size: 13px; color: var(--ink-muted); }
 .state.error { display: flex; align-items: center; gap: 12px; padding: 10px 14px; color: var(--ink); background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }

@@ -158,7 +158,7 @@ function label(s: AdminPtSlot): string {
 .cell.free { color: var(--ink-muted); background: var(--surface); border: 1px dashed var(--line); }
 .cell.member { color: var(--on-brand); background: var(--brand); outline: var(--stroke) solid var(--ink); outline-offset: calc(-1 * var(--stroke)); font-weight: 600; }
 .cell.offline { background: var(--accent); }
-.cell.off { color: var(--ink-muted); background: var(--neutral-soft); }
+.cell.off { color: var(--ink); background: var(--neutral-soft); }
 .cell.past { opacity: 0.45; }
 .cell.clickable { cursor: pointer; }
 .cell.clickable:hover { outline: 2px solid var(--ink); }
@@ -167,6 +167,8 @@ function label(s: AdminPtSlot): string {
 .row { display: flex; flex-wrap: wrap; gap: 8px; }
 .legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0 0; font-size: 12px; color: var(--ink-muted); }
 .legend .cell { padding: 2px 8px; }
+/* 图例在灰字的 .legend 里，色块上的字用 ink，浅色底上灰字对比度不够 */
+.legend .cell:not(.member) { color: var(--ink); }
 .retry { margin-left: 8px; }
 .muted { font-size: 13px; color: var(--ink-muted); }
 .err { padding: 9px 12px; font-size: 13px; background: var(--accent-soft); border-radius: var(--radius-sm); }

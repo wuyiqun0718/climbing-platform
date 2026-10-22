@@ -148,7 +148,8 @@ function onVoided() {
 .tiles.loading { opacity: 0.55; }
 .ins { display: flex; flex-direction: column; gap: 2px; margin: 0 0 16px; padding: 12px 16px; font-size: 13px; background: var(--brand-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
 .ins b { font-size: 14.5px; }
-.ins span { color: var(--ink-muted); }
+/* 浅绿底上的灰字对比度不够 4.5:1，用 ink */
+.ins span { color: var(--ink); }
 @media (max-width: 1100px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .voided { font-size: 12px; color: var(--ink-muted); }
 </style>

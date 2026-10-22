@@ -133,6 +133,6 @@ tbody tr:last-child td { border-bottom: 0; }
 td.num { font-family: var(--font-number); font-variant-numeric: tabular-nums; }
 tr.clickable { cursor: pointer; }
 tr.clickable:hover td, tr.clickable:focus-visible td { background: var(--brand-soft); }
-tr.clickable:focus-visible { outline: none; }
+tr.clickable:focus-visible { outline: 3px solid var(--ink); outline-offset: -3px; }
 .state td { padding: 36px 14px; text-align: center; color: var(--ink-muted); }
 </style>

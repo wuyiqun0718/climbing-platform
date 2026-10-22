@@ -166,5 +166,5 @@ const emptyText = () => (qFromRoute() ? `没找到「${qFromRoute()}」，换个
 .avatar { display: grid; flex: none; width: 30px; height: 30px; place-items: center; font-size: 13px; font-weight: 700; background: var(--brand-soft); border-radius: 50%; }
 .muted { color: var(--ink-muted); }
 .chip { display: inline-block; margin-left: 6px; padding: 1px 8px; font-size: 12px; font-weight: 600; border-radius: 999px; }
-.chip.quiet { color: var(--ink-muted); background: var(--neutral-soft); }
+.chip.quiet { color: var(--ink); background: var(--neutral-soft); }
 </style>

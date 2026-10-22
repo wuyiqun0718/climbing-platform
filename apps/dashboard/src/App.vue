@@ -4,7 +4,7 @@ import { ToastHost, UiSelect } from '@climb/ui-web';
 import gym from '@gym';
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { storeOptions } from './permissions';
+import { canDo, storeOptions } from './permissions';
 import { navFor } from './router';
 import { session } from './session';
 
@@ -13,6 +13,7 @@ const route = useRoute();
 const router = useRouter();
 const ROLE_LABEL = STAFF_ROLE_TEXT;
 
+const canBindDesk = computed(() => !!session.state.staff && canDo(session.state.staff.role, 'desk.bind'));
 const nav = computed(() => (session.state.staff ? navFor(session.state.staff.role) : []));
 const stores = computed(() => (session.state.staff ? storeOptions(session.state.staff, session.state.stores) : []));
 // 下拉的值只能是字符串，「全部门店」用空字符串
@@ -45,6 +46,8 @@ function logout() {
           :class="{ on: route.meta.page === n.name }"
           :aria-current="route.meta.page === n.name ? 'page' : undefined"
         >{{ n.label }}</RouterLink>
+        <!-- 前台平板页没有侧栏，新开一页，绑完这边后台还在 -->
+        <a v-if="canBindDesk" class="nav-item desk-link" :href="router.resolve({ name: 'desk' }).href" target="_blank" rel="noopener">前台平板<span aria-hidden="true"> ↗</span><span class="sr-only">（新窗口）</span></a>
       </nav>
       <div v-if="session.state.staff" class="me">
         <div class="me-name">{{ session.state.staff.name }}</div>
@@ -82,6 +85,7 @@ function logout() {
 nav { display: grid; gap: 4px; }
 .nav-item { padding: 10px 12px; border-radius: var(--radius-sm); color: var(--side-text); text-decoration: none; font-size: 14px; }
 .nav-item:hover { background: var(--side-hover); color: var(--surface); }
+.desk-link { margin-top: 8px; color: var(--side-muted); }
 .nav-item.on { background: var(--brand); color: var(--on-brand); font-weight: 700; }
 .me { margin-top: auto; display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 8px; padding: 12px 8px 0; border-top: 1px solid var(--side-line); }
 .me-name { font-size: 14px; font-weight: 700; }

@@ -9,6 +9,7 @@
 import { ApiError } from '@climb/api';
 import { errorText, UiButton, UiSelect } from '@climb/ui-web';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { api, deskApi, deskDevice } from '../api';
 import { canDo, canSeeStore } from '../permissions';
 import { session } from '../session';
@@ -46,6 +47,12 @@ onBeforeUnmount(() => {
 });
 
 // 绑定（只给店长以上，门店是自己能操作的）
+// 前台账号打开了这页：退出后带着 redirect 回来，店长登录完直接到绑定
+function switchAccount() {
+  session.logout();
+  router.replace({ name: 'login', query: { redirect: '/desk' } });
+}
+const router = useRouter();
 const canBind = computed(() => !!session.state.staff && canDo(session.state.staff.role, 'desk.bind'));
 const stores = computed(() => session.state.stores.filter(st => session.state.staff && canSeeStore(session.state.staff, st.id)));
 const storeId = ref('');
@@ -84,7 +91,13 @@ const unbound = computed(() => display.value.kind === 'unbound' || (state.value.
         <p>请店长先登录后台，再回到这个页面绑定门店。</p>
         <RouterLink :to="{ name: 'login', query: { redirect: '/desk' } }" class="btn">去登录</RouterLink>
       </template>
-      <p v-else-if="!canBind">只有店长以上能绑定前台平板。</p>
+      <template v-else-if="!canBind">
+        <p>只有店长以上能绑定前台平板。请店长登录后再绑定。</p>
+        <div class="actions">
+          <RouterLink to="/" class="btn secondary">回后台</RouterLink>
+          <UiButton variant="primary" @click="switchAccount">换个账号登录</UiButton>
+        </div>
+      </template>
       <form v-else class="row" @submit.prevent="bind">
         <UiSelect v-model="storeId" aria-label="门店" placeholder="选门店" :options="stores.map(st => ({ value: st.id, label: st.name }))" />
         <UiButton variant="primary" type="submit" :disabled="binding || !storeId">{{ binding ? '绑定中…' : '绑定这家店' }}</UiButton>
@@ -153,5 +166,7 @@ h1 { margin: 0; font-family: var(--font-display); font-size: 40px; font-weight: 
 .offline { max-width: 520px; padding: 32px; background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
 .row { display: flex; gap: 8px; }
 .btn { padding: 8px 16px; font: inherit; font-weight: 600; color: var(--on-brand); text-decoration: none; background: var(--brand); border: var(--stroke) solid var(--ink); border-radius: var(--radius-sm); }
+.btn.secondary { color: var(--ink); background: var(--surface); }
+.actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .warn { margin: 0; padding: 8px 12px; background: var(--accent-soft); border-radius: var(--radius-sm); }
 </style>
