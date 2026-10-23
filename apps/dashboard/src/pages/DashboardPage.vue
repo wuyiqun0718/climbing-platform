@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { MEMBER_SOURCE_TEXT, type DashboardSummary, type StoreCompareRow } from '@climb/api';
-import { BarList, DataTable, StatTile, errorText, type BarRow, type Column, UiButton } from '@climb/ui-web';
+import { BarList, DataTable, Panel, PanelGrid, StatTile, errorText, type BarRow, type Column, UiButton } from '@climb/ui-web';
 import { formatDot, formatYuan, toDateKey, weekdayOf } from '@climb/utils';
 import gym from '@gym';
 import { computed, ref, watch } from 'vue';
@@ -95,20 +95,18 @@ const show = (v: number | null | undefined, fmt: (n: number) => string | number 
     <StatTile label="有效会员" :value="show(data?.activeMembers)" unit="人" note="有能用的卡的人" />
   </section>
   <p v-if="loading && !data" class="state">加载中…</p>
-  <section v-if="data" class="grid two" :class="{ loading }">
-    <div class="panel">
-      <h2>新客从哪来</h2>
-      <p class="sub">{{ month }}第一次来馆的 {{ ncTotal?.visitors }} 人，其中 {{ ncTotal?.bought }} 人办了卡</p>
-      <BarList :rows="ncRows" />
-      <p class="note"><i class="k1" />第一次来馆 <i class="k2" />其中办了期限卡或次卡</p>
-    </div>
-    <div class="panel">
-      <h2>老带新转化</h2>
-      <p class="sub">{{ month }}期限卡会员发出的邀请</p>
-      <BarList :rows="funnelRows" />
-      <p class="note">右边的百分比是相对上一步的转化率。</p>
-    </div>
-  </section>
+  <PanelGrid v-if="data" class="two" :class="{ loading }">
+    <Panel title="新客从哪来">
+      <template #sub>{{ month }}第一次来馆的 {{ ncTotal?.visitors }} 人，其中 {{ ncTotal?.bought }} 人办了卡</template>
+      <template #chart><BarList :rows="ncRows" /></template>
+      <template #foot><span class="note"><i class="k1" />第一次来馆 <i class="k2" />其中办了期限卡或次卡</span></template>
+    </Panel>
+    <Panel title="老带新转化">
+      <template #sub>{{ month }}期限卡会员发出的邀请</template>
+      <template #chart><BarList :rows="funnelRows" /></template>
+      <template #foot>右边的百分比是相对上一步的转化率。</template>
+    </Panel>
+  </PanelGrid>
   <section v-if="compareRows" class="panel wide" :class="{ loading }">
     <h2>门店对比</h2>
     <p class="sub">点门店名只看这家店</p>
@@ -148,12 +146,13 @@ const show = (v: number | null | undefined, fmt: (n: number) => string | number 
 .grid.loading { opacity: 0.55; }
 .state { margin: 0 0 16px; font-size: 13px; color: var(--ink-muted); }
 .state.error { display: flex; align-items: center; gap: 12px; padding: 10px 14px; color: var(--ink); background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }
-.grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 16px; }
+.two { margin-top: 16px; transition: opacity 0.15s; }
+.two.loading { opacity: 0.55; }
 .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .panel { min-width: 0; padding: 16px 18px; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
 .panel h2 { margin: 0; font-family: var(--font-display); font-size: 20px; font-weight: 400; }
 .panel .sub { margin: 2px 0 14px; font-size: 12px; color: var(--ink-muted); }
-.panel .note { display: flex; align-items: center; gap: 6px; margin: 12px 0 0; font-size: 11px; color: var(--ink-muted); }
+.note { display: flex; align-items: center; gap: 6px; }
 .note i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
 .note .k1 { background: var(--accent); }
 .note .k2 { margin-left: 8px; background: var(--brand); }
@@ -171,5 +170,5 @@ const show = (v: number | null | undefined, fmt: (n: number) => string | number 
 .expiring small { grid-row: 2; font-size: 12px; color: var(--ink-muted); }
 .expiring .when { grid-row: 1 / span 2; grid-column: 2; align-self: center; font-size: 12px; font-weight: 600; }
 @media (max-width: 1100px) { .grid, .grid.three { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 560px) { .grid, .grid.two, .grid.three { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .grid, .grid.three { grid-template-columns: 1fr; } }
 </style>

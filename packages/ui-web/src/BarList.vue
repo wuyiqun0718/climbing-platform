@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** 横条列表：每行一个标签、一根条、右边的数字 */
+/** 横条列表：每行一个标签、一根条、右边的数字。在 PanelGrid 里每行用固定行高 --ui-row-h，和旁边卡片的行对齐 */
 import type { BarRow } from './bars';
 
 defineProps<{ rows: BarRow[] }>();
@@ -18,8 +18,8 @@ defineProps<{ rows: BarRow[] }>();
 </template>
 
 <style scoped>
-.bars { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
-li { display: grid; grid-template-columns: 6.5em minmax(0, 1fr) 7.5em; align-items: center; gap: 10px; font-size: 13px; }
+.bars { display: flex; flex-direction: column; gap: var(--ui-bar-gap, 10px); margin: 0; padding: 0; list-style: none; }
+li { box-sizing: border-box; height: var(--ui-row-h, auto); display: grid; grid-template-columns: 6.5em minmax(0, 1fr) 7.5em; align-items: center; gap: 10px; font-size: 13px; }
 .label { overflow: hidden; color: var(--ink); white-space: nowrap; text-overflow: ellipsis; }
 .track { height: 12px; background: var(--neutral-soft); border-radius: var(--radius-sm); overflow: hidden; }
 .bar { display: block; height: 100%; min-width: 0; background: var(--accent); }

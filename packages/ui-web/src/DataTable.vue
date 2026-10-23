@@ -155,6 +155,8 @@ th {
 }
 td { padding: 11px 14px; white-space: nowrap; vertical-align: middle; border-bottom: 1px solid var(--line); }
 tbody tr:last-child td { border-bottom: 0; }
+/* 放在 PanelGrid 的卡片里：每行固定行高（--ui-row-h，和条形图同一个），并排两张表的行对得齐 */
+tbody tr:not(.state) td { box-sizing: border-box; height: var(--ui-row-h, auto); }
 /* 长文字列：至少 14 个字宽，再长就换行；连续的英文、单号也能断开 */
 td.wrap-text { min-width: 14em; white-space: normal; overflow-wrap: anywhere; }
 td.num { font-family: var(--font-number); font-variant-numeric: tabular-nums; }
@@ -175,6 +177,7 @@ tr.clickable:focus-visible { outline: 3px solid var(--focus-ring, var(--ink)); o
   .stack tbody tr:last-child { border-bottom: 0; }
   .stack tbody tr:not(.state) td { display: grid; grid-template-columns: 5.5em minmax(0, 1fr); gap: 12px; padding: 4px 0; text-align: left !important; white-space: normal; overflow-wrap: anywhere; border: 0; }
   .stack td.wrap-text { min-width: 0; }
+  .stack tbody tr:not(.state) td { height: auto; }
   .stack tbody tr:not(.state) td::before { content: attr(data-label); font-size: 12.5px; color: var(--ink-muted); }
 }
 /* 触屏（平板前台）：能点的地方至少 44px，桌面鼠标不变 */

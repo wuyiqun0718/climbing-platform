@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { CHANNEL_TEXT, REFUND_METHOD_TEXT, REVENUE_CATEGORY_TEXT, type FinanceRefundRow, type FinanceSummary } from '@climb/api';
 import { financeRangeError, type RevenueBucket } from '@climb/core';
-import { BarList, DataTable, StatTile, errorText, type BarRow, type Column, Tabs, UiButton, UiDatePicker } from '@climb/ui-web';
+import { BarList, DataTable, Panel, PanelGrid, StatTile, errorText, type BarRow, type Column, Tabs, UiButton, UiDatePicker } from '@climb/ui-web';
 import { formatDot, formatYuan, toDateKey } from '@climb/utils';
 import { computed, ref, watch } from 'vue';
 import { api } from '../api';
@@ -106,18 +106,16 @@ const show = (v: number | undefined) => (v === undefined ? '—' : formatYuan(v)
     <StatTile label="净收入" :value="show(data?.netCents)" note="营收减去退款" />
   </section>
   <p v-if="loading && !data" class="state">加载中…</p>
-  <section v-if="data" class="grid two" :class="{ loading: dim }">
-    <div class="panel">
-      <h2>按收款方式</h2>
-      <BarList class="bars" :rows="bars(channelRows)" />
+  <PanelGrid v-if="data" class="two" :class="{ loading: dim }">
+    <Panel title="按收款方式">
+      <template #chart><BarList :rows="bars(channelRows)" /></template>
       <DataTable plain :columns="bucketColumns('收款方式')" :rows="channelRows" row-key="key" />
-    </div>
-    <div class="panel">
-      <h2>按品类</h2>
-      <BarList class="bars" :rows="bars(categoryRows)" />
+    </Panel>
+    <Panel title="按品类">
+      <template #chart><BarList :rows="bars(categoryRows)" /></template>
       <DataTable plain :columns="bucketColumns('品类')" :rows="categoryRows" row-key="key" />
-    </div>
-  </section>
+    </Panel>
+  </PanelGrid>
   <section v-if="data" class="panel wide" :class="{ loading: dim }">
     <h2>退款</h2>
     <p class="sub">微信订单原路退回；线下收的钱线下退，这里只记录</p>
@@ -133,14 +131,13 @@ const show = (v: number | undefined) => (v === undefined ? '—' : formatYuan(v)
 .bad { padding: 6px 10px; color: var(--ink); font-weight: 600; background: var(--accent-soft); border-radius: var(--radius-sm); }
 .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; transition: opacity 0.15s; }
 .grid.loading, .panel.loading { opacity: 0.55; }
-.grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 16px; }
+.two { margin-top: 16px; transition: opacity 0.15s; }
+.two.loading { opacity: 0.55; }
 .state { margin: 0 0 16px; font-size: 13px; color: var(--ink-muted); }
 .state.error { display: flex; align-items: center; gap: 12px; padding: 10px 14px; color: var(--ink); background: var(--accent-soft); border: var(--stroke) solid var(--ink); border-radius: var(--radius-md); }
 .panel { min-width: 0; padding: 16px 18px; background: var(--surface); border: var(--stroke) solid var(--ink); border-radius: var(--radius-lg); }
 .panel h2 { margin: 0 0 12px; font-family: var(--font-display); font-size: 20px; font-weight: 400; }
 .panel .sub { margin: -10px 0 12px; font-size: 12px; color: var(--ink-muted); }
 .panel.wide { margin-top: 16px; }
-.bars { margin-bottom: 16px; }
-@media (max-width: 1100px) { .grid.two { grid-template-columns: 1fr; } }
 @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
 </style>

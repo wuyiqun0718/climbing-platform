@@ -1,5 +1,7 @@
 export { default as StatTile } from './StatTile.vue';
 export { default as BarList } from './BarList.vue';
+export { default as Panel } from './Panel.vue';
+export { default as PanelGrid } from './PanelGrid.vue';
 export type { BarRow } from './bars';
 export { default as DataTable } from './DataTable.vue';
 export { default as Pager } from './Pager.vue';
